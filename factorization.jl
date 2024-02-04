@@ -23,7 +23,7 @@ end
 
 isdiv(num, div) = num % div == 0
 
-function solve(problem::Int, library::Library; allow_lookup=true)
+function solve(library::Library, problem::Int; allow_lookup=true)
     steps = 0
     allow_lookup && problem in keys(library) && return steps
     for n in keys(library)
@@ -36,6 +36,25 @@ function solve(problem::Int, library::Library; allow_lookup=true)
     end
     error("solve failed ", problem)
     # steps + length(factor(2*3*5))  # ASSUME no repetition
+end
+
+
+struct Search
+    allow_lookup::Bool
+    method::Symbol
+end
+
+breadth_cost(L, S) = S == 0 ? 0 : (L ^ (S+1)-1) ÷ (L-1) - 1
+best_cost(L, S) = L * S
+
+function cost(search::Search, lib::Library, problem::Int)
+    S = solve(lib, problem; search.allow_lookup)
+    L = length(lib)
+    if search.method == :breadth
+        breadth_cost(L, S)
+    else @assert search.method == :best
+        best_cost(L, S)
+    end
 end
 
 
@@ -68,42 +87,3 @@ function weighted_problems(pd::ProblemDistribution)
     softmax!(p)
     Dict(probs .=> p)
 end
-
-# %% --------
-
-breadth_cost(L, S) = S == 0 ? 0 : (L ^ (S+1)-1) / (L-1) - 1
-best_cost(L, S) = L * S
-
-
-base = primes(7)
-n_primitive = length(base)
-pd = ProblemDistribution(Set(base), Dict())
-libs = possible_libraries(pd)
-wp = weighted_problems(pd)
-
-df = flatmap([true, false]) do allow_lookup
-    flatmap(libs) do lib
-        breadth, best = sum(wp) do (problem, p)
-            S = solve(problem, lib; allow_lookup)
-            L = length(lib)
-            p .* [breadth_cost(L,S), best_cost(L,S)]
-        end
-        average_length = mean(filter(!isequal(1), collect(values(lib))))
-        (;allow_lookup, breadth, best, average_length, n_options=length(lib) - n_primitive)
-    end
-end |> DataFrame
-@rput df
-
-
-# %% --------
-
-R"""
-df %>%
-    pivot_longer(c(breadth, best), names_to="strategy", values_to="cost", names_prefix="") %>%
-    ggplot(aes(n_options, cost, color=allow_lookup)) +
-    geom_point(alpha=.01) +
-    lines(f=min, min_n=1) +
-    facet_wrap(~strategy, scales="free_y")
-
-fig("factorization", w=5)
-"""
