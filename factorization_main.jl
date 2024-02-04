@@ -1,11 +1,12 @@
 include("factorization.jl")
+
+# %% ==================== plot all libraries ====================
+include("r.jl")
 # %% --------
 
-base = primes(7)
-n_primitive = length(base)
-pd = ProblemDistribution(Set(base), Dict())
+N = 4
+pd = ProblemDistribution(N)
 libs = possible_libraries(pd)
-wp = weighted_problems(pd)
 
 g = grid(
     allow_lookup = [true, false],
@@ -16,13 +17,11 @@ df = flatmap(g) do (;allow_lookup, method)
     flatmap(libs) do lib
         cost = expected_cost(Search(allow_lookup, method), lib, pd)
         average_length = mean(filter(!isequal(1), collect(values(lib))))
-        (;allow_lookup, method=string(method), cost, average_length, n_options=length(lib) - n_primitive)
+        (;allow_lookup, method=string(method), cost, average_length, n_options=length(lib) - N)
     end
 end |> DataFrame
 @rput df
 
-
-# %% --------
 
 R"""
 df %>%
@@ -31,5 +30,5 @@ df %>%
     lines(f=min, min_n=1) +
     facet_wrap(~method, scales="free_y")
 
-fig("factorization", w=5)
+fig("factorization_costs", w=5)
 """
