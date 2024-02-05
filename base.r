@@ -533,10 +533,10 @@ element_grob.element_text_transform <- function(element, label = "", ...) {
 }
 
 fancy_names = list(
-    pid = "Participant",
-    n_fix = "# Fixations",
-    n_fixated = "# States Fixated"
+    pid = "participant",
+    gen = "generation"
 )
+
 
 fancy_replacements = c(
     "1 ?\\* ?" = "",
@@ -545,10 +545,7 @@ fancy_replacements = c(
 )
 
 fancy_word_replacements = c(
-    n = "#",
-    dur = "duration",
-    prop = "proportion",
-    fix = "fixation"
+    n = "#"
 )
 
 fancy_name = function(lab) {
@@ -560,7 +557,7 @@ fancy_name = function(lab) {
     lab %>%
         str_replace_all(fancy_replacements) %>%
         str_replace_all(words) %>%
-        str_to_title %>%
+        # str_to_title %>%
         gsub("Rt", "RT", .) %>%
         gsub("(?!^)\\b(Of|In|On|The|Up|To|Vs|Per|A)\\b", "\\L\\1", ., perl=TRUE)
 }
