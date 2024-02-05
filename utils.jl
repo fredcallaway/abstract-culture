@@ -251,6 +251,23 @@ function dataframe(x::KeyedArray)
     end
 end
 
+macro require(ex)
+    quote
+        $ex || return missing
+    end |> esc
+end
+
+function dataframe(f, params)
+    flatmap(params) do x
+        rows = f(x)
+        @require !ismissing(rows)
+        map(rows) do row
+            @require !ismissing(row)
+            (;x..., row...)
+        end
+    end |> skipmissing |> collect |> DataFrame
+end
+
 keymax(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmax(X).I))...)
 keymax(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmax(x)]
 keymin(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmin(X).I))...)

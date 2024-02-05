@@ -20,18 +20,20 @@ function Base.show(io::IO, lib::Library)
     print(io, "Library ", join(map(length, lib.levels), " "))
 end
 
-function add_option!(lib::Library, n::Int, len=length(factor(Set, n)))
+nfactor(n) = length(factor(Set, n))
+
+function add_option!(lib::Library, n::Int, len=nfactor(n))
     while length(lib.levels) < len
         push!(lib.levels, Set{Int}())
     end
     push!(lib.levels[len], n)
 end
 
-function remove_option!(lib::Library, n::Int, len=length(factor(Set, n)))
+function remove_option!(lib::Library, n::Int, len=nfactor(n))
     delete!(lib.levels[len], n)
 end
 
-function has_option(lib::Library, n::Int, len=length(factor(Set, n)))
+function has_option(lib::Library, n::Int, len=nfactor(n))
     length(lib.levels) ≥ len && n in lib.levels[len]
 end
 
@@ -49,14 +51,14 @@ end
 
 isdiv(num, div) = num % div == 0
 
-function solve(library::Library, problem::Int; allow_lookup=true)
+function solve(library::Library, problem::Int; len=nfactor(problem), allow_lookup=true)
     steps = 0
-    allow_lookup && problem in library && return steps
+    allow_lookup && has_option(library, problem, len) && return steps
     for n in library
         if isdiv(problem, n)
             steps += 1
             problem ÷= n
-            # allow_lookup && problem in keys(library) && return steps
+            allow_lookup && has_option(library, problem) && return steps
             problem == 1 && return steps
         end
     end
@@ -65,7 +67,7 @@ function solve(library::Library, problem::Int; allow_lookup=true)
 end
 
 
-struct Search
+struct Agent
     allow_lookup::Bool
     method::Symbol
 end
@@ -73,12 +75,12 @@ end
 breadth_cost(L, S) = S == 0 ? 0 : (L ^ (S+1)-1) ÷ (L-1) - 1
 best_cost(L, S) = L * S
 
-function cost(search::Search, lib::Library, problem::Int)
-    S = solve(lib, problem; search.allow_lookup)
+function cost(agent::Agent, lib::Library, problem::Int; len=nfactor(problem))
+    S = solve(lib, problem; agent.allow_lookup, len)
     L = length(lib)
-    if search.method == :breadth
+    if agent.method == :breadth
         breadth_cost(L, S)
-    else @assert search.method == :best
+    else @assert agent.method == :best
         best_cost(L, S)
     end
 end
@@ -94,10 +96,8 @@ Base.Broadcast.broadcastable(x::ProblemDistribution) = Ref(x)
 
 function ProblemDistribution(base::Set{Int}, freq::Dict)
     problems = map(prod, filter(x->length(x) ≥ 2, collect(powerset(collect(base)))))
-    sizes = map(problems) do n
-        length(factor(Set, n))
-    end
-    weights = map(problems) do n
+    sizes = map(nfactor, problems)
+    weights = map(problems) do problem
         sum(freq; init=0.) do (n, f)
             isdiv(problem, n) ? f : 0.
         end
@@ -129,8 +129,8 @@ function possible_libraries(pd::ProblemDistribution)
     end
 end
 
-function expected_cost(search::Search, lib::Library, pd::ProblemDistribution)
+function expected_cost(agent::Agent, lib::Library, pd::ProblemDistribution)
     sum(pd.problem_weights) do (problem, p)
-        p * cost(search, lib, problem)
+        p * cost(agent, lib, problem; len=pd.problem_sizes[problem])
     end
 end
