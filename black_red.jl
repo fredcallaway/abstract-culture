@@ -1,7 +1,6 @@
 include("utils.jl")
-include("r.jl")
 
-prob_learn(p::Float64, m::Int) = 1 - (1-p)^m
+prob_observe(p::Float64, m::Int) = 1 - (1-p)^m
 
 @kwdef struct Environment
     n::Int = 5  # number of starts and goals
@@ -12,6 +11,8 @@ prob_learn(p::Float64, m::Int) = 1 - (1-p)^m
 end
 
 ¬(p::Real) = 1 - p
+
+# ---------- track all edges separately ---------- #
 
 function prob_learn_red(b, r1, r2; ε)
     p_red =
@@ -31,9 +32,9 @@ function transition(env::Environment, P::Matrix)
     (;n, m, ε, T) = env
     P′ = zeros(n, n+2)
     for s in 1:n, g in 1:n
-        b = prob_learn(P[s, g], m)
-        r1 = prob_learn(P[s, n+1], m)
-        r2 = prob_learn(P[g, n+2], m)
+        b = prob_observe(P[s, g], m)
+        r1 = prob_observe(P[s, n+1], m)
+        r2 = prob_observe(P[g, n+2], m)
 
         p_task = T[s, g]
 
@@ -47,6 +48,27 @@ function transition(env::Environment, P::Matrix)
     P′
 end
 
+# ---------- just track red frequency ---------- #
+
+# behavior given observation probabilities
+function prob_learn_red(b, r; ε)
+    p = b * r * r * .5 + ¬b * (r * r + r * ¬r)
+    ε * .5 + (1-ε) * p
+end
+
+function transition(env::Environment, p_red::Float64)
+    (;n, m, ε, T, k) = env
+    @assert k == 1
+    # @assert all(T .≈ 1 / length(T))
+
+    # prob observe a given black edge
+    b = prob_observe(¬p_red / (n^2), m)
+    # prob observe a given red edge (not a pair)
+    r = prob_observe(p_red / n, m)
+
+    prob_learn_red(b, r; ε)
+end
+
 function simulate(env::Environment, n_gen; state=zeros(env.n, env.n+2))
     res = [state]
     for i in 1:n_gen
@@ -55,73 +77,3 @@ function simulate(env::Environment, n_gen; state=zeros(env.n, env.n+2))
     end
     res
 end
-
-simulate(Environment(), 4)
-
-
-# %% ==================== one task ====================
-g = grid(
-    ε = [.05, .1, .2, .4]
-)
-
-df = dataframe(g) do prm
-    env = Environment(;prm...)
-    n = env.n
-    sim = simulate(env, 20)
-    map(enumerate(sim)) do (gen, P)
-        black = sum(P[1:n, 1:n])
-        red = sum(P[1:n, n+1:end]) / 2
-        (;gen, black, red)
-    end
-end
-@rput df
-
-R"""
-df %>%
-    filter(gen > 1) %>%
-    ggplot(aes(gen, red, color=factor(ε))) +
-    geom_line() +
-    ylab("proportion using red") +
-    teals_pal(rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE))
-fig("red_black1")
-"""
-
-# %% ==================== m and n ====================
-
-env = Environment()
-n = env.n
-
-g = grid(
-    ε = [.05, .1, .2, .4],
-    m = [1, 5, 10],
-    n = [5, 10, 20],
-)
-
-df = dataframe(g) do prm
-    env = Environment(;prm...)
-    sim = simulate(env, 20)
-    map(enumerate(sim)) do (gen, P)
-        black = sum(P[1:n, 1:n])
-        red = sum(P[1:n, n+1:end]) / 2
-        (;gen, black, red)
-    end
-end
-@rput df
-
-R"""
-df %>%
-    filter(gen > 1) %>%
-    ggplot(aes(gen, red, color=factor(ε))) +
-    geom_line() +
-    ylab("proportion using red") +
-    teals_pal(rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(m ~ n, labeller=label_glue(
-        cols='n={n}',
-        rows='m={m}'
-    ))
-fig("red_black_grid", w=5, h=4)
-"""
