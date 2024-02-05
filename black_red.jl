@@ -1,6 +1,9 @@
+using Memoize
 include("utils.jl")
 
-prob_observe(p::Float64, m::Int) = 1 - (1-p)^m
+¬(p::Real) = 1 - p
+prob_observe(p::Float64, m::Int) = ¬((¬p) ^ m)
+
 
 @kwdef struct Environment
     n::Int = 5  # number of starts and goals
@@ -10,7 +13,61 @@ prob_observe(p::Float64, m::Int) = 1 - (1-p)^m
     T::Matrix{Float64} = normalize!(ones(n, n))  # task distribution
 end
 
-¬(p::Real) = 1 - p
+@memoize function taskdist(T::Matrix{Float64})
+    SetSampler(get.(CartesianIndices(T), :I)[:], T[:])
+end
+taskdist(env::Environment) = taskdist(env.T)
+
+
+struct Behavior
+    s::Int
+    g::Int
+    red::Bool
+end
+
+function initial_population(env::Environment, N::Int)
+    [Behavior(0, 0, false) for _ in 1:env.k, _ in 1:N]
+end
+
+function behave(tasks, observed; ε)
+    @assert length(tasks) == 1
+    s, g = tasks[1]
+    if rand() < ε
+        return [Behavior(s, g, rand((true, false)))]
+    end
+
+    black_cost = Behavior(s, g, false) in observed ? 0 : 1
+
+    red_s = any(observed) do beh
+        beh.red && beh.s == s
+    end
+    red_g = any(observed) do beh
+        beh.red && beh.g == g
+    end
+    red_cost = 2 - (red_s + red_g)
+
+    red =
+        red_cost < black_cost ? true :
+        red_cost > black_cost ? false :
+        rand((true, false))
+
+    [Behavior(s, g, red)]
+end
+
+
+function transition(env::Environment, pop::Matrix{Behavior})
+    (;n, m, ε, T, k) = env
+    N = length(pop)
+
+    pop1 = similar(pop)
+    tasks = rand(taskdist(env), k, N)
+
+    for agent in 1:length(pop)
+        observed = sample(pop, m)
+        pop1[:, agent] = behave(tasks[:, agent], observed; ε)
+    end
+    pop1
+end
 
 # ---------- track all edges separately ---------- #
 
@@ -28,17 +85,17 @@ function prob_learn_red(b, r1, r2; ε)
 end
 
 
-function transition(env::Environment, P::Matrix)
+function transition(env::Environment, P::Matrix{Float64})
     (;n, m, ε, T) = env
     P′ = zeros(n, n+2)
     for s in 1:n, g in 1:n
-        b = prob_observe(P[s, g], m)
-        r1 = prob_observe(P[s, n+1], m)
-        r2 = prob_observe(P[g, n+2], m)
+        b = prob_learn(P[s, g], m)
+        r1 = prob_learn(P[s, n+1], m)
+        r2 = prob_learn(P[g, n+2], m)
 
         p_task = T[s, g]
 
-        p_red = prob_learn_red(b, r1, r2; env.ε)
+        p_red = prob_learn_red(b, r1, r2; ε)
         p_black = 1 - p_red
 
         P′[s, g] += p_task * p_black
@@ -61,9 +118,9 @@ function transition(env::Environment, p_red::Float64)
     @assert k == 1
     # @assert all(T .≈ 1 / length(T))
 
-    # prob observe a given black edge
+    # prob observe the desired black edge
     b = prob_observe(¬p_red / (n^2), m)
-    # prob observe a given red edge (not a pair)
+    # prob observe one of the desired red edges (not both)
     r = prob_observe(p_red / n, m)
 
     prob_learn_red(b, r; ε)
