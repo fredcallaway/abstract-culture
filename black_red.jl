@@ -15,6 +15,20 @@ function initial(env::Environment)
     zeros(N,N+2)
 end
 
+function prob_learn_red(b, r1, r2; ε)
+    p_red =
+         b *  r1 *  r2 * .5 +
+         b *  r1 * ¬r2 * 0. +
+         b * ¬r1 *  r2 * 0. +
+         b * ¬r1 * ¬r2 * 0. +
+        ¬b *  r1 *  r2 * 1. +
+        ¬b *  r1 * ¬r2 * .5 +
+        ¬b * ¬r1 *  r2 * .5 +
+        ¬b * ¬r1 * ¬r2 * 0.
+    ε * .5 + (1-ε) * p_red
+end
+
+
 function transition(env::Environment, P::Matrix)
     (;N, m, ε, T) = env
     P′ = zeros(N, N+2)
@@ -24,8 +38,8 @@ function transition(env::Environment, P::Matrix)
         r2 = prob_learn(P[g, N+2], m)
 
         p_task = T[s, g]
-        p_red = r1 * r2 * (1-b) + ε
-        p_red = min(1, p_red)
+
+        p_red = prob_learn_red(b, r1, r2; env.ε)
         p_black = 1 - p_red
 
         P′[s, g] += p_task * p_black
@@ -46,18 +60,13 @@ end
 
 
 # %% ==================== one task ====================
-
-env = Environment()
-N = env.N
-sim = simulate(env, 10)
-
 g = grid(
-    ε = [.01, .05, .1, .2, .5]
+    ε = [.05, .1, .2, .4]
 )
 
 df = dataframe(g) do prm
     env = Environment(;prm...)
-    sim = simulate(env, 10)
+    sim = simulate(env, 20)
     map(enumerate(sim)) do (gen, P)
         black = sum(P[1:N, 1:N])
         red = sum(P[1:N, N+1:end]) / 2
@@ -68,9 +77,50 @@ end
 
 R"""
 df %>%
+    filter(gen > 1) %>%
     ggplot(aes(gen, red, color=factor(ε))) +
     geom_line() +
     ylab("proportion using red") +
-    teals_pal()
-fig("red_black_k1")
+    teals_pal(rev=T) +
+    expand_limits(y=0.4) +
+    guides(color = guide_legend(reverse=TRUE))
+fig("red_black1")
+"""
+
+# %% ==================== m and n ====================
+
+env = Environment()
+N = env.N
+
+g = grid(
+    ε = [.05, .1, .2, .4],
+    m = [1, 5, 10],
+    N = [5, 10, 20],
+)
+
+df = dataframe(g) do prm
+    env = Environment(;prm...)
+    sim = simulate(env, 20)
+    map(enumerate(sim)) do (gen, P)
+        black = sum(P[1:N, 1:N])
+        red = sum(P[1:N, N+1:end]) / 2
+        (;gen, black, red)
+    end
+end
+@rput df
+
+R"""
+df %>%
+    filter(gen > 1) %>%
+    ggplot(aes(gen, red, color=factor(ε))) +
+    geom_line() +
+    ylab("proportion using red") +
+    teals_pal(rev=T) +
+    expand_limits(y=0.4) +
+    guides(color = guide_legend(reverse=TRUE)) +
+    facet_grid(m ~ N, labeller=label_glue(
+        cols='n={N}',
+        rows='m={m}'
+    ))
+fig("red_black_grid", w=5, h=4)
 """
