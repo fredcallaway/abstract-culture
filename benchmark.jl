@@ -23,9 +23,9 @@ function bench_comp(jobs; mode=:both)
     end
 end
 
-env = Environment(k=10, m=10, n=4; ε=0.)
+env = Environment(k=10, m=10, n=20; ε=0.)
 Random.seed!(1)
-jobs = repeatedly(10000) do
+jobs = repeatedly(50000) do
     observed = map(rand(taskdist(env), env.m)) do (s, g)
         Behavior(s, g, rand(Bernoulli(0.4)))
     end
@@ -35,8 +35,8 @@ end
 
 bench_comp(jobs[1:2])
 GC.gc()
-@assert res == res1
-@time res = bench_comp(jobs);  # 0.38
+@time res = bench_comp(jobs);  #  1.490843 seconds (21.61 M allocations: 2.055 GiB, 11.90% gc time)
 
-# res1 = copy(res)
+GC.gc()
+@profview bench_comp(jobs);
 

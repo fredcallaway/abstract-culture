@@ -11,74 +11,69 @@ function plot_task_graph(graph; node_color=:black, edge_color=:black)
     # ax.aspect = DataAspect()
 end
 
-function task_graph(env, tasks, observed)
-    graph = MetaGraph(2env.n)
-    for i in vertices(graph)
-        set_prop!(graph, i, :label, i)
-    end
 
-    for (s, g) in tasks
-        add_edge!(graph, s, g+env.n)
-    end
-
-    for beh in observed
-        if beh.red
-            for i in (beh.s, beh.g+env.n)
-                set_prop!(graph, i, :observed, true)
-            end
-        else
-            set_prop!(graph, beh.s, beh.g+env.n, :observed, true)
-        end
-    end
-    graph
-end
-
-black_known(graph, i, j) = has_prop(graph, i, j, :observed)
-red_known(graph, i) = has_prop(graph, i, :observed)
-
-function n_unknown_black(graph, i)
-    sum(neighbors(graph, i); init=0) do j
-        !black_known(graph, i, j)
-    end
-    # WARNING we're not allowing for partially learned compositional solutions
-end
-
-function composable_nodes(graph)::Vector{Int}
-    graph = copy(graph)
+function composable_nodes!(graph, known)::Set{Int}
+    keep = Set(vertices(graph))
     # remove loners
-    while !isempty(vertices(graph))
-        for i in vertices(graph)
-            if !red_known(graph, i) && n_unknown_black(graph, i) < 2
-                rem_vertex!(graph, i)
-                break  # vertex indices invalidated, start at beginning
-            elseif i == length(vertices(graph))
-                @goto done
-            end
+
+    @label top
+    for i in keep
+        if i ∉ known && sum(j in keep for j in neighbors(graph, i); init=0) < 2
+            delete!(keep, i)
+            @goto top
         end
     end
-    @label done
+
     # check for at least one node with savings
-    nodes = collect(vertices(graph))
+    # nodes = collect(vertices(graph))
+
+    vmap = rem_vertices!(graph, setdiff(vertices(graph), keep))
+
     for comp in connected_components(graph)
         # good = any(comp) do i
         #     red_known(graph, i) || n_unknown_black(graph, i) > 2
         # end
         good = sum(comp) do i
-            n_unknown_black(graph, i) / 2 - !red_known(graph, i)
+            degree(graph, i) / 2 - (vmap[i] ∉ known)
         end > 0
+
         if !good
-            setdiff!(nodes, comp)
+            setdiff!(keep, vmap[comp])
         end
     end
-    map(nodes) do i
-        get_prop(graph, i, :label)
-    end
+    keep
+    # union!(keep, known)
 end
 
 
+function extract_knowledge(env, observed)
+    red = Set{Int}()
+    black = Set{Tuple{Int, Int}}()
+    for b in observed
+        if b.red
+            push!(red, b.s)
+            push!(red, b.g + env.n)
+        else
+            push!(black, (b.s, b.g + env.n))
+        end
+    end
+    (red, black)
+end
+
 function find_compositions(env, tasks, observed)
-    graph = task_graph(env, tasks, observed)
-    cnodes = composable_nodes(graph)
+    tasks = map(tasks) do (s, g)
+        (s, g+env.n)
+    end
+
+    known_red, known_black = extract_knowledge(env, observed)
+    setdiff!(tasks, known_black)
+
+    graph = Graph(2env.n)
+    for (s, g) in tasks
+        add_edge!(graph, s, g)
+    end
+
+    cnodes = composable_nodes!(graph, known_red)
     res = (Int[], Int[])
     for n in cnodes
         push!(res[div(n-1, env.n) + 1], mod1(n, env.n))
@@ -86,3 +81,5 @@ function find_compositions(env, tasks, observed)
     res
 end
 
+# tasks, observed = first(jobs)
+# find_compositions(env, tasks, observed)
