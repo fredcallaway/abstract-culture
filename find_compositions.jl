@@ -7,7 +7,7 @@ function find_compositions(tasks)
     G = unique(G)
 
 
-    best_cost = length(tasks)
+    best_cost = base_cost = length(tasks)
     optimal = Tuple{Vector{Int64}, Vector{Int64}}[]
 
     compositions = product(powerset(S), powerset(G))
@@ -21,15 +21,12 @@ function find_compositions(tasks)
             best_cost = total_cost
             empty!(optimal)
             push!(optimal, (ss, gg))
-        elseif total_cost == best_cost
+        elseif total_cost == best_cost && total_cost < base_cost
             push!(optimal, (ss, gg))
         end
     end
     optimal
 end
-
-
-find_compositions(rand(taskdist(env), 10))
 
 # %% --------
 
@@ -49,40 +46,62 @@ function task_graph(env, tasks)
     graph
 end
 
-function compositional_graph(graph)
+function composable_nodes(graph)
     graph = copy(graph)
-    for step in vertices(graph)
-        isempty(vertices(graph)) && return graph
+    # remove loners
+    while !isempty(vertices(graph))
         for i in vertices(graph)
             if degree(graph, i) < 2
-                println("remove $i ", get_prop(graph, i, :label))
                 rem_vertex!(graph, i)
-                break
+                break  # vertex indices invalidated, start at beginning
             elseif i == length(vertices(graph))
-                return graph
+                @goto done
             end
         end
     end
-end
-
-function composable_nodes(graph)
-    cg = compositional_graph(graph)
-    map(vertices(cg)) do i
-        get_prop(cg, i, :label)
+    @label done
+    # check for at least one node with 3 neighbors
+    nodes = collect(vertices(graph))
+    for comp in connected_components(graph)
+        has3 = any(comp) do i
+            degree(graph, i) > 2
+        end
+        if !has3
+            nodes
+            setdiff!(nodes, comp)
+        end
+    end
+    map(nodes) do i
+        get_prop(graph, i, :label)
     end
 end
 
+# %% --------
 
-env = Environment(k=1, m=10, n=3; ε=0.)
+env = Environment(k=1, m=10, n=10; ε=0.)
+tasks = rand(taskdist(env).vals, 30)
 
-tasks = rand(taskdist(env).vals, 10)
+
+# %% --------
+
 # tasks = copy(taskdist(env).vals)
 # setdiff!(tasks, [(1,1), (1,2), (1,3)])
 
+env = Environment(k=1, m=10, n=10; ε=0.)
+tasks = rand(taskdist(env).vals, 20)
+@time find_compositions(tasks)
+# tasks = [
+#     (1, 1),
+#     (1, 2),
+#     (1, 3),
+#     (2, 1),
+#     (2, 2),
+#     (3, 3),
+#     (2, 1),
+#     (3, 2),
+# ]
+
 graph = task_graph(env, tasks)
-
-find_compositions(tasks)
-
 figure() do
     layout = (g) -> map(vertices(g)) do i
         Point(mod1(i, env.n)/2, div(i-1, env.n))
@@ -98,11 +117,12 @@ figure() do
             edge_color[i] = :red
         end
     end
+    sum(edge_color .== :red)
     # for n in cnodes, n1 in cnodes
     #     rem_edge!(graph, n, n1)
     # end
     graphplot!(graph; layout, node_size=20, node_color, edge_color)
     ax = current_axis()
     hidedecorations!(ax); hidespines!(ax)
-    ax.aspect = DataAspect()
+    # ax.aspect = DataAspect()
 end
