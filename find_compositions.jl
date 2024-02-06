@@ -12,14 +12,15 @@ function plot_task_graph(graph; node_color=:black, edge_color=:black)
 end
 
 
-function composable_nodes!(graph, known)::Set{Int}
+function composable_nodes!(graph, known)::Vector{Int}
     keep = Set(vertices(graph))
+    keep = trues(vertices(graph))
     # remove loners
 
     @label top
-    for i in keep
-        if i ∉ known && sum(j in keep for j in neighbors(graph, i); init=0) < 2
-            delete!(keep, i)
+    for i in vertices(graph)
+        if keep[i] && i ∉ known && sum(keep[j] for j in neighbors(graph, i); init=0) < 2
+            keep[i] = false
             @goto top
         end
     end
@@ -27,7 +28,8 @@ function composable_nodes!(graph, known)::Set{Int}
     # check for at least one node with savings
     # nodes = collect(vertices(graph))
 
-    vmap = rem_vertices!(graph, setdiff(vertices(graph), keep))
+
+    vmap = rem_vertices!(graph, findall(!, keep))
 
     for comp in connected_components(graph)
         # good = any(comp) do i
@@ -38,10 +40,12 @@ function composable_nodes!(graph, known)::Set{Int}
         end > 0
 
         if !good
-            setdiff!(keep, vmap[comp])
+            for i in vmap[comp]
+                keep[i] = false
+            end
         end
     end
-    keep
+    findall(keep)
     # union!(keep, known)
 end
 
