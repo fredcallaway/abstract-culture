@@ -89,9 +89,9 @@ function transition(env::Environment, P::Matrix{Float64})
     (;n, m, ε, T) = env
     P′ = zeros(n, n+2)
     for s in 1:n, g in 1:n
-        b = prob_learn(P[s, g], m)
-        r1 = prob_learn(P[s, n+1], m)
-        r2 = prob_learn(P[g, n+2], m)
+        b = prob_observe(P[s, g], m)
+        r1 = prob_observe(P[s, n+1], m)
+        r2 = prob_observe(P[g, n+2], m)
 
         p_task = T[s, g]
 
