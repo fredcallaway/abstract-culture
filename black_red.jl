@@ -15,7 +15,8 @@ prob_observe(p::Float64, m::Int) = ¬((¬p) ^ m)
 end
 
 @memoize function taskdist(T::Matrix{Float64})
-    SetSampler(get.(CartesianIndices(T), :I)[:], T[:])
+    get.(CartesianIndices(T), :I)[:]
+    # SetSampler(get.(CartesianIndices(T), :I)[:], T[:])
 end
 taskdist(env::Environment) = taskdist(env.T)
 

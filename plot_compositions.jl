@@ -53,7 +53,7 @@ observed = map(rand(taskdist(env), env.m)) do (s, g)
     Behavior(s, g, rand(Bernoulli(0.4)))
 end
 
-tasks = rand(taskdist(env).vals, env.k)
+tasks = rand(taskdist(env), env.k)
 
 graph = task_graph(env, tasks, observed)
 cnodes = composable_nodes(graph)
