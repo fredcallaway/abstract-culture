@@ -1,6 +1,21 @@
 using Test
 include("black_red.jl")
 
+
+function consistency_test()
+    Random.seed!(1)
+    env = Environment(k=15, m=10, n=10; ε=0.)
+    map(red_rate, simulate(env, 100; state=initial_population(env, 100)))
+end
+
+@testset "consistency" begin
+    if !isfile(".consistency")
+        @info "Generating .consistency"
+        serialize(".consistency", consistency_test())
+    end
+    @test consistency_test() ≈ deserialize(".consistency")
+end
+
 @testset "matrix vs frequency" begin
     env = Environment()
     sim = simulate(env, 10)
@@ -40,32 +55,31 @@ end
 
 
 
-using Combinatorics
-function find_compositions_exhaustive(tasks)
-    tasks = unique(tasks)
-    S, G = invert(tasks)
-    S = unique(S)
-    G = unique(G)
+# using Combinatorics
+# function find_compositions_exhaustive(tasks)
+#     tasks = unique(tasks)
+#     S, G = invert(tasks)
+#     S = unique(S)
+#     G = unique(G)
 
 
-    best_cost = base_cost = length(tasks)
-    optimal = Tuple{Vector{Int64}, Vector{Int64}}[]
+#     best_cost = base_cost = length(tasks)
+#     optimal = Tuple{Vector{Int64}, Vector{Int64}}[]
 
-    compositions = product(powerset(S), powerset(G))
-    foreach(compositions) do (ss, gg)
-        black_cost = sum(tasks) do (s, g)
-            s in ss && g in gg ? 0 : 1
-        end
-        red_cost = length(ss) + length(gg)
-        total_cost = black_cost + red_cost
-        if total_cost < best_cost
-            best_cost = total_cost
-            empty!(optimal)
-            push!(optimal, (ss, gg))
-        elseif total_cost == best_cost && total_cost < base_cost
-            push!(optimal, (ss, gg))
-        end
-    end
-    optimal
-end
-find_compositions_exhaustive(tasks)
+#     compositions = product(powerset(S), powerset(G))
+#     foreach(compositions) do (ss, gg)
+#         black_cost = sum(tasks) do (s, g)
+#             s in ss && g in gg ? 0 : 1
+#         end
+#         red_cost = length(ss) + length(gg)
+#         total_cost = black_cost + red_cost
+#         if total_cost < best_cost
+#             best_cost = total_cost
+#             empty!(optimal)
+#             push!(optimal, (ss, gg))
+#         elseif total_cost == best_cost && total_cost < base_cost
+#             push!(optimal, (ss, gg))
+#         end
+#     end
+#     optimal
+# end

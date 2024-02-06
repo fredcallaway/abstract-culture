@@ -27,6 +27,10 @@ struct Behavior
     red::Bool
 end
 
+function red_rate(pop::AbstractArray{<:Behavior})
+    mean(get.(pop, :red))
+end
+
 function initial_population(env::Environment, N::Int)
     [Behavior(0, 0, false) for _ in 1:env.k, _ in 1:N]
 end
