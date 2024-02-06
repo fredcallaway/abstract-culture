@@ -1,5 +1,6 @@
 using Memoize
 include("utils.jl")
+include("find_compositions.jl")
 
 ¬(p::Real) = 1 - p
 prob_observe(p::Float64, m::Int) = ¬((¬p) ^ m)
@@ -29,31 +30,20 @@ function initial_population(env::Environment, N::Int)
     [Behavior(0, 0, false) for _ in 1:env.k, _ in 1:N]
 end
 
-function behave(tasks, observed; ε)
-    @assert length(tasks) == 1
-    s, g = tasks[1]
-    if rand() < ε
-        return [Behavior(s, g, rand((true, false)))]
+function behave(env, tasks, observed; ε)
+    s_red, g_red = find_compositions(env, tasks, observed)
+    map(tasks) do (s, g)
+        if rand() < ε
+            return Behavior(s, g, rand((true, false)))
+        else
+            if s in s_red && g in g_red
+                Behavior(s, g, true)
+            else
+                Behavior(s, g, false)
+            end
+        end
     end
-
-    black_cost = Behavior(s, g, false) in observed ? 0 : 1
-
-    red_s = any(observed) do beh
-        beh.red && beh.s == s
-    end
-    red_g = any(observed) do beh
-        beh.red && beh.g == g
-    end
-    red_cost = 2 - (red_s + red_g)
-
-    red =
-        red_cost < black_cost ? true :
-        red_cost > black_cost ? false :
-        rand((true, false))
-
-    [Behavior(s, g, red)]
 end
-
 
 function transition(env::Environment, pop::Matrix{Behavior})
     (;n, m, ε, T, k) = env
@@ -62,9 +52,9 @@ function transition(env::Environment, pop::Matrix{Behavior})
     pop1 = similar(pop)
     tasks = rand(taskdist(env), k, N)
 
-    for agent in 1:length(pop)
+    for agent in 1:size(pop, 2)
         observed = sample(pop, m)
-        pop1[:, agent] = behave(tasks[:, agent], observed; ε)
+        pop1[:, agent] = behave(env, tasks[:, agent], observed; ε)
     end
     pop1
 end
@@ -73,14 +63,15 @@ end
 
 function prob_learn_red(b, r1, r2; ε)
     p_red =
-         b *  r1 *  r2 * .5 +
-         b *  r1 * ¬r2 * 0. +
-         b * ¬r1 *  r2 * 0. +
-         b * ¬r1 * ¬r2 * 0. +
+         # b *  r1 *  r2 * .5 +
+         # b *  r1 * ¬r2 * 0. +
+         # b * ¬r1 *  r2 * 0. +
+         # b * ¬r1 * ¬r2 * 0. +
         ¬b *  r1 *  r2 * 1. +
-        ¬b *  r1 * ¬r2 * .5 +
-        ¬b * ¬r1 *  r2 * .5 +
-        ¬b * ¬r1 * ¬r2 * 0.
+        ¬b *  r1 * ¬r2 * 1. +
+        ¬b * ¬r1 *  r2 * 1. +
+        # ¬b * ¬r1 * ¬r2 * 0. +
+        0.
     ε * .5 + (1-ε) * p_red
 end
 
@@ -109,7 +100,8 @@ end
 
 # behavior given observation probabilities
 function prob_learn_red(b, r; ε)
-    p = b * r * r * .5 + ¬b * (r * r + r * ¬r)
+    p = ¬b * ¬(¬r * ¬r)
+    # p = b * r * r * .5 + ¬b * (r * r + r * ¬r)
     ε * .5 + (1-ε) * p
 end
 

@@ -60,14 +60,12 @@ function composable_nodes(graph)::Vector{Int}
     # check for at least one node with savings
     nodes = collect(vertices(graph))
     for comp in connected_components(graph)
-
-        good = any(comp) do i
-            red_known(graph, i) || n_unknown_black(graph, i) > 2
-        end
-        good2 = sum(comp) do i
+        # good = any(comp) do i
+        #     red_known(graph, i) || n_unknown_black(graph, i) > 2
+        # end
+        good = sum(comp) do i
             n_unknown_black(graph, i) / 2 - !red_known(graph, i)
         end > 0
-        @assert good == good2
         if !good
             setdiff!(nodes, comp)
         end
