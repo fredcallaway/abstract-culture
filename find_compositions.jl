@@ -12,6 +12,15 @@ function plot_task_graph(graph; node_color=:black, edge_color=:black)
 end
 
 
+function has_two_neighbors(graph, i, keep)
+    n = 0
+    for j in neighbors(graph, i)
+        n += keep[j]
+        n == 2 && return true
+    end
+    false
+end
+
 function composable_nodes!(graph, known)::Vector{Int}
     keep = Set(vertices(graph))
     keep = trues(vertices(graph))
@@ -19,7 +28,7 @@ function composable_nodes!(graph, known)::Vector{Int}
 
     @label top
     for i in vertices(graph)
-        if keep[i] && i ∉ known && sum(keep[j] for j in neighbors(graph, i); init=0) < 2
+        if keep[i] && i ∉ known && !has_two_neighbors(graph, i, keep)
             keep[i] = false
             @goto top
         end
