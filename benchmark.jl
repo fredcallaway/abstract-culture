@@ -5,12 +5,39 @@ using ProfileView
 
 # %% --------
 
-env = Environment(;k=10, n=5, m=10, ε=0.)
-@btime sim = simulate(env, 100; state=initial_population(env, 100));
+env = Environment(;k=10, n=10, m=10, p_0=.001)
+# @btime sim = simulate(env, 100; state=initial_population(env, 100));
 
-@time simulate(env, 100; state=initial_population(env, 200));
+GC.gc()
+@time sim = simulate(env, 1000; state=initial_population(env, 1000));
+# 2.035307 seconds (14.00 M allocations: 2.728 GiB, 12.63% gc time)
 
-@profview simulate(env, 100; state=initial_population(env, 200));
+# %% --------
+
+@profview simulate(env, 1000; state=initial_population(env, 1000));
+
+# %% --------
+
+@memoize get_X(n) = zeros(n, n)
+
+function foo(n, alloc; N=100000)
+    if alloc
+        for i in 1:N
+            zeros(n, n)
+        end
+    else
+        X = get_X(n)
+        for i in 1:N
+            X = get_X(n)
+            fill!(X, 0.)
+        end
+    end
+end
+
+foo(1, true)
+foo(1, false)
+@time foo(10, true)
+@time foo(10, false)
 
 # %% --------
 

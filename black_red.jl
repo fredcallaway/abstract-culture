@@ -18,6 +18,8 @@ prob_observe(p::Float64, m::Int) = ¬((¬p) ^ m)
     p_r::Float64 = 1.  # part red
     p_brr::Float64 = 0.  # full both
 
+    # used to avoid memory allocation
+    K::BitMatrix = falses(n, n+2)
 end
 
 @memoize function taskdist(T::Matrix{Float64})
@@ -44,14 +46,47 @@ function initial_population(env::Environment, N::Int)
     [Behavior(0, 0, false) for _ in 1:env.k, _ in 1:N]
 end
 
+
+function learn!(K, b::Behavior)
+    (;s, g, red) = b
+    n = size(K, 1)
+    (s == 0 || g == 0) && return
+    g = mod1(g, n)
+    if red
+        K[s, n+1] = true
+        K[g, n+2] = true
+    else
+        K[s, g] = true
+    end
+end
+
+function red_known(K, s)
+    n = size(K, 1)
+    K[mod1(s, n), n+1+div(s-1, n)]
+end
+
+red_known(K, s, g) = red_known(K, s) + red_known(K, g)
+
+function black_known(K, s, g)
+    n = size(K, 1)
+    g = mod1(g, n)
+    K[s, g]
+end
+
+
 function behave(env, tasks, observed)
-    known_red, known_black = extract_knowledge(env, observed)
+    K = env.K
+    fill!(K, false)
+    for b in observed
+        learn!(K, b)
+    end
     if env.foresight
-        union!(known_red, find_compositions(env, tasks, known_red, known_black))
+        error("unimplemented")
+        # union!(known_red, find_compositions(env, tasks, known_red, known_black))
     end
     map(tasks) do (s, g)
-        b = (s, g) in known_black
-        r = (s in known_red) + (g in known_red)
+        b = black_known(K, s, g)
+        r = red_known(K, s, g)
         use_red = if b
             r == 2 ? rand() < env.p_brr : false
         else
@@ -59,13 +94,9 @@ function behave(env, tasks, observed)
             r == 1 ? rand() < env.p_r :
             rand() < env.p_0
         end
-        if use_red
-            push!(known_red, s)
-            push!(known_red, g)
-        else
-            push!(known_black, (s,g))
-        end
-        Behavior(s, g, use_red)
+        b = Behavior(s, g, use_red)
+        learn!(K, b)
+        b
     end
 end
 
