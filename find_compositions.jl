@@ -1,17 +1,6 @@
 using Graphs
 using MetaGraphs
 
-function plot_task_graph(graph; node_color=:black, edge_color=:black)
-    layout = (g) -> map(vertices(g)) do i
-        Point(mod1(i, env.n)/2, div(i-1, env.n))
-    end
-    graphplot!(graph; layout, node_size=25, node_color, edge_color, edge_width=2.5)
-    ax = current_axis()
-    hidedecorations!(ax); hidespines!(ax)
-    # ax.aspect = DataAspect()
-end
-
-
 function has_two_neighbors(graph, i, keep)
     n = 0
     for j in neighbors(graph, i)
@@ -22,7 +11,6 @@ function has_two_neighbors(graph, i, keep)
 end
 
 function composable_nodes!(graph, known)::Vector{Int}
-    keep = Set(vertices(graph))
     keep = trues(vertices(graph))
     # remove loners
 
@@ -54,7 +42,6 @@ function composable_nodes!(graph, known)::Vector{Int}
     # union!(keep, known)
 end
 
-
 function extract_knowledge(env, observed)
     red = Set{Int}()
     black = Set{Tuple{Int, Int}}()
@@ -70,15 +57,18 @@ function extract_knowledge(env, observed)
     (red, black)
 end
 
-function find_compositions(env, tasks, observed)
-    known_red, known_black = extract_knowledge(env, observed)
-
+function find_compositions(env, tasks, known_red, known_black)
     graph = Graph(2env.n)
     for (s, g) in tasks
         (s, g) in known_black && continue
         add_edge!(graph, s, g)
     end
     composable_nodes!(graph, known_red)
+end
+
+function find_compositions(env, tasks, observed)
+    known_red, known_black = extract_knowledge(env, observed)
+    find_compositions(env, tasks, known_red, known_black)
 end
 
 

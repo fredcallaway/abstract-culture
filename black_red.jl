@@ -10,8 +10,14 @@ prob_observe(p::Float64, m::Int) = ¬((¬p) ^ m)
     n::Int = 5  # number of starts and goals
     m::Int = 5  # number of models
     k::Int = 1  # number of tasks per agent
-    ε::Float64 = .01  # lapse rate
+    ε::Float64 = 0. # lapse rate
     T::Matrix{Float64} = normalize!(ones(n, n))  # task distribution
+    foresight::Bool = false  # choose composition in advance?
+    # red frequencies for ambiguous cases
+    p_0::Float64 = 0.  # no info
+    p_r::Float64 = 1.  # part red
+    p_brr::Float64 = 0.  # full both
+
 end
 
 @memoize function taskdist(T::Matrix{Float64})
@@ -38,24 +44,33 @@ function initial_population(env::Environment, N::Int)
     [Behavior(0, 0, false) for _ in 1:env.k, _ in 1:N]
 end
 
-function behave(env, tasks, observed; ε)
-    red = find_compositions(env, tasks, observed)
+function behave(env, tasks, observed)
+    known_red, known_black = extract_knowledge(env, observed)
+    if env.foresight
+        union!(known_red, find_compositions(env, tasks, known_red, known_black))
+    end
     map(tasks) do (s, g)
-        if rand() < ε
-            return Behavior(s, g, rand((true, false)))
+        b = (s, g) in known_black
+        r = (s in known_red) + (g in known_red)
+        use_red = if b
+            r == 2 ? rand() < env.p_brr : false
         else
-            if s in red && g in red
-                Behavior(s, g, true)
-            else
-                Behavior(s, g, false)
-            end
+            r == 2 ? true :
+            r == 1 ? rand() < env.p_r :
+            rand() < env.p_0
         end
+        if use_red
+            push!(known_red, s)
+            push!(known_red, g)
+        else
+            push!(known_black, (s,g))
+        end
+        Behavior(s, g, use_red)
     end
 end
 
-
 function transition(env::Environment, pop::Matrix{Behavior})
-    (;n, m, ε, T, k) = env
+    (;n, m, T, k) = env
     N = size(pop, 2)
 
     pop1 = similar(pop)
@@ -63,7 +78,7 @@ function transition(env::Environment, pop::Matrix{Behavior})
 
     for agent in 1:N
         observed = sample(pop, m)
-        pop1[:, agent] = behave(env, tasks[:, agent], observed; ε)
+        pop1[:, agent] = behave(env, tasks[:, agent], observed)
     end
     pop1
 end

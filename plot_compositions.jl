@@ -5,8 +5,7 @@ include("figure.jl")
 
 using Graphs, MetaGraphs
 
-# %% --------
-function task_graph(env, tasks, observed)
+function task_graph(env, tasks, observed, cnodes)
     graph = MetaGraph(2env.n)
     for i in vertices(graph)
         set_prop!(graph, i, :label, i)
@@ -28,26 +27,66 @@ function task_graph(env, tasks, observed)
     graph
 end
 
+function plot_task_graph(graph)
+    layout = (g) -> map(vertices(g)) do i
+        Point(mod1(i, env.n)/2, div(i-1, env.n))
+    end
+    node_color = map(vertices(graph)) do i
+        if has_prop(graph, i, :observed)
+            :blue
+        elseif has_prop(graph, i, :learned)
+            :red
+        else
+            :black
+        end
+    end
+    edge_color = map(edges(graph)) do e
+        if has_prop(graph, e.src, e.dst, :observed)
+            :blue
+        elseif has_prop(graph, e.src, :learned) && has_prop(graph, e.dst, :learned)
+            :lightgray
+        else
+            :black
+        end
+    end
+    graphplot!(graph; layout, node_size=25, node_color, edge_color, edge_width=2.5)
+    ax = current_axis()
+    hidedecorations!(ax); hidespines!(ax)
+    # ax.aspect = DataAspect()
+end
+
 
 # %% --------
 
 env = Environment(k=1, m=10, n=4; ε=0.)
 tasks = [
-    (1, 1),
-    (1, 2),
-    (1, 4),
-    (2, 1),
-    (2, 2),
-    (3, 4),
-    (2, 1),
-    (3, 2),
+    (1, 5),
+    (1, 6),
+    # (1, 8),
+    (2, 5),
+    (2, 6),
+    (2, 7)
+    # (3, 8),
+    # (2, 5),
+    # (3, 6),
 ]
 
 observed = [
-    Behavior(1, 1, false),
-    Behavior(1, 2, false),
-    Behavior(3, 4, true),
+    Behavior(1, 5, true),
+    # Behavior(1, 2, false),
+    # Behavior(3, 4, true),
 ]
+
+graph = task_graph(env, tasks, observed)
+# cnodes = find_compositions(env, tasks, observed)
+# for i in cnodes
+#     set_prop!(graph, i, :learned, true)
+# end
+
+
+figure() do
+    plot_task_graph(graph)
+end
 
 # %% --------
 

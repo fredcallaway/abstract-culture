@@ -34,6 +34,9 @@ bench_comp(jobs[1:2])
 GC.gc()
 @time res = bench_comp(jobs);  #  1.490843 seconds (21.61 M allocations: 2.055 GiB, 11.90% gc time)
 
+# %% --------
+
+
 GC.gc()
 @profview bench_comp(jobs);
 
