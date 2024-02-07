@@ -15,11 +15,14 @@ prob_observe(p::Float64, m::Int) = ¬((¬p) ^ m)
 end
 
 @memoize function taskdist(T::Matrix{Float64})
-    get.(CartesianIndices(T), :I)[:]
+    n = size(T, 1)
+    map(CartesianIndices(T)[:]) do c
+        s, g = c.I
+        (s, g+n)
+    end
     # SetSampler(get.(CartesianIndices(T), :I)[:], T[:])
 end
 taskdist(env::Environment) = taskdist(env.T)
-
 
 struct Behavior
     s::Int
@@ -36,12 +39,12 @@ function initial_population(env::Environment, N::Int)
 end
 
 function behave(env, tasks, observed; ε)
-    s_red, g_red = find_compositions(env, tasks, observed)
+    red = find_compositions(env, tasks, observed)
     map(tasks) do (s, g)
         if rand() < ε
             return Behavior(s, g, rand((true, false)))
         else
-            if s in s_red && g in g_red
+            if s in red && g in red
                 Behavior(s, g, true)
             else
                 Behavior(s, g, false)
@@ -50,14 +53,15 @@ function behave(env, tasks, observed; ε)
     end
 end
 
+
 function transition(env::Environment, pop::Matrix{Behavior})
     (;n, m, ε, T, k) = env
-    N = length(pop)
+    N = size(pop, 2)
 
     pop1 = similar(pop)
     tasks = rand(taskdist(env), k, N)
 
-    for agent in 1:size(pop, 2)
+    for agent in 1:N
         observed = sample(pop, m)
         pop1[:, agent] = behave(env, tasks[:, agent], observed; ε)
     end

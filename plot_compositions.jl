@@ -13,16 +13,16 @@ function task_graph(env, tasks, observed)
     end
 
     for (s, g) in tasks
-        add_edge!(graph, s, g+env.n)
+        add_edge!(graph, s, g)
     end
 
     for beh in observed
         if beh.red
-            for i in (beh.s, beh.g+env.n)
+            for i in (beh.s, beh.g)
                 @assert set_prop!(graph, i, :observed, true)
             end
         else
-            set_prop!(graph, beh.s, beh.g+env.n, :observed, true)
+            set_prop!(graph, beh.s, beh.g, :observed, true)
         end
     end
     graph
@@ -51,7 +51,7 @@ observed = [
 
 # %% --------
 
-env = Environment(k=20, m=10, n=10; ε=0.)
+env = Environment(k=10, m=10, n=5; ε=0.)
 
 observed = map(rand(taskdist(env), env.m)) do (s, g)
     Behavior(s, g, rand(Bernoulli(0.4)))
@@ -59,8 +59,7 @@ end
 tasks = rand(taskdist(env), env.k)
 graph = task_graph(env, tasks, observed)
 
-comp = find_compositions(env, tasks, observed)
-cnodes = vcat(comp[1], comp[2] .+ env.n)
+cnodes = find_compositions(env, tasks, observed)
 
 figure() do
     node_color = map(vertices(graph)) do i
