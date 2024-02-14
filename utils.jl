@@ -12,6 +12,7 @@ using ProgressMeter
 using DataStructures: DefaultDict
 using Distributions
 using Dates
+using Distributed
 
 
 const TOL = 1e-5
@@ -257,13 +258,24 @@ macro require(ex)
     end |> esc
 end
 
-function dataframe(f, params)
-    flatmap(params) do x
-        rows = f(x)
+function dataframe(f, params; parallel=false, pbar=parallel)
+
+    map_fun = if pbar
+        parallel ? progress_pmap : progress_map
+    else
+        parallel ? pmap : map
+    end
+
+    results = map_fun(f, params)
+
+    flatmap(params, results) do prm, rows
         @require !ismissing(rows)
+        if rows isa NamedTuple
+            rows = [rows]
+        end
         map(rows) do row
             @require !ismissing(row)
-            (;x..., row...)
+            (;prm..., row...)
         end
     end |> skipmissing |> collect |> DataFrame
 end

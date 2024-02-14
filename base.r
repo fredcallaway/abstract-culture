@@ -97,6 +97,12 @@ teals_pal = function(...) {
     scale_color_discrete_sequential(palette = "TealGrn", l1=40, l2=80, c2=40, aesthetics=c("color", "fill"), ...)
 }
 
+discrete_sequential = function(...) {
+    scale_color_discrete_sequential(l1=40, l2=80, c2=40, aesthetics=c("color", "fill"), ...)
+}
+
+
+
 zissou_pal = scale_fill_discrete_divergingx(
     palette="Zissou 1", aesthetics=c("color", "fill"), rev=T, guide=guide_legend(reverse=TRUE))
 
@@ -393,6 +399,7 @@ point_smooth_bin = function(bins, min_n=2, ...) {
 }
 
 no_legend = theme(legend.position="none")
+rev_legend = guides(color = guide_legend(reverse=TRUE))
 
 no_gridlines = theme(
     panel.grid.major.x=element_blank(),
@@ -545,7 +552,7 @@ fancy_replacements = c(
 )
 
 fancy_word_replacements = c(
-    n = "#"
+    null = "null"
 )
 
 fancy_name = function(lab) {
