@@ -24,6 +24,11 @@ function task_graph(env, tasks, observed, cnodes)
             set_prop!(graph, beh.s, beh.g, :observed, true)
         end
     end
+    for i in eachindex(cnodes)
+        if cnodes[i]
+            set_prop!(graph, i, :learned, true)
+        end
+    end
     graph
 end
 
@@ -58,7 +63,7 @@ end
 
 # %% --------
 
-env = Environment(k=1, m=10, n=4; ε=0.)
+env = Environment(k=1, m=10, n=4, ε=0., p_r=1.)
 tasks = [
     (1, 5),
     (1, 6),
@@ -72,54 +77,26 @@ tasks = [
 ]
 
 observed = [
-    Behavior(1, 5, true),
+    # Behavior(1, 5, false),
     # Behavior(1, 2, false),
     # Behavior(3, 4, true),
 ]
 
-graph = task_graph(env, tasks, observed)
-# cnodes = find_compositions(env, tasks, observed)
-# for i in cnodes
-#     set_prop!(graph, i, :learned, true)
-# end
+graph = task_graph(env, tasks, observed, [])
 
-
-figure() do
-    plot_task_graph(graph)
-end
 
 # %% --------
 
-env = Environment(k=10, m=10, n=5; ε=0.)
-
-observed = map(rand(taskdist(env), env.m)) do (s, g)
-    Behavior(s, g, rand(Bernoulli(0.4)))
+K = env.K
+fill!(K, false)
+for b in observed
+    learn!(K, b)
 end
-tasks = rand(taskdist(env), env.k)
-graph = task_graph(env, tasks, observed)
 
-cnodes = find_compositions(env, tasks, observed)
+find_compositions!(env, tasks)
 
+
+graph = task_graph(env, tasks, observed, [red_known(K, i) for i in 1:2env.n])
 figure() do
-    node_color = map(vertices(graph)) do i
-        if has_prop(graph, i, :observed)
-            :blue
-        elseif i in cnodes
-            :red
-        else
-            :black
-        end
-    end
-    edge_color = map(edges(graph)) do e
-        if has_prop(graph, e.src, e.dst, :observed)
-            :blue
-        elseif e.src in cnodes && e.dst in cnodes
-            :lightgray
-        else
-            :black
-        end
-    end
-    plot_task_graph(graph; node_color, edge_color)
+    plot_task_graph(graph)
 end
-
-
