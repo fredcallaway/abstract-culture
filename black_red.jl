@@ -118,7 +118,11 @@ function transition(env::Environment, pop::Matrix{Behavior})
     @assert N == size(pop, 2)
 
     pop1 = similar(pop)
-    tasks = rand(taskdist(env), k, N)
+    # tasks = rand(taskdist(env), k, N)
+    tasks = mapreduce(hcat, 1:N) do i
+        sample(taskdist(env), k; replace=false)
+    end
+
 
     for agent in 1:N
         observed = sample(pop, m)

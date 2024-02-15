@@ -399,6 +399,7 @@ point_smooth_bin = function(bins, min_n=2, ...) {
 }
 
 no_legend = theme(legend.position="none")
+top_legend = theme(legend.position="top")
 rev_legend = guides(color = guide_legend(reverse=TRUE))
 
 no_gridlines = theme(
@@ -473,7 +474,7 @@ theme_update(
 update_geom_defaults("vline", list(linetype="dashed"))
 update_geom_defaults("abline", list(linetype="dashed"))
 update_geom_defaults("hline", list(linetype="dashed"))
-update_geom_defaults("line", list(linewidth = 1.2))
+update_geom_defaults("line", list(linewidth = 1))
 update_geom_defaults("smooth", list(color="black"))
 update_geom_defaults("pointrange", list(size=.3))
 
@@ -645,8 +646,9 @@ FIGS_PATH = maybe(FIGS_PATH, "figs/")
 MAKE_PDF = maybe(MAKE_PDF, FALSE)
 WIDTH = maybe(WIDTH, 3.5)
 HEIGHT = maybe(HEIGHT, 2.5)
+DPI = maybe(DPI, 160)
 
-fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=160, pdf=MAKE_PDF, ...) {
+fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_PDF, ...) {
     if (isTRUE(getOption('knitr.in.progress'))) {
         show(last_plot())
         return()
