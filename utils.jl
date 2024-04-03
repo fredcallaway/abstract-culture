@@ -52,27 +52,6 @@ end
 
 # %% ==================== General Purpose ====================
 
-ASYNC_RESULTS = Any[]
-macro asyncremote(expr)
-    quote
-        println("Starting remote task")
-        _remote_task = @async @remote $expr
-        @async begin
-            try
-                result = fetch(_remote_task)
-                push!(ASYNC_RESULTS, result)
-                run(`say \"task complete\"`)
-                println("⏰ Remote Task Done!")
-            catch err
-                println("☠️ TASK FAILED!")
-                run(`say \"task failed\"`)
-                rethrow()
-            end
-        end
-        _remote_task
-    end
-end
-
 mutable struct LineProgress
     N::Int
     every::Int
