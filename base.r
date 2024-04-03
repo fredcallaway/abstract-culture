@@ -124,6 +124,12 @@ glue = glue::glue
 
 # %% ==================== Miscellany ====================
 
+agg = function(data, y, grp=pid, fun=mean, na.rm=T) {
+    data %>%
+        group_by(pick({{grp}}), .add=T) %>%
+        summarise("{{y}}" := fun({{y}}, na.rm=na.rm))
+}
+
 quantize = function(x, q) q * round(x / q)
 
 
@@ -183,6 +189,7 @@ maybe = function(sym, .default=NULL) {
 }
 
 # %% ==================== Stats ====================
+
 
 coeftable = function(model, digits=3, intercept=FALSE) {
     summ(model)$coeftable %>%

@@ -4,6 +4,9 @@ using Graphs
 include("utils.jl")
 # include("find_compositions.jl")
 
+# use hub if travel_cost + rand_cost < hub_discount
+
+
 @kwdef struct Environment
     S::Int = 5  # number of states
     M::Int = 5  # number of models
@@ -13,12 +16,13 @@ include("utils.jl")
 
     discovery_cost::Float64 = 1.
     travel_cost::Float64 = 0.2
-    hub_discount::Float64 = 0.
+    hub_discount::Float64 = 0.0
+    rand_cost::Float64 = .01
 
     # internal variables
     graph::DiGraph = complete_digraph(S)
     edge_cost::Matrix{Float64} = begin
-        X = (discovery_cost + travel_cost) .+ .01 * rand(S, S)
+        X = (discovery_cost + travel_cost) .+ rand_cost * rand(S, S)
         X[1,:] .-= hub_discount
         X[:,1] .-= hub_discount
         X
@@ -27,7 +31,7 @@ include("utils.jl")
 end
 
 function initial_population(env::Environment)
-    normalize!(ones(env.S, env.S))
+    fill(Int[], env.N)
 end
 
 @memoize function taskdist(env::Environment)
@@ -37,33 +41,36 @@ end
     end
 end
 
-function transition(env::Environment, pop::Matrix{Float64})
-    (;N, M, discovery_cost, travel_cost, hub_discount, graph, edge_cost) = env
+
+function transition(env::Environment, pop::Vector{Vector{Int}})
+    (;N, M, S, discovery_cost, travel_cost, hub_discount, graph, edge_cost) = env
 
     pop1 = zeros(size(pop))
-    wts =  Weights(@view pop[:])
-    n_obs = min(sum(!isequal(0), wts), M)
+    map(1:N) do i
+        models = sample(pop, M; replace=false)
 
-
-    for i in 1:N
-        observed = sample(eachindex(pop), wts, n_obs; replace=false)
-        for i in observed
-            edge_cost[i] -= 1.
+        observed = Set{Int}()
+        for edges in models
+            for e in edges
+                push!(observed, e)
+            end
+        end
+        for e in observed
+            edge_cost[e] -= discovery_cost
         end
 
         (start, goal) = rand(taskdist(env))
         path = a_star(graph, start, goal, edge_cost)
 
         # restore original edge_cost
-        for i in observed
-            edge_cost[i] += 1.
+        for e in observed
+            edge_cost[e] += discovery_cost
         end
 
-        for edge in path
-            pop1[edge.src, edge.dst] += 1
+        map(path) do e
+            LinearIndices((S, S))[e.src, e.dst]
         end
     end
-    normalize!(pop1)
 end
 
 function simulate(env::Environment, n_gen; init=initial_population(env))
