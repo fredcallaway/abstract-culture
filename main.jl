@@ -1,10 +1,11 @@
-@everywhere include("graph.jl")
+include("remote.jl")
+connect_repl("d16")
+@remote gethostname()
 
 # %% --------
 
-include("figure.jl")
-using GraphMakie
-using NetworkLayout
+@both @everywhere include("graph.jl")
+include("graph_plots.jl")
 include("r.jl")
 
 # %% --------
@@ -13,19 +14,66 @@ R"""
 FIGS_PATH = "figs/graphs/"
 """
 
-# %% --------
-using RemoteREPL
-connect_repl("d16")
-# macro remote(expr)
-#     expr
-#     # RemoteREPL.@remote expr
-# end
+# %% ==================== social learning ====================
 
-@remote gethostname()
+env = Environment(S=5)
+(;S, M, K, N, graph) = env
 
-# %% --------
+figure() do
+    plot!(env.graph)
+end
 
-function run_sims(repeats=1; kws...)
+function num_paths(S)
+    map(0:S-2) do n
+        factorial(S - 2) ÷ factorial(S - 2 - n)
+    end
+end
+
+function possible_paths(env, s, g)
+    (;S, graph) = env
+    map(all_simple_paths(graph, s, g)) do path
+        map(sliding_window(path, 2)) do (src, dst)
+            LinearIndices((S, S))[src, dst]
+        end
+    end
+end
+
+function possible_paths(env)
+    (;S, graph) = env
+    flatmap(tasks(env)) do (s, g)
+        possible_paths(env, s, g)
+    end
+end
+
+function observation_probability(env::Environment, len, N=100000)
+    paths = unique(Set.(filter(x->length(x) == len, possible_paths(env))))
+    my_paths = possible_paths(env, 1, 2)
+    observation_probability(paths, my_paths, env.M, N)
+end
+
+function observation_probability(paths, my_paths, M, N)
+    sort!(my_paths, by=length)
+    c = zeros(Int, maximum(length.(my_paths)))
+    for i in 1:N
+        observed = reduce(union, rand(paths, M))
+        for p in my_paths
+            if all(e in observed for e in p)
+                c[length(p)] += 1
+                break
+            end
+        end
+    end
+    c ./ N
+end
+
+observation_probability(Environment(S=5, M=10), 1)
+
+
+
+# %% ==================== evolution ====================
+
+
+@both function run_sims(repeats=1, generations=30; kws...)
     g = grid(;kws..., population=1:repeats)
     dataframe(g; parallel=true) do prm
         prm = delete(prm, :population)
@@ -35,53 +83,20 @@ function run_sims(repeats=1; kws...)
                 length(edges) > 1
             end
             (;generation, compositionality)
-
-            # this is incorrect; edges are indexed in full matrix, not edgelist
-            # edge_counts = counts(SplitApplyCombine.flatten(pop), 1:ne(env.graph))
-
-            # state_counts = zeros(Int, env.S)
-            # all_edges = collect(edges(env.graph))
-            # foreach(enumerate(edge_counts)) do (e, c)
-            #     s = all_edges[e].dst
-            #     state_counts[s] += c
-            # end
-            # (;generation, compositionality, edge_counts, state_counts)
         end
     end
 end
 
-run_sims(5, )
-
-# %% ==================== plot environment ====================
-
-task = @asyncremote begin
-    g = grid(;S=2:30, M=0:5:150, population=1:20)
-    dataframe(g; parallel=true) do (;M, S)
-        env = Environment(;M, S, N=500, travel_cost=.01, rand_cost=.001)
-        map(enumerate(simulate(env, 100))) do (generation, pop)
-            compositionality = mean(pop) do edges
-                length(edges) > 1
-            end
-            (;generation, compositionality)
-
-            # this is incorrect; edges are indexed in full matrix, not edgelist
-            # edge_counts = counts(SplitApplyCombine.flatten(pop), 1:ne(env.graph))
-
-            # state_counts = zeros(Int, env.S)
-            # all_edges = collect(edges(env.graph))
-            # foreach(enumerate(edge_counts)) do (e, c)
-            #     s = all_edges[e].dst
-            #     state_counts[s] += c
-            # end
-            # (;generation, compositionality, edge_counts, state_counts)
-        end
-    end
-end
-
-df_ms = fetch(task)
-@rput df_ms
 
 # %% ==================== vary M and S ====================
+
+task = @asyncremote run_sims(10, S=2:30, M=0:5:150, N=[500], travel_cost=[0.])
+
+# %% --------
+
+# df_ms = fetch(task)
+serialize("tmp/df_ms", df_ms)
+@rput df_ms
 
 R"""
 df_ms %>%
@@ -96,32 +111,47 @@ df_ms %>%
 fig("heatmap", w=4)
 """
 
-# %% --------
-keep_s = 4:8:28
-keep_m = 10:30:100
 
+# %% --------
+# keep_s = 4:8:28
+# keep_m = 10:30:100
+
+env = Environment(hub_travel_discount=.005)
+
+edge_costs(env, [])
+
+task = @asyncremote run_sims(10, S = [5, 10, 20], M = [10, 20, 40], hub_travel_discount=[.005])
+df = fetch(task)
+@rput df
 R"""
-df_ms %>%
-    filter(S %in% $keep_s, M %in% $keep_m) %>%
+df %>%
+    # filter(S %in% $keep_s, M %in% $keep_m) %>%
     filter(generation < 31) %>% 
     ggplot(aes(generation, compositionality)) +
     geom_line(aes(group=population), linewidth=.2, alpha=0.5) +
-    facet_grid(S ~ M)
+    facet_grid(M ~ S, labeller=label_glue(cols='S={S}', rows='M={M}'))
 
-fig(w=5,h=5)
+fig("MS-evolution", w=5,h=4)
 """
-
-# %% --------
-
-
-
 
 
 # %% ==================== vary hub cost ====================
 
 
+df = run_sims(5, S=[10], M=[10], hub_discount=[.01])
+@rput df
+
+R"""
+df %>% filter(generation < 31) %>%
+    ggplot(aes(generation, compositionality)) +
+    geom_line(aes(group=population), linewidth=.2, alpha=0.5)
+fig()
+"""
+
+# %% --------
+
 facet_grid(3) do col, row
-    env = Environment(S=6, M=20, N=500, hub_discount=0.0, travel_cost=-0.005)
+    env = Environment(S=5, M=15, N=500, travel_cost=0.)
     sim = simulate(env, 100);
     pop = sim[end]
     plot_edge_frequency!(env, pop)
@@ -130,10 +160,15 @@ end
 
 # %% --------
 
+facet_grid(3) do col, row
+    env = Environment(S=5, M=15, N=500, hub_discount=0.001, travel_cost=0.01)
+    sim = simulate(env, 30);
+    pop = sim[end]
+    plot_edge_frequency!(env, pop)
+    # plot!([0,1], [0, col])
+end
 
-df = run_sims(10; S=[6], M=[20], N=[500], hub_discount=[.105])
-
-
+# %% --------
 
 
 
@@ -168,25 +203,7 @@ fig()
 """
 
 # %% ==================== plots ====================
-function Makie.plot!(g::AbstractGraph; kws...)
-    defaults = (
-        node_color="gray",
-        node_size=40,
-        node_strokewidth=2,
-        edge_width=2,
-        arrow_size=15,
-        arrow_shift=:end,
-        layout=Shell()
-    )
-    kws = merge(defaults, kws)
-    gp = graphplot!(env.graph; kws...)
-    ax = current_axis()
-    ax.yautolimitmargin = (0.1, 0.1)
-    ax.xautolimitmargin = (0.1, 0.1)
-    hidedecorations!(ax); hidespines!(ax)
-    ax.aspect = DataAspect()
 
-end
 
 env = Environment(S=5)
 figure("graphs/graph", size=(300,300)) do
@@ -195,24 +212,6 @@ end
 
 # %% --------
 
-function edge_frequency(env, pop)
-    X = zeros(env.S, env.S)
-    for path in pop
-        for edge in path
-            X[edge] += 1
-        end
-    end
-    normalize!(X)
-end
-
-function plot_edge_frequency!(env, pop)
-    E = edge_frequency(env, pop)
-    edge_width = 40 .* [E[e.src, e.dst] for e in edges(env.graph)]
-    gp = plot!(env.graph; arrow_size=10 .* (edge_width .^ 0.5), edge_width)
-    ax = current_axis()
-    hidedecorations!(ax); hidespines!(ax)
-    ax.aspect = DataAspect()
-end
 
 facet_grid(3) do col, row
     env = Environment(S=6, M=10, N=500)
