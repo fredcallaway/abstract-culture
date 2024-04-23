@@ -52,6 +52,24 @@ end
 
 # %% ==================== General Purpose ====================
 
+function SplitApplyCombine.invert(d::AbstractDict)
+    d2 = Dict(values(d) .=> keys(d))
+    if length(d2) != length(d)
+        error("Values are not unique, can't invert.")
+    end
+    d2
+end
+
+macro infiltry(ex)
+    return quote
+        try
+            $(esc(ex))
+        catch
+            $(Infiltrator.start_prompt)($(__module__), Base.@locals, $(String(__source__.file)), $(__source__.line))
+        end
+    end
+end
+
 mutable struct LineProgress
     N::Int
     every::Int
@@ -151,6 +169,13 @@ end
 function sliding_window(xs, k)
     map(1:length(xs) - (k-1)) do i
         @view xs[i:i+(k-1)]
+    end
+end
+
+function chunks(xs, k)
+    map(1:k:length(xs)) do i
+        stop = min(length(xs), i+(k-1))
+        @view xs[i:stop]
     end
 end
 

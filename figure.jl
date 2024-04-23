@@ -24,7 +24,7 @@ function figure(func, name="tmp", size=(600,300); dir="figs", resolution=3, pdf=
 end
 
 function facet_grid(f, name::String, ncol::Int, nrow::Int=1; size=300, kws...)
-    figure() do
+    figure(name) do
         fig = Figure(size=400 .* (ncol, nrow); kws...)
         for row=1:nrow, col=1:ncol
             ax = Axis(fig[row, col])
