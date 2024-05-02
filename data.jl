@@ -1,7 +1,7 @@
 using JSON
 using Memoize
 using Graphs
-
+include("allsimplepaths.jl")
 ematch(e, key::String) =  startswith(e["event"], key)
 ematch(e, keys) = any(key -> ematch(e, key), keys)
 ematch(key::String) = Base.Fix2(ematch, key)
@@ -45,6 +45,10 @@ function load_participants(versions...)
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
                 :generation = missing
 
+                # findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
+
+
+
 #                 try
 #                     init = findnextmatch(events, 1, "experiment.initialize")[1]
 #                     :generation = @coalesce begin
@@ -67,8 +71,8 @@ function load_participants(versions...)
                 end
             end
             select(Not([:assignmentId, :hitId, :useragent, :status, :counterbalance, :mode]))
+            @rsubset :complete
             @transform _ :pid = 1:nrow(_)
-            @orderby :pid
         end
     end
 end
@@ -95,7 +99,7 @@ struct Trial
     knowledge::Vector{Edge{Int}}
     traversed::Vector{Edge{Int}}
     path::Vector{Edge{Int}}
-    attempts::Vector{Tuple{Int,Int}}
+    attempts::Vector{Tuple{Int,Int,Union{Nothing, Int}}}
     start_time::Int
     end_time::Int
     # event_indices::Tuple{Int, Int}
@@ -130,7 +134,7 @@ duration(t::Trial) = t.end_time - t.start_time
         end |> skipmissing |> collect
 
         attempts = map(filtermatch(trial_events, "machine.result")) do e
-            (e["chemical"]+1, e["spell"]+1)
+            (e["chemical"]+1, e["spell"]+1, haskey(e, "result") ? e["result"] + 1 : nothing)
         end
 
         g = SimpleDiGraphFromIterator(traversed)

@@ -153,6 +153,7 @@ function integer_labeler(T::DataType)
     end
 end
 
+imap(f, xs...) = map(f, Iterators.countfrom(1), xs...)
 flatmap(f, xs...) = mapreduce(f, vcat, xs...)
 
 function softmax!(x)
@@ -359,4 +360,3 @@ nanreduce(f, x) = f(filter(!isnan, x))
 nanmean(x) = nanreduce(mean, x)
 nanstd(x) = nanreduce(std, x)
 normalize(x) = x ./ sum(x)
-normalize!(x) = x ./= sum(x)
