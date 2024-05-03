@@ -97,12 +97,6 @@ teals_pal = function(...) {
     scale_color_discrete_sequential(palette = "TealGrn", l1=40, l2=80, c2=40, aesthetics=c("color", "fill"), ...)
 }
 
-discrete_sequential = function(...) {
-    scale_color_discrete_sequential(l1=40, l2=80, c2=40, aesthetics=c("color", "fill"), ...)
-}
-
-
-
 zissou_pal = scale_fill_discrete_divergingx(
     palette="Zissou 1", aesthetics=c("color", "fill"), rev=T, guide=guide_legend(reverse=TRUE))
 
@@ -189,7 +183,6 @@ maybe = function(sym, .default=NULL) {
 }
 
 # %% ==================== Stats ====================
-
 
 coeftable = function(model, digits=3, intercept=FALSE) {
     summ(model)$coeftable %>%
@@ -366,8 +359,8 @@ bars = function(min_n=2, ...) {
     )
 }
 
-lines = function(f=mean, min_n=2, ...) {
-    stat_summary(fun=robust(f, min_n), geom="line", ...)
+mean_line = function(min_n=2, ...) {
+    stat_summary(fun=robust(mean, min_n), geom="line", ...)
 }
 
 point_bin = function(bins, min_n=2, ...) {
@@ -406,8 +399,6 @@ point_smooth_bin = function(bins, min_n=2, ...) {
 }
 
 no_legend = theme(legend.position="none")
-top_legend = theme(legend.position="top")
-rev_legend = guides(color = guide_legend(reverse=TRUE))
 
 no_gridlines = theme(
     panel.grid.major.x=element_blank(),
@@ -481,7 +472,7 @@ theme_update(
 update_geom_defaults("vline", list(linetype="dashed"))
 update_geom_defaults("abline", list(linetype="dashed"))
 update_geom_defaults("hline", list(linetype="dashed"))
-update_geom_defaults("line", list(linewidth = 1))
+update_geom_defaults("line", list(linewidth = 1.2))
 update_geom_defaults("smooth", list(color="black"))
 update_geom_defaults("pointrange", list(size=.3))
 
@@ -548,10 +539,10 @@ element_grob.element_text_transform <- function(element, label = "", ...) {
 }
 
 fancy_names = list(
-    pid = "participant",
-    gen = "generation"
+    pid = "Participant",
+    n_fix = "# Fixations",
+    n_fixated = "# States Fixated"
 )
-
 
 fancy_replacements = c(
     "1 ?\\* ?" = "",
@@ -560,7 +551,10 @@ fancy_replacements = c(
 )
 
 fancy_word_replacements = c(
-    null = "null"
+    n = "#",
+    dur = "duration",
+    prop = "proportion",
+    fix = "fixation"
 )
 
 fancy_name = function(lab) {
@@ -572,7 +566,7 @@ fancy_name = function(lab) {
     lab %>%
         str_replace_all(fancy_replacements) %>%
         str_replace_all(words) %>%
-        # str_to_title %>%
+        str_to_title %>%
         gsub("Rt", "RT", .) %>%
         gsub("(?!^)\\b(Of|In|On|The|Up|To|Vs|Per|A)\\b", "\\L\\1", ., perl=TRUE)
 }
@@ -602,6 +596,23 @@ no_fancy = theme(
 
 
 # %% ==================== Saving results ====================
+
+TMP_PATH = maybe(TMP_PATH, "tmp/")
+
+save_tmp = function(obj, name=glue(ensym(obj)), path=TMP_PATH) {
+    if(name == "." || name == "") {
+        stop("no name found save_tmp")
+    }
+    file = glue("{path}{name}.rds")
+    dir.create(dirname(file), recursive=TRUE, showWarnings=FALSE)
+    saveRDS(obj, file)
+    print(paste0(file))
+}
+
+read_tmp = function(name, path=TMP_PATH) {
+    file = glue("{path}{name}.rds")
+    readRDS(file)
+}
 
 sprintf_transformer <- function(text, envir) {
   m <- regexpr(":.+$", text)
@@ -653,9 +664,8 @@ FIGS_PATH = maybe(FIGS_PATH, "figs/")
 MAKE_PDF = maybe(MAKE_PDF, FALSE)
 WIDTH = maybe(WIDTH, 3.5)
 HEIGHT = maybe(HEIGHT, 2.5)
-DPI = maybe(DPI, 160)
 
-fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_PDF, ...) {
+fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=160, pdf=MAKE_PDF, ...) {
     if (isTRUE(getOption('knitr.in.progress'))) {
         show(last_plot())
         return()

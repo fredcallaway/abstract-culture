@@ -45,7 +45,13 @@ function load_participants(versions...)
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
                 :generation = missing
 
-                # findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
+
+                :information_type = if :complete
+                    params = findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
+                    params["information_type"]
+                else
+                    missing
+                end
 
 
 
@@ -137,14 +143,27 @@ duration(t::Trial) = t.end_time - t.start_time
             (e["chemical"]+1, e["spell"]+1, haskey(e, "result") ? e["result"] + 1 : nothing)
         end
 
+        stock = Set{Int}(start)
+        for a in attempts
+            if a[1] ∉ stock
+                @warn "cheater: $uid"
+                return missing
+            elseif !isnothing(a[3])
+                push!(stock, a[3])
+            end
+        end
+
+
         g = SimpleDiGraphFromIterator(traversed)
 
-        path = a_star(g, start, goal)
+        path = @infiltry a_star(g, start, goal)
+
+
 
         start_time = trial_events[1]["time"]
         end_time = trial_events[end]["time"]
 
         Trial(uid, trial_number, start, goal, knowledge, traversed, path, attempts, start_time, end_time)
-    end
+    end |> skipmissing |> collect
 end
 

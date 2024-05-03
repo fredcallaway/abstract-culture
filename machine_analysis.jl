@@ -3,10 +3,10 @@ include("data.jl")
 
 using DataFrames, RCall
 
-version = "v2.1"
-@rput version
 # %% --------
 
+version = "v1.1"
+@rput version
 R"""
 suppressPackageStartupMessages(source("base.r"))
 FIGS_PATH = glue("figs/machine/{version}-")
@@ -16,6 +16,7 @@ cpal = scale_colour_manual(values=c(
 ), aesthetics=c("fill", "colour"), name="")
 
 """
+
 # %% --------
 
 function ffmap(f, args)
@@ -28,11 +29,14 @@ function ffmap(f, args)
 end
 
 participants = load_participants(version)
+@rsubset! participants :uid ∉ ("v1.1-w6c294f2", "v1.1-wd2788fb")  # cheated
 uids = participants.uid
+
+trials = mapreduce(load_trials, vcat, uids)
 
 function pframe(f, data=participants)
     @chain data begin
-        @groupby :generation :pid
+        @groupby :information_type :pid
         @combine $AsTable = ffmap(f, :uid)
     end
 end
@@ -44,6 +48,131 @@ function tframe(f, data=participants)
         end
     end
 end
+
+# %% ==================== trials ====================
+
+df = pframe() do uid
+    map(load_trials(uid)) do t
+        discovered = setdiff(t.traversed, t.knowledge)
+        (;t.trial_number, path_length = length(t.path), n_pull=length(t.attempts), n_discovered=length(discovered))
+    end
+end
+@rput df
+
+R"""
+df %>%
+    ggplot(aes(trial_number, n_pull, color=information_type)) +
+    point_line()
+fig()
+"""
+
+# %% --------
+
+R"""
+df %>%
+    group_by(information_type, pid) %>%
+    summarise(compositionality = mean(path_length > 1)) %>%
+    ggplot(aes(information_type, compositionality, color=information_type)) +
+    geom_quasirandom(alpha=0.3) +
+    points() + no_legend
+fig()
+"""
+
+R"""
+df %>%
+    group_by(information_type, pid) %>%
+    summarise(n_pull = mean(n_pull)) %>%
+    ggplot(aes(information_type, n_pull, color=information_type)) +
+    geom_quasirandom(alpha=0.3) +
+    points() + no_legend
+fig()
+"""
+
+# %% ==================== is information conserved ====================
+
+INFO_TYPES = Dict(participants.uid .=> participants.information_type)
+info_type(uid::String) = INFO_TYPES[uid]
+info_type(t::Trial) = info_type(t.uid)
+
+
+
+info_type(uids[1])
+g = DiGraph(6)
+for e in flatmap(get(:path), load_trials(uids[1]))
+    add_edge!(g, e)
+end
+
+# %% --------
+
+function edge_counts(S::Int, edges)
+    X = zeros(S, S)
+    for e in edges
+        X[e.src, e.dst] += 1
+    end
+    X
+end
+
+
+function edge_frequency(trials::Vector{Trial}; S=6)
+    X = zeros(S, S)
+    for e in flatmap(get(:path), trials)
+        X[e.src, e.dst] += 1
+    end
+    X ./ length(trials)
+end
+
+
+
+function plot_edge_frequency!(E::Matrix; S=6)
+    g = complete_digraph(S)
+
+    edge_width = 30 .* [E[e.src, e.dst] for e in edges(g)]
+    arrow_size = map(edge_width) do ew
+        ew == 0 && return 0
+        max(3, 5. * ew^.89)
+    end
+    gp = plot!(g; arrow_size, edge_width)
+    ax = current_axis()
+    hidedecorations!(ax); hidespines!(ax)
+    ax.aspect = DataAspect()
+end
+
+
+countmap(participants.information_type)
+
+
+gtrials = collect(map(g->collect(group(get(:uid), g)), group(info_type, trials)))
+
+facet_grid(10, 3) do col, row
+    try
+        plot_edge_frequency!(edge_frequency(gtrials[row][col]))
+    catch
+        ax = current_axis()
+        hidedecorations!(ax); hidespines!(ax)
+    end
+end
+
+
+end
+figure() do
+    plot_edge_frequency!(edge_frequency(load_trials(uids[3])))
+end
+
+# %% --------
+
+
+
+# doesn't work bc everyone has a different hub
+# g_edges = map(group(info_type, trials)) do trials
+#     flatmap(trials) do t
+#         t.path
+#     end
+# end
+
+
+
+
+
 
 # %% ==================== scratch ====================
 
