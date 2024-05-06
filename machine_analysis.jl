@@ -70,23 +70,29 @@ fig()
 
 R"""
 df %>%
-    group_by(information_type, pid) %>%
+    mutate(half=if_else(trial_number>5, "early", "late")) %>%
+    group_by(half, information_type, pid) %>%
     summarise(compositionality = mean(path_length > 1)) %>%
-    ggplot(aes(information_type, compositionality, color=information_type)) +
+    ggplot(aes(half, compositionality, color=information_type, group=information_type)) +
     geom_quasirandom(alpha=0.3) +
-    points() + no_legend
-fig()
+    point_line()
+
+fig(w=4)
 """
+
 
 R"""
 df %>%
-    group_by(information_type, pid) %>%
+    mutate(half=if_else(trial_number>5, "early", "late")) %>%
+    group_by(half, information_type, pid) %>%
     summarise(n_pull = mean(n_pull)) %>%
-    ggplot(aes(information_type, n_pull, color=information_type)) +
+    ggplot(aes(half, n_pull, color=information_type, group=information_type)) +
     geom_quasirandom(alpha=0.3) +
-    points() + no_legend
-fig()
+    point_line()
+
+fig(w=4)
 """
+
 
 # %% ==================== is information conserved ====================
 
