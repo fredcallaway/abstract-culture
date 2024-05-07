@@ -5,7 +5,7 @@ using DataFrames, RCall
 
 # %% --------
 
-version = "v1.1"
+version = "v2.0"
 @rput version
 R"""
 suppressPackageStartupMessages(source("base.r"))
@@ -16,6 +16,7 @@ cpal = scale_colour_manual(values=c(
 ), aesthetics=c("fill", "colour"), name="")
 
 """
+
 
 # %% --------
 
@@ -29,7 +30,8 @@ function ffmap(f, args)
 end
 
 participants = load_participants(version)
-@rsubset! participants :uid ∉ ("v1.1-w6c294f2", "v1.1-wd2788fb")  # cheated
+@rsubset! participants :pid > 3  # old version??
+# @rsubset! participants :uid ∉ ("v1.1-w6c294f2", "v1.1-wd2788fb")  # cheated
 uids = participants.uid
 
 trials = mapreduce(load_trials, vcat, uids)
@@ -62,7 +64,8 @@ end
 R"""
 df %>%
     ggplot(aes(trial_number, n_pull, color=information_type)) +
-    point_line()
+    point_line() +
+    expand_limits(y=0)
 fig()
 """
 

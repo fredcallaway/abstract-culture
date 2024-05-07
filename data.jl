@@ -25,6 +25,12 @@ function findnextmatch(events, start, key)
     events[i], i
 end
 
+function findprevmatch(events, start, key)
+    i = findprev(e -> ematch(e, key), events, start)
+    isnothing(i) && return (nothing, nothing)
+    events[i], i
+end
+
 filtermatch(uid::String, key) = filtermatch(load_events(uid), key)
 function filtermatch(events, key)
     filter(events) do e
@@ -48,7 +54,7 @@ function load_participants(versions...)
 
                 :information_type = if :complete
                     params = findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
-                    params["information_type"]
+                    get(params, "information_type", missing)
                 else
                     missing
                 end
@@ -105,7 +111,7 @@ struct Trial
     knowledge::Vector{Edge{Int}}
     traversed::Vector{Edge{Int}}
     path::Vector{Edge{Int}}
-    attempts::Vector{Tuple{Int,Int,Union{Nothing, Int}}}
+    attempts::Vector
     start_time::Int
     end_time::Int
     # event_indices::Tuple{Int, Int}
@@ -135,21 +141,34 @@ duration(t::Trial) = t.end_time - t.start_time
         end
 
         traversed = map(filtermatch(trial_events, "machine.result")) do e
-            @require haskey(e, "result")
+            @require haskey(e, "result") && !isnothing(e["result"])
             Edge{Int}((e["chemical"]+1, e["result"]+1))
         end |> skipmissing |> collect
 
-        attempts = map(filtermatch(trial_events, "machine.result")) do e
-            (e["chemical"]+1, e["spell"]+1, haskey(e, "result") ? e["result"] + 1 : nothing)
-        end
+
+        attempts = map(findallmatch(trial_events, "machine.result")) do i
+            e = trial_events[i]
+            e_target = findprevmatch(trial_events, i, "machine.activateTarget")[1]
+            @require !isnothing(e_target)
+            target = parse(Int, e_target["event"][end])
+            result = get(e, "result", nothing)
+            if !isnothing(result)
+                result += 1
+            end
+            (;src=e["chemical"]+1, dst=target+1, mode=e["mode"]+1, result)
+        end |> skipmissing |> collect
+
+        # attempts = map(filtermatch(trial_events, "machine.result")) do e
+        #     (e["chemical"]+1, e["spell"]+1, haskey(e, "result") ? e["result"] + 1 : nothing)
+        # end
 
         stock = Set{Int}(start)
         for a in attempts
-            if a[1] ∉ stock
+            if a.src ∉ stock
                 @warn "cheater: $uid"
                 return missing
-            elseif !isnothing(a[3])
-                push!(stock, a[3])
+            elseif !isnothing(a.result)
+                push!(stock, a.result)
             end
         end
 
@@ -166,4 +185,3 @@ duration(t::Trial) = t.end_time - t.start_time
         Trial(uid, trial_number, start, goal, knowledge, traversed, path, attempts, start_time, end_time)
     end |> skipmissing |> collect
 end
-
