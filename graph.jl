@@ -81,6 +81,8 @@ function transition(env::Environment, pop::Vector{Vector{Int}})
     map(1:N) do i
         models = sample(pop, M; replace=false)
         observed = observed_edges(models)
+        # all_edges = SplitApplyCombine.flatten(pop)
+        # observed = Set(sample(all_edges, min(length(all_edges), M); replace=false))
 
         (start, goal) = rand(tasks(env))
         path = a_star(graph, start, goal, edge_costs(env, observed))

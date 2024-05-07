@@ -1,5 +1,7 @@
 include("utils.jl")
 include("data.jl")
+include("figure.jl")
+include("graph_plots.jl")
 
 using DataFrames, RCall
 
@@ -146,10 +148,6 @@ function plot_edge_frequency!(E::Matrix; S=6)
     ax.aspect = DataAspect()
 end
 
-
-countmap(participants.information_type)
-
-
 gtrials = collect(map(g->collect(group(get(:uid), g)), group(info_type, trials)))
 
 facet_grid(10, 3) do col, row
@@ -159,12 +157,6 @@ facet_grid(10, 3) do col, row
         ax = current_axis()
         hidedecorations!(ax); hidespines!(ax)
     end
-end
-
-
-end
-figure() do
-    plot_edge_frequency!(edge_frequency(load_trials(uids[3])))
 end
 
 # %% --------

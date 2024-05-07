@@ -17,7 +17,7 @@ FIGS_PATH = "figs/graphs/"
 
 # %% ==================== social learning ====================
 
-env = Environment(S=5)
+env = Environment(S=5, discovery_cost=4., travel_cost=1.)
 (;S, M, K, N, graph) = env
 
 figure() do
@@ -71,12 +71,12 @@ observation_probability(Environment(S=5, M=10), 1)
 
 # %% ==================== evolution ====================
 
-@both function run_sims(params::AbstractArray{<:NamedTuple})
-    dataframe(parallel=true) do prm
+@both function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
+    dataframe(params, parallel=true) do prm
         prm = delete(prm, :population)
         env = Environment(;prm...)
-        @require env.N ≥ env.M
-        map(enumerate(simulate(env, 100))) do (generation, pop)
+        # @require env.N ≥ env.M
+        map(enumerate(simulate(env, generations))) do (generation, pop)
             compositionality = mean(pop) do edges
                 length(edges) > 1
             end
@@ -85,16 +85,28 @@ observation_probability(Environment(S=5, M=10), 1)
     end
 end
 
-
 @both function run_sims(repeats=1, generations=30; kws...)
-    run_sims(grid(;kws..., population=1:repeats))
+    run_sims(grid(;kws..., population=1:repeats); generations)
 end
 
+# %% ==================== simple ====================
+
+@time df = run_sims(100, 10, S=[6], M=[20], N=[15]);
+
+@rput df
+
+R"""
+df %>%
+    ggplot(aes(generation, compositionality)) +
+    point_line()
+fig()
+"""
 
 # %% ==================== vary M and S ====================
 
 task = @asyncremote run_sims(10, S=2:30, M=0:5:150, N=[500])
 df_zoom = fetch(task)
+
 # %% --------
 
 # df_ms = fetch(task)
@@ -192,7 +204,7 @@ fig("tmp", w=5, h=4)
 
 # %% ==================== structure ====================
 
-env = Environment(S=5)
+env = Environment(S=6)
 figure("graphs/graph", size=(300,300)) do
     plot!(env.graph)
 end
@@ -213,6 +225,8 @@ function plot_chain(name, env, seed=1)
         plot_edge_frequency!(env, pop)
     end
 end
+
+plot_chain("structure6-10", Environment(S=5, M=20, N=30))
 
 # %% --------
 plot_chain("structure10", Environment(S=5, M=10, N=10))
