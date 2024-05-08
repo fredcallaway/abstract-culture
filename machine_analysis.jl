@@ -7,7 +7,7 @@ using DataFrames, RCall
 
 # %% --------
 
-version = "3"
+version = "4"
 @rput version
 R"""
 suppressPackageStartupMessages(source("base.r"))
@@ -22,6 +22,9 @@ cpal = scale_colour_manual(values=c(
 
 # %% --------
 
+load_events("v4.0-wb30a1fa")[4]["PARAMS"]["example"]
+# %% --------
+
 function ffmap(f, args)
     results = skipmissing(map(f, args))
     while eltype(results) <: AbstractVector
@@ -31,7 +34,7 @@ function ffmap(f, args)
     collect(results)
 end
 
-participants = load_participants("v3.0", "v3.1")
+participants = load_participants("v4.0")
 # @rsubset! participants :pid > 3  # old version??
 # @rsubset! participants :uid ∉ ("v1.1-w6c294f2", "v1.1-wd2788fb")  # cheated
 uids = participants.uid
@@ -40,7 +43,7 @@ trials = mapreduce(load_trials, vcat, uids)
 
 function pframe(f, data=participants)
     @chain data begin
-        @groupby :information_type :pid
+        @groupby :generation :pid
         @combine $AsTable = ffmap(f, :uid)
     end
 end
@@ -52,6 +55,40 @@ function tframe(f, data=participants)
         end
     end
 end
+
+participants
+
+# %% ==================== scratch ====================
+
+
+flatmap(uids) do uid
+    events_ = load_events(uid)
+    map(filtermatch(events_, "machine.run")) do x
+        x["transitions"]
+    end
+end |> unique
+
+
+# %% --------
+
+df = pframe() do uid
+    map(load_trials(uid)) do t
+        discovered = setdiff(t.traversed, t.knowledge)
+        (;t.trial_number, path_length = length(t.path), n_pull=length(t.attempts), n_discovered=length(discovered))
+    end
+end
+@rput df
+
+R"""
+df %>%
+    group_by(generation, pid) %>%
+    summarise(compositionality = mean(path_length > 1)) %>%
+    ggplot(aes(generation, compositionality)) +
+    point_line() +
+    expand_limits(y=0)
+fig()
+"""
+
 
 # %% ==================== trials ====================
 
@@ -67,6 +104,14 @@ end
 R"""
 df %>%
     ggplot(aes(trial_number, n_pull, color=information_type)) +
+    point_line() +
+    expand_limits(y=0)
+fig()
+"""
+
+R"""
+df %>%
+    ggplot(aes(trial_number, path_length, color=information_type)) +
     point_line() +
     expand_limits(y=0)
 fig()
@@ -108,7 +153,6 @@ info_type(uid::String) = INFO_TYPES[uid]
 info_type(t::Trial) = info_type(t.uid)
 
 
-
 info_type(uids[1])
 g = DiGraph(6)
 for e in flatmap(get(:path), load_trials(uids[1]))
@@ -134,8 +178,6 @@ function edge_frequency(trials::Vector{Trial}; S=6)
     X ./ length(trials)
 end
 
-
-
 function plot_edge_frequency!(E::Matrix; S=6)
     g = complete_digraph(S)
 
@@ -150,6 +192,7 @@ function plot_edge_frequency!(E::Matrix; S=6)
     ax.aspect = DataAspect()
 end
 
+
 gtrials = collect(map(g->collect(group(get(:uid), g)), group(info_type, trials)))
 
 facet_grid(10, 3) do col, row
@@ -163,6 +206,19 @@ end
 
 # %% --------
 
+
+solutions = map(trials) do t
+    Tuple.(t.path)
+end
+
+tt = sample(trials, 10; replace=false)
+map(get(:path), tt)
+figure() do
+    E = edge_frequency(tt)
+    E[E .> 0] .= .1
+    plot_edge_frequency!(E)
+end
+# %% --------
 
 
 # doesn't work bc everyone has a different hub
@@ -237,10 +293,6 @@ end
 
 # %% --------
 
-R"""
-
-"""
-
 
 # %% --------
 
@@ -311,7 +363,7 @@ fig()
 
 # %% ==================== timing ====================
 
-idents = Dict(v => k for (k, v) in JSON.parsefile("../machine-task/data/raw/$version/identifiers.json"))
+# idents = Dict(v => k for (k, v) in JSON.parsefile("../machine-task/data/raw/$version/identifiers.json"))
 
 
 times = pframe() do uid
@@ -331,7 +383,7 @@ times = pframe() do uid
         @assert (block == rsplit(s["event"], "."; limit=2)[end])
         block => (e["time"] - s["time"]) / 60000
     end |> Dict{String, Any}
-    d["workerid"] = idents[split(uid, "-")[end]]
+    # d["workerid"] = idents[split(uid, "-")[end]]
     d
 end
 

@@ -52,6 +52,25 @@ end
 
 # %% ==================== General Purpose ====================
 
+
+function ensure_keys(d::Dict{K,V}, keys) where {K,V}
+    d1 = Dict{Union{K,eltype(keys)}, Union{V,Missing}}(d)
+    for k in keys
+        if !haskey(d1, k)
+            d1[k] = missing
+        end
+    end
+    d1
+end
+
+function pick_dict(d::Dict{K,V}, keys) where {K,V}
+    d1 = Dict{Union{K,eltype(keys)}, Union{V,Missing}}()
+    for k in keys
+        d1[k] = get(d, k, missing)
+    end
+    d1
+end
+
 function SplitApplyCombine.invert(d::AbstractDict)
     d2 = Dict(values(d) .=> keys(d))
     if length(d2) != length(d)

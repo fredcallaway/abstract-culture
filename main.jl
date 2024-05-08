@@ -74,7 +74,7 @@ observation_probability(Environment(S=5, M=10), 1)
 @both function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
     dataframe(params, parallel=true) do prm
         prm = delete(prm, :population)
-        env = Environment(;prm...)
+        env = Environment(;prm..., discovery_cost=4., travel_cost=1.)
         # @require env.N ≥ env.M
         map(enumerate(simulate(env, generations))) do (generation, pop)
             compositionality = mean(pop) do edges
@@ -91,7 +91,7 @@ end
 
 # %% ==================== simple ====================
 
-@time df = run_sims(100, 10, S=[6], M=[20], N=[15]);
+@time df = run_sims(100, 10, S=[6], M=[10], N=[15]);
 
 @rput df
 
@@ -101,6 +101,19 @@ df %>%
     point_line()
 fig()
 """
+
+# %% ==================== vary M ====================
+
+@time df = run_sims(100, 10, S=[6], M=[10], N=[5, 10, 15, 20]);
+@rput df
+
+R"""
+df %>%
+    ggplot(aes(generation, compositionality, color=factor(N))) +
+    point_line()
+fig()
+"""
+
 
 # %% ==================== vary M and S ====================
 

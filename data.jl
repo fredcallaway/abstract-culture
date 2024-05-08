@@ -38,6 +38,12 @@ function filtermatch(events, key)
     end
 end
 
+function extract_parameters(events, keys...)
+    e = findnextmatch(events, 1, "experiment.initialize")[1]
+    params = isnothing(e) ? Dict() : e["PARAMS"]
+    Dict{String,Any}(pick_dict(params, keys))
+end
+
 function load_participants(versions...)
     gen_counts = zeros(Int, 100)
     mapreduce(vcat, versions) do version
@@ -51,23 +57,22 @@ function load_participants(versions...)
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
                 :generation = missing
 
+                # params = findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
+                # :generation = get(params, "generation", missing)
+                # :information_type = if :complete
+                #     get(params, "information_type", missing)
+                # else
+                #     missing
+                # end
 
-                :information_type = if :complete
-                    params = findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
-                    get(params, "information_type", missing)
-                else
-                    missing
-                end
 
-
-
-#                 try
-#                     init = findnextmatch(events, 1, "experiment.initialize")[1]
-#                     :generation = @coalesce begin
-#                         get(init["PARAMS"], "generation", missing)
-#                         get(init["stimuli"], "generation", missing)
-#                     end
-#                 catch end
+                try
+                    init = findnextmatch(events, 1, "experiment.initialize")[1]
+                    :generation = @coalesce begin
+                        get(init["PARAMS"], "generation", 1)
+                        # get(init["stimuli"], "generation", missing)
+                    end
+                catch end
 # -
 #                 if :complete && !ismissing(:generation)
 #                     gen_counts[:generation] += 1
@@ -185,3 +190,5 @@ duration(t::Trial) = t.end_time - t.start_time
         Trial(uid, trial_number, start, goal, knowledge, traversed, path, attempts, start_time, end_time)
     end |> skipmissing |> collect
 end
+
+participants = load_participants("v4.0")
