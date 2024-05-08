@@ -7,7 +7,7 @@ using DataFrames, RCall
 
 # %% --------
 
-version = "v2.0"
+version = "3"
 @rput version
 R"""
 suppressPackageStartupMessages(source("base.r"))
@@ -31,8 +31,8 @@ function ffmap(f, args)
     collect(results)
 end
 
-participants = load_participants(version)
-@rsubset! participants :pid > 3  # old version??
+participants = load_participants("v3.0", "v3.1")
+# @rsubset! participants :pid > 3  # old version??
 # @rsubset! participants :uid ∉ ("v1.1-w6c294f2", "v1.1-wd2788fb")  # cheated
 uids = participants.uid
 
@@ -55,6 +55,7 @@ end
 
 # %% ==================== trials ====================
 
+
 df = pframe() do uid
     map(load_trials(uid)) do t
         discovered = setdiff(t.traversed, t.knowledge)
@@ -75,7 +76,7 @@ fig()
 
 R"""
 df %>%
-    mutate(half=if_else(trial_number>5, "early", "late")) %>%
+    mutate(half=if_else(trial_number>5, "late", "early")) %>%
     group_by(half, information_type, pid) %>%
     summarise(compositionality = mean(path_length > 1)) %>%
     ggplot(aes(half, compositionality, color=information_type, group=information_type)) +
@@ -87,8 +88,9 @@ fig(w=4)
 
 
 R"""
+
 df %>%
-    mutate(half=if_else(trial_number>5, "early", "late")) %>%
+    mutate(half=if_else(trial_number>5, "late", "early")) %>%
     group_by(half, information_type, pid) %>%
     summarise(n_pull = mean(n_pull)) %>%
     ggplot(aes(half, n_pull, color=information_type, group=information_type)) +

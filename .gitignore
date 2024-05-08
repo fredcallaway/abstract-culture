@@ -1,3 +1,4 @@
 .fighist
 figs/tmp.png
 figs/*/tmp.png
+figs/*/*-tmp.png
