@@ -11,9 +11,8 @@ include("r.jl")
 
 # %% --------
 
-R"""
 FIGS_PATH = "figs/graphs/"
-"""
+@rput FIGS_PATH
 
 # %% ==================== social learning ====================
 
@@ -67,20 +66,22 @@ function observation_probability(paths, my_paths, M, N)
     c ./ N
 end
 
-observation_probability(Environment(S=5, M=10), 1)
 
 # %% ==================== evolution ====================
 
 @both function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
     dataframe(params, parallel=true) do prm
         prm = delete(prm, :population)
-        env = Environment(;prm..., discovery_cost=4., travel_cost=1.)
-        # @require env.N ≥ env.M
+        env = Environment(;prm..., discovery_cost=8., travel_cost=1.)
+        @require env.N * env.K ≥ env.M
         map(enumerate(simulate(env, generations))) do (generation, pop)
-            compositionality = mean(pop) do edges
-                length(edges) > 1
+            compositionality = mean(pop) do solutions
+                mean(solutions) do edges
+                    length(edges) > 1
+                end
             end
-            (;generation, compositionality)
+            F = normalize(edge_frequency(env, pop))
+            (;generation, compositionality, entropy=entropy(F), unique_edges=sum(F .> 0))
         end
     end
 end
@@ -89,15 +90,15 @@ end
     run_sims(grid(;kws..., population=1:repeats); generations)
 end
 
+
 # %% ==================== simple ====================
 
-@time df = run_sims(100, 10, S=[6], M=[10], N=[15]);
-
+@time df = run_sims(100, 10, S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1);
 @rput df
 
 R"""
 df %>%
-    ggplot(aes(generation, compositionality)) +
+    ggplot(aes(generation, unique_edges, color=factor(K))) +
     point_line()
 fig()
 """
@@ -163,6 +164,33 @@ heat2 = df_zoom %>%
 fig("heatmap_zoom", w=4)
 """
 
+
+
+# %% ==================== vary a lot ====================
+
+df = run_sims(30, S=[6, 8], M=[10, 15, 20], N=[10, 15], K=[1,5])
+@rput df
+R"""
+
+df %>%
+    ggplot(aes(generation, unique_edges, color=factor(M), linetype=factor(N))) +
+    # geom_line(mapping=aes(group=population), linewidth=.1) +
+    mean_line(min_n=0) +
+    # geom_hline(yintercept=30) +
+    scale_y_continuous(breaks = scales::pretty_breaks()) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+df %>% ggplot(aes(generation, entropy, color=factor(M), linetype=factor(N))) +
+    # geom_line(mapping=aes(group=population), linewidth=.1) +
+    mean_line(min_n=0) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+    plot_layout(guides = 'collect') +
+    labs(y="Edge Entropy") &
+    facet_grid(S ~ K, labeller=label_both)
+
+fig(w=8, h=4)
+"""
+
+
 # %% ==================== dynamics ====================
 
 
@@ -224,28 +252,40 @@ end
 
 # %% --------
 
-function plot_chain(name, env, seed=1)
+function plot_chain(name, env, seed=1; generations=10, chunk_size=1)
     Random.seed!(seed)
     sims = repeatedly(3) do
-        sim = simulate(env, 30);
-        map(chunks(sim, 5)) do chunk
-            reduce(vcat, chunk)
+        sim = simulate(env, generations);
+        map(chunks(sim, chunk_size)) do chunk
+            reduce(vcat, reduce(vcat, chunk))
         end
     end
 
-    facet_grid("graphs/$name", length(sims[1]), length(sims)) do col, row
+    facet_grid(name, length(sims[1]), length(sims)) do col, row
         pop = sims[row][col]
         plot_edge_frequency!(env, pop)
     end
 end
 
-plot_chain("structure6-10", Environment(S=5, M=20, N=30))
+
+plot_chain("structure-v4", Environment(S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1.))
+plot_chain("structure-v4K1", Environment(S=6, M=10, N=10, K=1, discovery_cost=8, travel_cost=1.))
+
+plot_chain("structure-v4K1alt", Environment(S=6, M=20, N=20, K=1, discovery_cost=4, travel_cost=1.))
+
+plot_chain("structure-v4K1N30", Environment(S=6, M=10, N=30, K=1, discovery_cost=4, travel_cost=1.))
 
 # %% --------
+
+plot_chain("structure10", Environment(S=6, M=10, N=10, discovery_cost=4, travel_cost=1.); generations=8, chunk_size=1)
+
+# %% --------
+
+
 plot_chain("structure10", Environment(S=5, M=10, N=10))
-plot_chain("structure50", Environment(S=5, M=10, N=50))
-plot_chain("structure-hub10", Environment(S=5, M=10, N=10, hub_travel_discount=.005))
-plot_chain("structure-hub50", Environment(S=5, M=10, N=50, hub_travel_discount=.005))
+plot_chain("structure50", Environment(S=5, M=10, N=50); generations=30, chunk_size=5)
+plot_chain("structure-hub10", Environment(S=5, M=10, N=10, hub_travel_discount=.005); generations=30, chunk_size=5)
+plot_chain("structure-hub50", Environment(S=5, M=10, N=50, hub_travel_discount=.005); generations=30, chunk_size=5)
 
 # %% --------
 

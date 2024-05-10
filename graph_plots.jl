@@ -25,12 +25,14 @@ end
 
 function edge_frequency(env, pop)
     X = zeros(env.S, env.S)
-    for path in pop
-        for edge in path
-            X[edge] += 1
+    for pp in pop
+        for path in pp
+            for edge in path
+                X[edge] += 1
+            end
         end
     end
-    X ./ length(pop)
+    normalize(X)
 end
 
 function plot_edge_frequency!(env, pop)
@@ -45,3 +47,26 @@ function plot_edge_frequency!(env, pop)
     hidedecorations!(ax); hidespines!(ax)
     ax.aspect = DataAspect()
 end
+
+function edge_frequency(trials::Vector{Trial}; S=6)
+    X = zeros(S, S)
+    for e in flatmap(get(:path), trials)
+        X[e.src, e.dst] += 1
+    end
+    normalize(X)
+end
+
+function plot_edge_frequency!(E::Matrix; S=6)
+    g = complete_digraph(S)
+
+    edge_width = 30 .* [E[e.src, e.dst] for e in edges(g)]
+    arrow_size = map(edge_width) do ew
+        ew == 0 && return 0
+        max(3., 5. * ew^.89)
+    end
+    gp = plot!(g; arrow_size, edge_width)
+    ax = current_axis()
+    hidedecorations!(ax); hidespines!(ax)
+    ax.aspect = DataAspect()
+end
+

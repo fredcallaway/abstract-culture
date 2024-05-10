@@ -254,7 +254,7 @@ function grid(;kws...)
     X = map(Iterators.product(values(kws)...)) do x
         (; zip(keys(kws), x)...)
     end
-    KeyedArray(X; kws...)
+    X
 end
 
 function initialize_keyed(val; keys...)

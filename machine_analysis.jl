@@ -2,28 +2,25 @@ include("utils.jl")
 include("data.jl")
 include("figure.jl")
 include("graph_plots.jl")
+include("graph.jl")
 
 using DataFrames, RCall
 
 # %% --------
 
-version = "4"
-@rput version
+version = "v4"
+
+FIGS_PATH = "figs/machine/$version-"
+@rput FIGS_PATH
+
 R"""
 suppressPackageStartupMessages(source("base.r"))
-FIGS_PATH = glue("figs/machine/{version}-")
 cpal = scale_colour_manual(values=c(
     individual="#73AB84",
     social="#F5760A"
 ), aesthetics=c("fill", "colour"), name="")
 
 """
-
-
-# %% --------
-
-load_events("v4.0-wb30a1fa")[4]["PARAMS"]["example"]
-# %% --------
 
 function ffmap(f, args)
     results = skipmissing(map(f, args))
@@ -34,7 +31,7 @@ function ffmap(f, args)
     collect(results)
 end
 
-participants = load_participants("v4.0")
+participants = load_participants("v4.0", "v4.0g3", "v4.0g3b", "v4.0g4", "v4.0g6", "v4.0g7", "v4.0g8", "v4.0g9", "v4.0g10")
 # @rsubset! participants :pid > 3  # old version??
 # @rsubset! participants :uid ∉ ("v1.1-w6c294f2", "v1.1-wd2788fb")  # cheated
 uids = participants.uid
@@ -56,10 +53,212 @@ function tframe(f, data=participants)
     end
 end
 
-participants
+
+using Dictionaries
+
+GENERATIONS = Dict(participants.uid .=> participants.generation)
+generation(uid::String)::Int = GENERATIONS[uid]
+generation(t::Trial)::Int = generation(t.uid)
+gtrials = Dictionaries.sortkeys(map(g->collect(group(get(:uid), g)), group(generation, trials)))
+
+# %% --------
+
+function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
+    dataframe(params, parallel=true) do prm
+        prm = delete(prm, :population)
+        env = Environment(;prm..., discovery_cost=4., travel_cost=1.)
+        # @require env.N ≥ env.M
+        map(enumerate(simulate(env, generations))) do (generation, pop)
+            compositionality = mean(pop) do solutions
+                mean(solutions) do edges
+                    length(edges) > 1
+                end
+            end
+            F = normalize(edge_frequency(env, pop))
+            (;generation, compositionality, entropy=entropy(F), unique_edges=sum(F .> 0))
+        end
+    end
+end
+
+function run_sims(repeats=1, generations=30; kws...)
+    run_sims(grid(;kws..., population=1:repeats); generations)
+end
+
+
+# %% ==================== generations ====================
+
+function edge_counts(trials::Vector{Trial}; S=6)
+    X = zeros(Int, S, S)
+    for e in flatmap(get(:path), trials)
+        X[e.src, e.dst] += 1
+    end
+    X
+end
+
+df = map(pairs(gtrials)) do (generation, trials)
+    F = normalize(edge_counts(reduce(vcat, trials)))
+    (;generation, entropy=entropy(F), unique_edges=sum(F .> 0))
+end |> DataFrame
+@rput df
+
+baseline_ent = entropy(ones(30) / 30)
+@rput baseline_ent
+
+
+# %% --------
+
+sim = run_sims(100, 10, S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1);
+@rput sim
+
+R"""
+
+data = bind_rows(
+    mutate(sim, agent="model"),
+    mutate(df, agent="human")
+) %>% fctrize(agent, levels=c("model", "human"))
+
+data %>%
+    ggplot(aes(generation, unique_edges, color=agent)) +
+    geom_line(data=filter(data, population < 10), mapping=aes(group=population), linewidth=.1) +
+    mean_line(min_n=0) +
+    # geom_hline(yintercept=30) +
+    scale_y_continuous(breaks = scales::pretty_breaks()) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+data %>% ggplot(aes(generation, entropy, color=agent)) +
+    geom_line(data=filter(data, population < 10), mapping=aes(group=population), linewidth=.1) +
+    mean_line(min_n=0) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+    plot_layout(guides = 'collect') +
+    labs(y="Edge Entropy") &
+    scale_colour_manual(values=c(
+        human="black",
+        model="#18BAFB"
+    ), aesthetics=c("fill", "colour"), name="")
+
+fig("edges_entropy", w=6)
+"""
+
+# %% ==================== solution graphs ====================
+
+
+n_gen = maximum(participants.generation)
+facet_grid("graphs-generation", n_gen, 1) do col, row
+    try
+        E = 3 .* normalize(edge_counts(reduce(vcat, gtrials[col])))
+        # E[E .> 0] .= .15
+        plot_edge_frequency!(E)
+    catch
+        ax = current_axis()
+        hidedecorations!(ax); hidespines!(ax)
+    end
+end
+
+# %% --------
+
+function plot_chain(name, env, seed=1; generations=10, chunk_size=1)
+    Random.seed!(seed)
+    sims = repeatedly(3) do
+        sim = simulate(env, generations);
+        map(chunks(sim, chunk_size)) do chunk
+            reduce(vcat, reduce(vcat, chunk))
+        end
+    end
+
+    facet_grid(name, length(sims[1]), length(sims)) do col, row
+        pop = sims[row][col]
+        plot_edge_frequency!(env, pop)
+    end
+end
+
+
+plot_chain("model-graphs", Environment(S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1.))
+plot_chain("structure-v4K1", Environment(S=6, M=10, N=10, K=1, discovery_cost=4, travel_cost=1.))
+plot_chain("structure-v4K1N30", Environment(S=6, M=10, N=30, K=1, discovery_cost=4, travel_cost=1.))
+
+
+# %% ==================== individuals ====================
+
+df = flatmap(pairs(gtrials)) do (generation, pop_trials)
+    map(pop_trials) do trials
+        F = normalize(edge_counts(trials))
+        (;generation, trials[1].uid, entropy=entropy(F), unique_edges=sum(F .> 0))
+    end
+end |> DataFrame
+@rput df
+
+
+R"""
+data = df %>% mutate(agent = "human")
+data %>%
+    ggplot(aes(generation, unique_edges, color=agent)) +
+    geom_point(data=filter(data), mapping=aes(group=uid), linewidth=.1, alpha=0.1) +
+    mean_line(min_n=0) +
+    # geom_hline(yintercept=30) +
+    scale_y_continuous(breaks = scales::pretty_breaks()) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+data %>% ggplot(aes(generation, entropy, color=agent)) +
+    geom_line(data=filter(data), mapping=aes(group=uid), linewidth=.1) +
+    mean_line(min_n=0) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+    plot_layout(guides = 'collect') +
+    labs(y="Edge Entropy") &
+    scale_colour_manual(values=c(
+        human="black",
+        model="#18BAFB"
+    ), aesthetics=c("fill", "colour"), name="")
+
+fig(w=6)
+"""
+
+# %% --------
+
+
+facet_grid("machine/$version-graphs-individual", n_gen, 10) do col, row
+    try
+        E = 3 .* normalize(edge_counts(gtrials[row][col]))
+        # E[E .> 0] .= .15
+        plot_edge_frequency!(E)
+    catch
+        ax = current_axis()
+        hidedecorations!(ax); hidespines!(ax)
+    end
+end
+# %% --------
+
+sim = run_sims(100, 8, S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1);
+@rput sim
+
+R"""
+
+data = bind_rows(
+    mutate(sim, agent="model"),
+    mutate(df, agent="human")
+) %>% fctrize(agent, levels=c("model", "human"))
+
+data %>%
+    ggplot(aes(generation, unique_edges, color=agent)) +
+    geom_line(data=filter(data, population < 10), mapping=aes(group=population), linewidth=.1) +
+    mean_line(min_n=0) +
+    # geom_hline(yintercept=30) +
+    scale_y_continuous(breaks = scales::pretty_breaks()) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+data %>% ggplot(aes(generation, entropy, color=agent)) +
+    geom_line(data=filter(data, population < 10), mapping=aes(group=population), linewidth=.1) +
+    mean_line(min_n=0) +
+    scale_x_continuous(breaks = scales::pretty_breaks()) +
+    plot_layout(guides = 'collect') +
+    labs(y="Edge Entropy") &
+    scale_colour_manual(values=c(
+        human="black",
+        model="#18BAFB"
+    ), aesthetics=c("fill", "colour"), name="")
+
+fig("edges_entropy", w=6)
+"""
+
+
 
 # %% ==================== scratch ====================
-
 
 flatmap(uids) do uid
     events_ = load_events(uid)
@@ -71,166 +270,74 @@ end |> unique
 
 # %% --------
 
-df = pframe() do uid
+tdf = pframe() do uid
     map(load_trials(uid)) do t
         discovered = setdiff(t.traversed, t.knowledge)
-        (;t.trial_number, path_length = length(t.path), n_pull=length(t.attempts), n_discovered=length(discovered))
+        g = DiGraph(6)
+        for e in t.knowledge
+            add_edge!(g, e)
+        end
+        known_path_length = length(a_star(g, t.start, t.goal))
+        (;t.trial_number, path_length = length(t.path), n_pull=length(t.attempts), known_path_length,
+            n_discovered=length(discovered), n_known=length(t.knowledge))
     end
 end
-@rput df
+@rput tdf
+
+# %% --------
+
 
 R"""
-df %>%
+tdf %>%
     group_by(generation, pid) %>%
     summarise(compositionality = mean(path_length > 1)) %>%
     ggplot(aes(generation, compositionality)) +
     point_line() +
     expand_limits(y=0)
-fig()
-"""
-
-
-# %% ==================== trials ====================
-
-
-df = pframe() do uid
-    map(load_trials(uid)) do t
-        discovered = setdiff(t.traversed, t.knowledge)
-        (;t.trial_number, path_length = length(t.path), n_pull=length(t.attempts), n_discovered=length(discovered))
-    end
-end
-@rput df
-
-R"""
-df %>%
-    ggplot(aes(trial_number, n_pull, color=information_type)) +
-    point_line() +
-    expand_limits(y=0)
-fig()
+fig("compositionality")
 """
 
 R"""
-df %>%
-    ggplot(aes(trial_number, path_length, color=information_type)) +
-    point_line() +
-    expand_limits(y=0)
-fig()
-"""
-
-# %% --------
-
-R"""
-df %>%
-    mutate(half=if_else(trial_number>5, "late", "early")) %>%
-    group_by(half, information_type, pid) %>%
-    summarise(compositionality = mean(path_length > 1)) %>%
-    ggplot(aes(half, compositionality, color=information_type, group=information_type)) +
-    geom_quasirandom(alpha=0.3) +
-    point_line()
-
-fig(w=4)
-"""
-
-
-R"""
-
-df %>%
-    mutate(half=if_else(trial_number>5, "late", "early")) %>%
-    group_by(half, information_type, pid) %>%
+tdf %>%
+    group_by(generation, pid) %>%
     summarise(n_pull = mean(n_pull)) %>%
-    ggplot(aes(half, n_pull, color=information_type, group=information_type)) +
-    geom_quasirandom(alpha=0.3) +
-    point_line()
-
-fig(w=4)
+    ggplot(aes(generation, n_pull)) +
+    point_line() +
+    expand_limits(y=0)
+fig("n_pull")
 """
 
+R"""
+tdf %>%
+    ungroup() %>%
+    group_by(known_path_length) %>%
+    summarise(discovery=mean(n_discovered > 0)) %>%
+    ggplot(aes(known_path_length, discovery)) +
+    geom_bar(stat="identity")
+fig()
+"""
 
-# %% ==================== is information conserved ====================
+R"""
+tdf %>%
+    # filter(trial_number == 1) %>%
+    group_by(generation, pid) %>%
+    summarise(discovery = mean(n_discovered>0)) %>%
+    ggplot(aes(generation, discovery)) +
+    point_line() +
+    expand_limits(y=0)
+fig("discovery")
+"""
 
-INFO_TYPES = Dict(participants.uid .=> participants.information_type)
-info_type(uid::String) = INFO_TYPES[uid]
-info_type(t::Trial) = info_type(t.uid)
-
-
-info_type(uids[1])
-g = DiGraph(6)
-for e in flatmap(get(:path), load_trials(uids[1]))
-    add_edge!(g, e)
-end
-
-# %% --------
-
-function edge_counts(S::Int, edges)
-    X = zeros(S, S)
-    for e in edges
-        X[e.src, e.dst] += 1
-    end
-    X
-end
-
-
-function edge_frequency(trials::Vector{Trial}; S=6)
-    X = zeros(S, S)
-    for e in flatmap(get(:path), trials)
-        X[e.src, e.dst] += 1
-    end
-    X ./ length(trials)
-end
-
-function plot_edge_frequency!(E::Matrix; S=6)
-    g = complete_digraph(S)
-
-    edge_width = 30 .* [E[e.src, e.dst] for e in edges(g)]
-    arrow_size = map(edge_width) do ew
-        ew == 0 && return 0
-        max(3, 5. * ew^.89)
-    end
-    gp = plot!(g; arrow_size, edge_width)
-    ax = current_axis()
-    hidedecorations!(ax); hidespines!(ax)
-    ax.aspect = DataAspect()
-end
-
-
-gtrials = collect(map(g->collect(group(get(:uid), g)), group(info_type, trials)))
-
-facet_grid(10, 3) do col, row
-    try
-        plot_edge_frequency!(edge_frequency(gtrials[row][col]))
-    catch
-        ax = current_axis()
-        hidedecorations!(ax); hidespines!(ax)
-    end
-end
-
-# %% --------
-
-
-solutions = map(trials) do t
-    Tuple.(t.path)
-end
-
-tt = sample(trials, 10; replace=false)
-map(get(:path), tt)
-figure() do
-    E = edge_frequency(tt)
-    E[E .> 0] .= .1
-    plot_edge_frequency!(E)
-end
-# %% --------
-
-
-# doesn't work bc everyone has a different hub
-# g_edges = map(group(info_type, trials)) do trials
-#     flatmap(trials) do t
-#         t.path
-#     end
-# end
-
-
-
-
+R"""
+tdf %>%
+    filter(trial_number == 1) %>%
+    group_by(generation, pid) %>%
+    summarise(n_known = mean(n_known)) %>%
+    ggplot(aes(generation, n_known)) +
+    point_line() +
+    expand_limits(y=0)
+fig("known")
+"""
 
 
 # %% ==================== scratch ====================

@@ -55,7 +55,7 @@ function edge_costs(env, observed)
 end
 
 function initial_population(env::Environment)
-    fill(Int[], env.N)
+    fill([Int[]], env.N)
 end
 
 @memoize function tasks(env::Environment)
@@ -65,30 +65,52 @@ end
     end
 end
 
-function observed_edges(behavior)
+function observed_edges(pop_behavior)
     observed = Set{Int}()
-    for edges in behavior
-        for e in edges
-            push!(observed, e)
+    for behavior in pop_behavior
+        for edges in behavior
+            for e in edges
+                push!(observed, e)
+            end
         end
     end
     observed
 end
 
 
-function transition(env::Environment, pop::Vector{Vector{Int}})
+function transition(env::Environment, pop::Vector{Vector{Vector{Int}}})
     (;S, M, K, N, graph) = env
+    @assert env.hub_discovery_discount == 0  # assumed below
     map(1:N) do i
-        models = sample(pop, M; replace=false)
-        observed = observed_edges(models)
+        all_solutions = reduce(vcat, pop)
+        if all(isempty, all_solutions)
+            observed = Set{Int}()
+        else
+            models = sample(all_solutions, M; replace=false)
+            observed = observed_edges(models)
+        end
         # all_edges = SplitApplyCombine.flatten(pop)
         # observed = Set(sample(all_edges, min(length(all_edges), M); replace=false))
 
-        (start, goal) = rand(tasks(env))
-        path = a_star(graph, start, goal, edge_costs(env, observed))
-
-        map(path) do e
-            LinearIndices((S, S))[e.src, e.dst]
+        E = edge_costs(env, observed)
+        map(1:K) do i
+            (start, goal) = rand(tasks(env))
+            if rand() < 0.2
+                path = [Edge(start, goal)]
+            else
+                path = a_star(graph, start, goal, E)
+            end
+            path_edges = map(path) do e
+                LinearIndices((S, S))[e.src, e.dst]
+            end
+            for i in path_edges
+                if i ∉ observed
+                    E[i] -= env.discovery_cost
+                    @assert E[i] > 0
+                    push!(observed, i)
+                end
+            end
+            path_edges
         end
     end
 end
@@ -100,4 +122,17 @@ function simulate(env::Environment, n_gen; init=initial_population(env))
         pop = transition(env, pop)
         pop
     end
+end
+
+
+function edge_frequency(env, pop)
+    X = zeros(env.S, env.S)
+    for solutions in pop
+        for path in solutions
+            for edge in path
+                X[edge] += 1
+            end
+        end
+    end
+    X ./ length(pop)
 end

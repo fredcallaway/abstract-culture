@@ -9,7 +9,7 @@ n_chemical = 6
 n_mode = 8
 n_task = 10
 
-generation = 3
+generation = 10
 
 
 Random.seed!(hash("v4.0"))
@@ -107,9 +107,13 @@ if generation == 1
         )))
     end
 else
-    participants = load_participants("v4.0")
-    @rsubset! participants :generation == generation - 1
+    prev_gen = generation - 1
+    participants = load_participants("v4.0g$prev_gen")
+    # participants = load_participants("v4.0g4")
+    @rsubset! participants :generation == prev_gen
     uids = participants.uid
+    @show length(uids)
+    @assert length(uids) ≥ 9
     trials = mapreduce(load_trials, vcat, uids)
 
     solutions = map(trials) do t

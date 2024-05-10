@@ -5,8 +5,10 @@ mkpath("figs")
 # gr(label="", dpi=200, size=(400,300), lw=2)
 # ENV["GKSwstype"] = "nul"
 
-
-function figure(func, name="tmp", size=(600,300); dir="figs", resolution=3, pdf=false, kws...)
+if !@isdefined(FIGS_PATH)
+    FIGS_PATH = "figs/"
+end
+function figure(func, name="tmp", size=(600,300); figs_path=FIGS_PATH, resolution=3, pdf=false, kws...)
     f = Figure(;size, kws...);
     Axis(f[1, 1]);
     func()
@@ -14,11 +16,12 @@ function figure(func, name="tmp", size=(600,300); dir="figs", resolution=3, pdf=
     path = ".fighist/$dt-$(replace(name, "/" => "-")).png"
     save(path, current_figure(), px_per_unit=resolution)
     if name != "tmp"
-        mkpath(dirname("$dir/$name"))
+        mkpath(dirname("$figs_path-$name"))
         if pdf
-            save("$dir/$name.pdf", current_figure())
+            save("$figs_path$name.pdf", current_figure())
         else
-            cp(path, "$dir/$name.png"; force=true)
+            print("$figs_path$name.png")
+            cp(path, "$figs_path$name.png"; force=true)
         end
     end
 end
