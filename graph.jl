@@ -8,11 +8,16 @@ include("utils.jl")
 
 
 @kwdef struct Environment
-    S::Int = 5  # number of states
+    graph::SimpleDiGraph{Int64}
+
     M::Int = 5  # number of models
     K::Int = 1  # number of tasks per agent
     N::Real = 100 # population size
     ε::Float64 = 0. # lapse rate
+
+    starts::Vector{Int} = collect(vertices(graph))
+    goals::Vector{Int} = collect(vertices(graph))
+    hub::Int = 0
 
     discovery_cost::Float64 = 1.
     travel_cost::Float64 = 0.01
@@ -21,14 +26,13 @@ include("utils.jl")
     rand_cost::Float64 = 1e-8
 
     # internal variables
-    graph::DiGraph = complete_digraph(S)
     # base_cost::Matrix{Float64} = begin
     #     X = @. (discovery_cost + travel_cost) * ones(S, S)
     #     X[1,:] .-= hub_discount
     #     X[:,1] .-= hub_discount
     #     X
     # end
-    tmp::Matrix{Float64} = zeros(S, S)
+    tmp::Matrix{Float64} = zeros(nv(graph), nv(graph))
 end
 
 function edge_costs(env, observed)
@@ -59,8 +63,7 @@ function initial_population(env::Environment)
 end
 
 @memoize function tasks(env::Environment)
-    S = env.S
-    filter(collect(Iterators.product(1:S, 1:S))) do (s,g)
+    filter(collect(Iterators.product(env.starts, env.goals))) do (s,g)
         s != g
     end
 end
@@ -77,9 +80,8 @@ function observed_edges(pop_behavior)
     observed
 end
 
-
 function transition(env::Environment, pop::Vector{Vector{Vector{Int}}})
-    (;S, M, K, N, graph) = env
+    (;M, K, N, graph, ε) = env
     @assert env.hub_discovery_discount == 0  # assumed below
     map(1:N) do i
         all_solutions = reduce(vcat, pop)
@@ -95,13 +97,15 @@ function transition(env::Environment, pop::Vector{Vector{Vector{Int}}})
         E = edge_costs(env, observed)
         map(1:K) do i
             (start, goal) = rand(tasks(env))
-            if rand() < 0.2
+            if rand() < ε
                 path = [Edge(start, goal)]
             else
                 path = a_star(graph, start, goal, E)
             end
+            @infiltrate isempty(path)
+            @assert !isempty(path)
             path_edges = map(path) do e
-                LinearIndices((S, S))[e.src, e.dst]
+                LinearIndices((nv(graph), nv(graph)))[e.src, e.dst]
             end
             for i in path_edges
                 if i ∉ observed
@@ -125,8 +129,9 @@ function simulate(env::Environment, n_gen; init=initial_population(env))
 end
 
 
-function edge_frequency(env, pop)
-    X = zeros(env.S, env.S)
+function edge_counts(env::Environment, pop)
+    S = nv(env.graph)
+    X = zeros(Int, S, S)
     for solutions in pop
         for path in solutions
             for edge in path
@@ -134,5 +139,62 @@ function edge_frequency(env, pop)
             end
         end
     end
-    X ./ length(pop)
+    X
+end
+
+function red_black_graph(n_start, n_goal)
+    graph = DiGraph(n_start + n_goal + 1)
+    for s in 1:(n_start+1)
+        for g in (n_start+1):nv(graph)
+            if s ≠ g
+                add_edge!(graph, s, g)
+            end
+        end
+    end
+    graph
+end
+
+function compositionality(pop::Vector{Vector{Vector{Int64}}})
+    mean(pop) do solutions
+        mean(solutions) do edges
+            length(edges) > 1
+        end
+    end
+end
+
+function full_edges(env, pop)
+    S = nv(env.graph)
+    C = CartesianIndices((S, S))
+    map(pop) do solutions
+        map(solutions) do path
+            map(path) do edge
+                Edge(C[edge].I)
+            end
+        end
+    end
+end
+
+function red_black_env(;S, kws...)
+    graph = red_black_graph(S, S)
+    Environment(;graph, starts=1:S+1, goals=S+1:2S+1, kws...)
+end
+
+function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
+    dataframe(params, parallel=true) do prm
+        prm = delete(prm, :population)
+        env = red_black_env(;prm...)
+        @require env.N * env.K ≥ env.M
+        map(enumerate(simulate(env, generations))) do (generation, pop)
+            compositionality = mean(pop) do solutions
+                mean(solutions) do edges
+                    length(edges) > 1
+                end
+            end
+            (;generation, compositionality)
+        end
+    end
+end
+
+function run_sims(repeats=1, generations=30; kws...)
+    run_sims(grid(;kws..., population=1:repeats); generations)
 end
