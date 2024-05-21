@@ -154,12 +154,25 @@ function red_black_graph(n_start, n_goal)
     graph
 end
 
-function compositionality(pop::Vector{Vector{Vector{Int64}}})
-    mean(pop) do solutions
-        mean(solutions) do edges
-            length(edges) > 1
+function compositionality(env::Environment, pop::Vector{Vector{Vector{Int64}}})
+    S = nv(env.graph)
+    C = CartesianIndices((S, S))
+    middle_node = cld(S, 2)
+
+    num = denom = 0
+    foreach(pop) do solutions
+        foreach(solutions) do edges
+            if length(edges) == 1
+                a, b = C[edges[1]].I
+                if a == middle_node || b == middle_node
+                    return
+                end
+            end
+            denom += 1
+            num += length(edges) > 1
         end
     end
+    num / denom
 end
 
 function full_edges(env, pop)
@@ -185,12 +198,7 @@ function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
         env = red_black_env(;prm...)
         @require env.N * env.K ≥ env.M
         map(enumerate(simulate(env, generations))) do (generation, pop)
-            compositionality = mean(pop) do solutions
-                mean(solutions) do edges
-                    length(edges) > 1
-                end
-            end
-            (;generation, compositionality)
+            (;generation, compositionality=compositionality(env, pop))
         end
     end
 end
