@@ -90,6 +90,22 @@ end
     run_sims(grid(;kws..., population=1:repeats); generations)
 end
 
+R"""
+plot_compostionality = function(data, grp) {
+    if (missing(grp)) {
+        data %>%
+            ggplot(aes(generation, compositionality)) +
+            geom_line(linewidth=.1, mapping=aes(group=population)) +
+            mean_line()
+    } else {
+        data %>%
+        ggplot(aes(generation, compositionality, color=factor({{grp}}))) +
+        geom_line(linewidth=.1, mapping=aes(group=interaction(population, {{grp}}))) +
+        mean_line()
+    }
+}
+
+"""
 
 # %% ==================== simple ====================
 

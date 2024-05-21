@@ -19,6 +19,7 @@ function findallmatch(events, key)
     end
 end
 
+findnextmatch(events, key) = findnextmatch(events, 1, key)
 function findnextmatch(events, start, key)
     i = findnext(e -> ematch(e, key), events, start)
     isnothing(i) && return (nothing, nothing)
@@ -38,20 +39,38 @@ function filtermatch(events, key)
     end
 end
 
+@memoize function get_params(uid)
+    findnextmatch(load_events(uid), "experiment.initialize")[1]["PARAMS"]
+end
+
 function extract_parameters(events, keys...)
     e = findnextmatch(events, 1, "experiment.initialize")[1]
     params = isnothing(e) ? Dict() : e["PARAMS"]
     Dict{String,Any}(pick_dict(params, keys))
 end
 
-function load_participants(versions...)
+function load_participants(versions...; all_generations=false, keep_incomplete=false)
+    if all_generations
+        versions = mapreduce(vcat, versions) do v
+            filter(readdir("../machine-task/data/raw")) do v1
+                startswith(v1, v)
+            end
+        end
+        @info "versions: $versions"
+    end
+    versions = unique(versions)
     gen_counts = zeros(Int, 100)
+
     mapreduce(vcat, versions) do version
+        idents = invert(JSON.parsefile("../machine-task/data/raw/$version/identifiers.json"))
+
         @chain CSV.read("../machine-task/data/raw/$version/participants.csv", DataFrame) begin
+
             @rsubset :mode == "live"
             @rtransform! @astable begin
                 :version = version
                 :uid = string(version, "-", :wid)
+                :workerid = idents[:wid]
                 events = load_events(:uid)
 
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
@@ -64,7 +83,6 @@ function load_participants(versions...)
                 # else
                 #     missing
                 # end
-
 
                 try
                     init = findnextmatch(events, 1, "experiment.initialize")[1]
@@ -88,7 +106,7 @@ function load_participants(versions...)
                 end
             end
             select(Not([:assignmentId, :hitId, :useragent, :status, :counterbalance, :mode]))
-            @rsubset :complete
+            @rsubset keep_incomplete || :complete
             @transform _ :pid = 1:nrow(_)
         end
     end
@@ -135,7 +153,7 @@ duration(t::Trial) = t.end_time - t.start_time
 @memoize function load_trials(uid)
     events = load_events(uid)
     start_main = findnextmatch(events, 1, "timeline.start.main")[2]
-    g = group(e->get(e, "trialId", ""), events[start_main:end])
+    g = group(e->get(e, "trialID", ""), events[start_main:end])
     delete!(g, "")
     map(enumerate(g)) do (trial_number, trial_events)
         start = trial_events[1]["start"] + 1
@@ -163,6 +181,7 @@ duration(t::Trial) = t.end_time - t.start_time
             (;src=e["chemical"]+1, dst=target+1, mode=e["mode"]+1, result)
         end |> skipmissing |> collect
 
+
         # attempts = map(filtermatch(trial_events, "machine.result")) do e
         #     (e["chemical"]+1, e["spell"]+1, haskey(e, "result") ? e["result"] + 1 : nothing)
         # end
@@ -180,8 +199,13 @@ duration(t::Trial) = t.end_time - t.start_time
 
         g = SimpleDiGraphFromIterator(traversed)
 
-        path = @infiltry a_star(g, start, goal)
+        if startswith(uid, "vM2g1") && goal == 8 && length(trial_events) == 4
+            @warn "H trial"
+            return missing
+        end
 
+
+        path = @infiltry a_star(g, start, goal)
 
 
         start_time = trial_events[1]["time"]
@@ -190,5 +214,3 @@ duration(t::Trial) = t.end_time - t.start_time
         Trial(uid, trial_number, start, goal, knowledge, traversed, path, attempts, start_time, end_time)
     end |> skipmissing |> collect
 end
-
-participants = load_participants("v4.0")
