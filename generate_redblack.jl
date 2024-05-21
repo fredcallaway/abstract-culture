@@ -6,10 +6,12 @@ include("utils.jl")
 include("data.jl")
 include("graph.jl")
 
-generation = 1
+generation = parse(Int, ARGS[1])
+println("Generating generation $generation")
 n_mode = 8
 
-Random.seed!(hash("vM1"))
+version = "vM5"
+Random.seed!(hash(version))
 
 env = red_black_env(S=4, N=10, K=5, M=20)
 
@@ -36,11 +38,20 @@ function get_solutions(gen)
         gen0 = full_edges(env, simulate(env, 1)[1])
         reduce(vcat, gen0)
     else
-        participants = load_participants("vM1g$gen")
-        @rsubset! participants :generation == gen - 1
-        uids = participants.uid
-        trials = mapreduce(load_trials, vcat, uids)
+        participants = load_participants("$(version)g$gen")
+        @rsubset! participants begin
+            :generation == gen
+            :complete
+        end
+        uids = sample(participants.uid, env.N; replace=false)
 
+        # make sure the transition structure hasn't changed
+        jsonT = JSON.parse(json(zero_index(transpose(T))))
+        @assert all(uids) do uid
+            get_params(uid)["transitions"] == jsonT
+        end
+
+        trials = mapreduce(load_trials, vcat, uids)
         map(trials) do t
             t.path
         end
