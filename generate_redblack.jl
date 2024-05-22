@@ -81,7 +81,7 @@ end
 function write_configs(pop::Population, generation::Int)
     dir = "../machine-task/static/json/$(pop.name)-$(pop.id)"
     mkpath(dir)
-    foreach(1:100) do i
+    foreach(1:300) do i
         write("$dir/$i.json", json((;
             pop_name = pop.name,
             pop_id = pop.id,

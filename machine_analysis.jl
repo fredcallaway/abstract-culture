@@ -32,6 +32,7 @@ function ffmap(f, args)
 end
 
 
+
 participants = @chain begin
     load_participants("vM5"; all_generations=true)
     @rtransform! begin
@@ -47,7 +48,6 @@ participants = @chain begin
         end
     end |> DataFrame
 end
-
 
 @rput participants
 
@@ -141,7 +141,26 @@ fig(w=5)
 
 """
 
+R"""
+sim %>%
+    filter(population < 11) %>%
+    fctrize(M) %>%
+    regress(compositionality ~ generation * M)
+
+"""
+
+# %% ==================== ε ====================
+
+R"""
+tdf %>%
+    group_by(known_path_length) %>%
+    summarise(mean(path_length == 2))
+"""
+
+
 # %% ==================== effort ====================
+
+
 
 R"""
 tdf %>%
@@ -170,11 +189,14 @@ R"""
 times %>%
     select(population, generation, instructions, main) %>%
     pivot_longer(c(instructions, main), names_to="block", values_to="time") %>%
-    group_by(generation, block) %>%
+    group_by(population, generation, block) %>%
     summarise(time = median(time)) %>%
     ggplot(aes(generation, time, color=block)) +
-    geom_line()
-fig()
+    geom_line() +
+    facet_wrap(~population) +
+    scale_x_continuous(n.break=2)
+
+fig(w=5)
 """
 
 R"""
