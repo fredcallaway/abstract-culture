@@ -39,17 +39,17 @@ function filtermatch(events, key)
     end
 end
 
-@memoize function get_params(uid)
-    findnextmatch(load_events(uid), "experiment.initialize")[1]["PARAMS"]
+@memoize function get_params(uid::String)
+    e = findnextmatch(load_events(uid), "experiment.initialize")[1]
+    params = isnothing(e) ? Dict() : e["PARAMS"]
 end
 
-function extract_parameters(events, keys...)
-    e = findnextmatch(events, 1, "experiment.initialize")[1]
-    params = isnothing(e) ? Dict() : e["PARAMS"]
+function extract_parameters(uid::String, keys...)
+    params = get_params(uid)
     Dict{String,Any}(pick_dict(params, keys))
 end
 
-function load_participants(versions...; all_generations=false, keep_incomplete=false)
+function load_participants(versions...; all_generations=false, keep_incomplete=false, keep_extras=false)
     if all_generations
         versions = mapreduce(vcat, versions) do v
             filter(readdir("../machine-task/data/raw")) do v1
@@ -61,55 +61,44 @@ function load_participants(versions...; all_generations=false, keep_incomplete=f
     versions = unique(versions)
     gen_counts = zeros(Int, 100)
 
-    mapreduce(vcat, versions) do version
+    df = mapreduce(vcat, versions) do version
         idents = invert(JSON.parsefile("../machine-task/data/raw/$version/identifiers.json"))
 
-        @chain CSV.read("../machine-task/data/raw/$version/participants.csv", DataFrame) begin
-
+        df = @chain CSV.read("../machine-task/data/raw/$version/participants.csv", DataFrame) begin
             @rsubset :mode == "live"
             @rtransform! @astable begin
                 :version = version
                 :uid = string(version, "-", :wid)
                 :workerid = idents[:wid]
                 events = load_events(:uid)
-
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
-                :generation = missing
-
-                # params = findnextmatch(events, 1, "experiment.initialize")[1]["PARAMS"]
-                # :generation = get(params, "generation", missing)
-                # :information_type = if :complete
-                #     get(params, "information_type", missing)
-                # else
-                #     missing
-                # end
-
-                try
-                    init = findnextmatch(events, 1, "experiment.initialize")[1]
-                    :generation = @coalesce begin
-                        get(init["PARAMS"], "generation", 1)
-                        # get(init["stimuli"], "generation", missing)
-                    end
-                catch end
-# -
-#                 if :complete && !ismissing(:generation)
-#                     gen_counts[:generation] += 1
-#                     :pid = string("g", :generation, "-", lpad(gen_counts[:generation], 2, "0"))
-#                 else
-#                     gen_counts[100] += 1
-#                     :pid = string("p", lpad(gen_counts[100], 2, "0"))
-#                 end
-
-                :total_time = begin
-                    events = load_events(:uid)
-                    (events[end]["time"] - events[1]["time"]) / 60000
-                end
+                :total_time = (events[end]["time"] - events[1]["time"]) / 60000
             end
             select(Not([:assignmentId, :hitId, :useragent, :status, :counterbalance, :mode]))
-            @rsubset keep_incomplete || :complete
-            @transform _ :pid = 1:nrow(_)
         end
+        if keep_incomplete
+            return df
+        end
+        df = @chain df begin
+            @subset :complete
+            @rtransform! $AsTable = extract_parameters(:uid, "generation", "pop_name", "pop_id")
+            @rtransform! @astable begin
+                pn = :pop_name
+                env = deserialize("envs/$pn")
+                :M = env.M
+                :K = env.K
+                :population = string(:pop_name, "-", :pop_id)
+            end
+            @orderby :population :generation
+            @groupby :population :generation
+            @transform :agent_i = 1:length(:generation)
+        end
+        if !keep_extras
+            @rsubset! df :agent_i ≤ 20
+        end
+        df
     end
+    @transform df :pid = 1:nrow(df)
 end
 
 @memoize function load_events(uid; normalize_time=true)

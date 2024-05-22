@@ -380,3 +380,8 @@ nanreduce(f, x) = f(filter(!isnan, x))
 nanmean(x) = nanreduce(mean, x)
 nanstd(x) = nanreduce(std, x)
 normalize(x) = x ./ sum(x)
+
+zero_index(x::Int) = x - 1
+zero_index(x::AbstractArray) = map(zero_index, x)
+zero_index(x::Tuple) = map(zero_index, x)
+zero_index(x::NamedTuple) = map(zero_index, x)
