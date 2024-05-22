@@ -32,16 +32,31 @@ function ffmap(f, args)
 end
 
 
-# participants = load_participants(version; all_generations=true)
-participants = load_participants("vM4", "vM4.1"; all_generations=true)
-@rtransform! participants :population = startswith(:version, "vM4.1") ? 2 : 1
+participants = @chain begin
+    load_participants("vM5"; all_generations=true)
+    @rtransform! begin
+        :M = :generation == 1 ? missing : :M
+    end
+    flatmap(eachrow(_)) do row
+        if ismissing(row.M)
+            map([5,20,50]) do M
+                (;row..., M, population = "M$M-1")
+            end
+        else
+            [row]
+        end
+    end |> DataFrame
+end
+
+
 @rput participants
+
 uids = participants.uid
 trials = mapreduce(load_trials, vcat, uids)
 
 function pframe(f, data=participants)
     @chain data begin
-        @groupby :population :generation :pid
+        @groupby :population :generation :pid :M
         @combine $AsTable = ffmap(f, :uid)
     end
 end
@@ -100,26 +115,29 @@ end
 
 # %% ==================== evolution of compositionality ====================
 
-sim = run_sims(30, 11, S=4, N=10, K=5, M=20, ε=.14)
+
+sim = run_sims(30, 11, S=4, N=10, K=5, M=[5, 20, 50], ε=.14)
 @rput sim
 
 R"""
 human = tdf %>%
     filter(start != 5, goal != 5) %>%
-    group_by(population, generation) %>%
+    group_by(M, population, generation) %>%
     summarise(compositionality = mean(path_length == 2)) %>%
-    mutate(agent = "human", generation=generation + 1)
+    mutate(agent = "human")
 
-df = bind_rows(mutate(sim, agent="model", population=100+population), human)
-"""
 
-R"""
+
+# df = bind_rows(mutate(sim, agent="model", population=100+population), human)
+
 sim %>%
     ggplot(aes(generation, 1*compositionality, group=population)) +
     geom_line(linewidth=.5, color="#18BAFB", alpha=0.5) +
     geom_line(linewidth=1, data=human) +
-    ylab("Two-Step Solution Rate")
-fig()
+    ylab("Two-Step Solution Rate") +
+    facet_wrap(~M)
+
+fig(w=5)
 
 """
 
@@ -143,7 +161,8 @@ fig(w=5)
 R"""
 tdf %>%
     ggplot(aes(generation, 1*n_pull, group=population)) +
-    point_line()
+    point_line() +
+    facet_wrap(~M)
 fig()
 """
 
@@ -163,6 +182,36 @@ tdf %>%
     ggplot(aes(generation, 1*n_pull, group=population)) +
     point_line()
 fig()
+"""
+
+R"""
+tdf %>%
+    group_by(known_path_length) %>%
+    drop_extreme(duration, n_pull) %>%
+    ggplot(aes(n_pull, duration, color=factor(known_path_length))) +
+    points(size=.1) +
+    linear_fit()
+
+fig()
+
+"""
+
+R"""
+tdf %>%
+    group_by(known_path_length) %>%
+    drop_extreme(duration, n_pull) %>%
+    mutate(P = factor(known_path_length)) %>%
+    regress(duration ~ n_pull * P) %>%
+    coeftable(intercept=T)
+"""
+
+R"""
+tdf %>%
+    group_by(known_path_length) %>%
+    drop_extreme(duration, n_pull) %>%
+    filter(known_path_length == 2) %>%
+    regress(duration ~ n_pull) %>%
+    coeftable(intercept=T)
 """
 
 # %% ==================== information ====================
