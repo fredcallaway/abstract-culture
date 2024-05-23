@@ -50,29 +50,32 @@ fig(w=10, h=7)
 
 # %% --------
 
-R"""
-df %>%
-    fctrize(M, levels=c(20, 5, 50)) %>%
-    regress(compositionality ~ M, print_table=FALSE) %>%
-    tidy %>%
-    filter(term != "(Intercept)") %>%
-    with(max(p.value))
+df = run_sims(500, 10, S=4, N=[12], K=[5,7,10], M=[5, 20, 50], ε=[.14])
+@rput df
 
+R"""
+df %>% plot_compostionality() +
+    stat_summary(fun.data="mean_sdl", geom="ribbon", alpha=0.1, mult=2) +
+    facet_grid(K~M, labeller=purrr::partial(label_both, sep = " = ")) +
+    scale_x_continuous(breaks=scales::pretty_breaks())
+
+fig(w=7, h=5)
 """
 
+# %% ==================== power analysis ====================
+
+df = run_sims(500, 10, S=4, N=[12,15], K=[5,7,10], M=[5, 20, 50], ε=[.14])
+@rput df
+
 
 R"""
-
-
 sample_p = function(groups, n_chain, run_model) {
     data = sample(groups, n_chain, replace=T) %>% bind_rows
     tryCatch(run_model(data), error=function(c) NaN)
 }
 
-power_analysis = function(N, n_chain, n_sim, run_model) {
-    groups = df %>%
-        filter(N == {{N}}) %>%
-        fctrize(M, levels=c(20, 5, 50)) %>%
+power_analysis = function(data, n_chain, n_sim, run_model) {
+    groups = data %>%
         nest_by(population, .keep=TRUE) %>%
         with(data)
     # results = map(n_chain, ~ replicate(n_sim, sample_p(groups, .x, run_model))) %>% unlist
@@ -86,27 +89,32 @@ power_analysis = function(N, n_chain, n_sim, run_model) {
     ) %>% ungroup()
 }
 
-n_sim = 300
-n_chain = c(1, 2, 4, 8)
 
-pwr = map(c(10, 12,14, 16, 18, 20), ~
-    power_analysis(.x, n_chain, n_sim, . %>%
-        regress(compositionality ~ M, print_table=FALSE) %>%
-        tidy %>%
-        filter(term != "(Intercept)") %>%
-        with(max(p.value))
-    ) %>%
-    mutate(N = .x) %>%
-    group_by(N, n_chain) %>%
+run_model = . %>%
+    regress(compositionality ~ M, print_table=FALSE) %>%
+    tidy %>%
+    filter(term != "(Intercept)") %>%
+    with(max(p.value))
+
+pwr = df %>%
+    filter(generation > 1, generation < 8) %>%
+    select(-c(S, ε, generation)) %>%
+    group_by(population, N, M, K) %>%
+    summarise(compositionality=mean(compositionality)) %>%
+    ungroup() %>% 
+    fctrize(M, levels=c(20, 5, 50)) %>%
+    nest_by(N, K) %>%
+    reframe(power_analysis(data, c(1,2,3), 300, run_model)) %>%
+    group_by(N, K, n_chain) %>%
     summarise(power = mean(p < .05))
-) %>% bind_rows
 
 """
 
 R"""
 pwr %>%
-    ggplot(aes(n_chain, power, color=factor(N))) +
-    geom_line(linewidth=.5) + teals_pal()
+    ggplot(aes(n_chain, power, color=factor(K))) +
+    geom_line(linewidth=.5) + teals_pal() +
+    facet_wrap(~N)
 
 fig()
 """
