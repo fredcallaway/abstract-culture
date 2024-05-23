@@ -32,22 +32,25 @@ function ffmap(f, args)
 end
 
 
+participants = load_participants("vM4"; all_generations=true)
 
-participants = @chain begin
-    load_participants("vM5"; all_generations=true)
-    @rtransform! begin
-        :M = :generation == 1 ? missing : :M
-    end
-    flatmap(eachrow(_)) do row
-        if ismissing(row.M)
-            map([5,20,50]) do M
-                (;row..., M, population = "M$M-1")
-            end
-        else
-            [row]
+if version == "vM5"
+    participants = @chain participants begin
+        @rtransform! begin
+            :M = :generation == 1 ? missing : :M
         end
-    end |> DataFrame
+        flatmap(eachrow(_)) do row
+            if ismissing(row.M)
+                map([5,20,50]) do M
+                    (;row..., M, population = "M$M-1")
+                end
+            else
+                [row]
+            end
+        end |> DataFrame
+    end
 end
+
 
 @rput participants
 
@@ -113,6 +116,8 @@ times = pframe() do uid
 end
 @rput times
 
+participants.version
+
 # %% ==================== evolution of compositionality ====================
 
 
@@ -153,14 +158,26 @@ sim %>%
 
 R"""
 tdf %>%
-    group_by(known_path_length) %>%
-    summarise(mean(path_length == 2))
+    filter(known_path_length == 2) %>%
+    group_by(pid) %>%
+    filter(n() > 1) %>%
+    summarise(compositionality=mean(path_length == 2)) %>%
+    ggplot(aes(pid, compositionality)) +
+    geom_point()
+
+fig()
 """
 
 
 # %% ==================== effort ====================
 
-
+R"""
+tdf %>%
+    ggplot(aes(generation, duration, group=population)) +
+    point_line() +
+    facet_wrap(~M)
+fig()
+"""
 
 R"""
 tdf %>%

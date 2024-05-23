@@ -79,22 +79,36 @@ function load_participants(versions...; all_generations=false, keep_incomplete=f
         if keep_incomplete
             return df
         end
-        df = @chain df begin
-            @subset :complete
-            @rtransform! $AsTable = extract_parameters(:uid, "generation", "pop_name", "pop_id")
-            @rtransform! @astable begin
-                pn = :pop_name
-                env = deserialize("envs/$pn")
-                :M = env.M
-                :K = env.K
-                :population = string(:pop_name, "-", :pop_id)
+        @subset! df :complete
+        if version ≥ "vM5"
+            df = @chain df begin
+                @rtransform! $AsTable = extract_parameters(:uid, "generation", "pop_name", "pop_id")
+                @rtransform! @astable begin
+                    pn = :pop_name
+                    env = deserialize("envs/$pn")
+                    :N = env.N
+                    :M = env.M
+                    :K = env.K
+                    :population = string(:pop_name, "-", :pop_id)
+                end
+                @orderby :population :generation
+                @groupby :population :generation
+                @transform :agent_i = 1:length(:generation)
             end
-            @orderby :population :generation
-            @groupby :population :generation
-            @transform :agent_i = 1:length(:generation)
+        else
+            @rtransform! df begin
+                :generation = get_params(:uid)["generation"]
+                :M = 20
+                :N = 10
+                :K = 5
+            end
+            @transform! df :agent_i = 1:length(:version)
+        end
+        if startswith(version, "vM4")
+            @rtransform! df :population = startswith(version, "vM4.1") ? 2 : 1
         end
         if !keep_extras
-            @rsubset! df :agent_i ≤ 20
+            @rsubset! df :agent_i ≤ :N
         end
         df
     end
