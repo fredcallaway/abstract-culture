@@ -175,6 +175,25 @@ function compositionality(env::Environment, pop::Vector{Vector{Vector{Int64}}})
     num / denom
 end
 
+function compositionality(env::Environment, behavior::Vector{Vector{Int64}})
+    S = nv(env.graph)
+    C = CartesianIndices((S, S))
+    middle_node = cld(S, 2)
+
+    num = denom = 0
+    foreach(behavior) do edges
+        if length(edges) == 1
+            a, b = C[edges[1]].I
+            if a == middle_node || b == middle_node
+                return
+            end
+        end
+        denom += 1
+        num += length(edges) > 1
+    end
+    num / denom
+end
+
 function full_edges(env, pop)
     S = nv(env.graph)
     C = CartesianIndices((S, S))

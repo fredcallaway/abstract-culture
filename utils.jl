@@ -385,3 +385,9 @@ zero_index(x::Int) = x - 1
 zero_index(x::AbstractArray) = map(zero_index, x)
 zero_index(x::Tuple) = map(zero_index, x)
 zero_index(x::NamedTuple) = map(zero_index, x)
+
+one_index(::Nothing) = nothing
+one_index(x::Int) = x + 1
+one_index(x::AbstractArray) = map(one_index, x)
+one_index(x::Tuple) = map(one_index, x)
+one_index(x::NamedTuple) = map(one_index, x)

@@ -354,7 +354,7 @@ points = function(min_n=2, ...) {
 
 bars = function(min_n=2, ...) {
     list(
-        stat_summary(fun=robust(mean, min_n), geom="bar"),
+        stat_summary(fun=robust(mean, min_n), geom="bar", ...),
         stat_summary(fun.data=robust(mean_cl_boot, min_n), geom="errorbar", width=.1)
     )
 }

@@ -22,6 +22,21 @@ plot_compostionality = function(data, grp) {
 
 # %% --------
 
+df = run_sims(300, 10, S=4, N=12, K=7, M=[5,20,50], ε=.2)
+@rput df
+
+R"""
+df %>% plot_compostionality() +
+    stat_summary(fun.data="mean_sdl", geom="ribbon", alpha=0.1, mult=2) +
+    scale_x_continuous(breaks=scales::pretty_breaks()) +
+    facet_wrap(~M)
+
+fig(w=7)
+"""
+
+
+# %% --------
+
 df = run_sims(10, 10, S=4, N=[10], K=[5], M=[10, 20, 30, 50], ε=[.14])
 @rput df
 
