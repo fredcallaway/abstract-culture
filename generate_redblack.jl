@@ -7,9 +7,11 @@ include("utils.jl")
 include("data.jl")
 include("graph.jl")
 
-n_mode = 6
-version = "vM5"
-gen = parse(Int, ARGS[1])
+n_mode = 8
+version = "vM7"
+if !@isdefined(gen)
+    gen =  parse(Int, ARGS[1])
+end
 
 # Random.seed!(hash(version))  # this shouldn't be necessary but just in case
 
@@ -21,7 +23,7 @@ gen = parse(Int, ARGS[1])
     T::Matrix{Int}
 end
 
-function Population(name, id; S=4, N=20, K=5, M)
+function Population(name, id; S=4, N=12, K=7, M)
     env = red_black_env(;S, N, K, M)
     rng = MersenneTwister(hash(version * string(id)))
     n_state = nv(env.graph)
@@ -44,10 +46,15 @@ end
     @assert gen ≥ 1
 
     participants = load_participants("$(version)g$gen")
+    @assert allunique(participants.uid)
     @assert all(participants.generation .== gen)
     @assert all(participants.complete)
 
-    @rsubset! participants :population == string(pop.name, "-", pop.id)
+    if gen != 1
+        @rsubset! participants :population == string(pop.name, "-", pop.id)
+    end
+    @assert all(isequal(pop.env.M), participants.M)
+
     if nrow(participants) != env.N
         error("Incorrect number of participants: $(nrow(participants))")
     end
@@ -81,10 +88,13 @@ end
 function write_configs(pop::Population, generation::Int)
     dir = "../machine-task/static/json/$(pop.name)-$(pop.id)"
     mkpath(dir)
-    foreach(1:300) do i
+    foreach(1:100) do i
         write("$dir/$i.json", json((;
             pop_name = pop.name,
             pop_id = pop.id,
+            pop.env.M,
+            pop.env.N,
+            pop.env.K,
             generation,
             transitions = zero_index(transpose(pop.T)),
             tasks = zero_index(sample_tasks(pop)),
@@ -95,15 +105,42 @@ function write_configs(pop::Population, generation::Int)
     end
 end
 
-populations = [
-    Population("M5", 1; M=5),
-    Population("M20", 1; M=20),
-    Population("M50", 1; M=50),
-]
-
-mkpath("envs")
-for pop in populations
-    serialize("envs/$(pop.name)", pop.env)
-    write_configs(pop, gen)
+if gen == 1
+    populations = [Population("initial", 1; M=0)]
+else
+    populations = [
+        Population("M5", 1; M=5),
+        Population("M20", 1; M=20),
+        Population("M50", 1; M=50),
+    ]
 end
+
+pop = Population("M5", 1; M=5)
+gen = 4
+get_solutions(pop, gen)
+
+# %% --------
+
+monte_carlo() do
+    g = DiGraph(11)
+    knowledge = sample_recipes(pop, 5)
+    for recipe in knowledge
+        add_edge!(g, Edge(recipe[1], recipe[2]))
+    end
+    mean(sample_tasks(pop)) do (start, goal)
+        known_path_length = length(a_star(g, start, goal))
+        known_path_length == 2
+    end
+end
+# %% --------
+
+
+mean(x->length(x)>1,
+
+
+# mkpath("envs")
+# for pop in populations
+#     serialize("envs/$(pop.name)", pop.env)
+#     write_configs(pop, gen)
+# end
 
