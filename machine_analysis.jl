@@ -8,7 +8,7 @@ using DataFrames, RCall
 
 # %% --------
 
-version = "vM4"
+version = "vM7"
 
 FIGS_PATH = "figs/machine/$version-"
 @rput FIGS_PATH
@@ -32,9 +32,9 @@ function ffmap(f, args)
 end
 
 
-participants = load_participants("vM4"; all_generations=true)
+participants = load_participants("vM7"; all_generations=true)
 
-if version == "vM5"
+if version in ("vM5", "vM7")
     participants = @chain participants begin
         @rtransform! begin
             :M = :generation == 1 ? missing : :M
@@ -66,14 +66,15 @@ end
 
 using Dictionaries
 
-GENERATIONS = Dict(participants.uid .=> participants.generation)
-generation(uid::String)::Int = GENERATIONS[uid]
-generation(t::Trial)::Int = generation(t.uid)
-POPULATIONS = Dict(participants.uid .=> participants.population)
-population(uid::String)::Int = POPULATIONS[uid]
-population(t::Trial)::Int = population(t.uid)
+function lookup(uid::String, key)
+    rows = eachrow(participants)
+    i = findfirst(x -> x.uid == uid, rows)
+    get(rows[i], key)
+end
+lookup(t::Trial, key) = lookup(t.uid, key)
 
-gtrials = Dictionaries.sortkeys(map(g->collect(group(get(:uid), g)), group(generation, trials)))
+
+# gtrials = Dictionaries.sortkeys(map(g->collect(group(get(:uid), g)), group(generation, trials)))
 
 tdf = pframe() do uid
     n_state = get_params(uid)["nChemical"]
@@ -83,10 +84,14 @@ tdf = pframe() do uid
         for e in t.knowledge
             add_edge!(g, e)
         end
+        known_path_length = length(a_star(g, t.start, t.goal))
 
         (;t.trial_number, t.start, t.goal, duration=(t.end_time - t.start_time) / 1000,
-            path_length = length(t.path), known_path_length = length(a_star(g, t.start, t.goal)),
+            path_length = length(t.path), known_path_length,
+            comp_start_known = Edge(t.start, 5) in t.knowledge,
+            comp_goal_known = Edge(5, t.goal) in t.knowledge,
             n_pull=length(t.attempts), n_discovered=length(discovered), n_known=length(t.knowledge),
+
             version = uid[3:3]
         )
     end
@@ -116,13 +121,208 @@ times = pframe() do uid
 end
 @rput times
 
-participants.version
+# %% ==================== debug ====================
+repeats = ("65ab052d1e112ab8611d762d", "664ab329e0b7a59dc3afcf69", "6650da43a82f01840447bcbe", "6650f3da72e0dcc860312e62")
+
+ffmap(trials) do t
+    @require t.trial_number == 1
+    @require lookup(t, :workerid) in repeats
+    (M = lookup(t, :M), n_known = length(t.knowledge))
+end
+
+# %% --------
+
+i = findfirst(trials) do t
+    t.trial_number == 1 && lookup(t, :workerid) == "664ed5f3fdd2443855330873"
+end
+
+trials[i].knowledge
+
+R"""
+X = tdf %>%
+    filter(M==5, generation==5) %>%
+    filter(start != 5, goal != 5) %>%
+    group_by(pid, known_path_length) %>%
+    summarise(
+        n_case = n(),
+        n_two_step = sum(path_length == 2)
+    ) %>%
+    pivot_longer(c(n_case, n_two_step), names_to="name", values_to="value") %>%
+    fctrize(known_path_length, levels=c(0,1,2)) %>%
+    ggplot(aes(known_path_length, value, fill=name)) +
+    geom_bar(stat="identity", alpha=1, position="identity") +
+    scale_colour_manual(values=c(
+        n_case = "darkgray",
+        n_two_step = "red"
+    ), aesthetics=c("fill", "colour"), name="") +
+    facet_wrap(~pid) +
+    ggtitle("M = 5") +
+    ylab("Count")
+fig(w=7, h=4)
+"""
+
+R"""
+participants %>%
+    filter(workerid %in% repeats) %>%
+    select(population, generation)
+
+"""
+
+
+
+
+R"""
+X %>%
+    left_join(select(participants, pid, workerid)) %>%
+    filter(workerid %in% repeats)
+"""
+
+R"""
+participants %>%
+    filter(workerid %in% repeats) %>%
+    select(pid)
+
+"""
+
+R"""
+tdf %>%
+    filter(start != 5, goal != 5) %>%
+    group_by(M, population, generation) %>%
+
+
+# two-step solutions are common even when they aren't known
+tdf %>%
+    filter(M==5, generation==5) %>%
+    filter(start != 5, goal != 5) %>%
+    filter(known_path_length != 1) %>%
+    group_by(comp_start_known, comp_goal_known) %>%
+    summarise(
+        n = n(),
+        two_step = mean(path_length == 2)
+    )
+
+# 136 and 140 are using two-step even when both are not known
+# 136 and 139 (also 135) have high compositionality rates
+# conditions: 92 89 30
+tdf %>%
+    left_join(select(participants, pid, condition)) %>%
+    filter(M==20, generation==5) %>%
+    filter(start != 5, goal != 5) %>%
+    # filter(!comp_start_known, !comp_goal_known) %>%
+    group_by(pid, condition) %>%
+    summarise(
+        n = n(),
+        two_step = mean(path_length == 2)
+    )
+
+participants %>% filter(pid == 121) %>% select(generation)
+"""
+
+t = filter(trials) do t
+    lookup(t, :pid) == 121
+end |> first
+lookup(t, :generation)
+t.knowledge
+t.start, t.goal
+lookup(t, :condition)
+participants[1:3, :]
+get_params(t.uid)["tasks"]
+
+# generation 4 configs line up
+
+R"""
+tdf %>%
+    filter(pid == 140) %>%
+    select(comp_start_known, comp_goal_known, path_length, duration, n_pull)
+
+
+
+"""
+
+
+# %% --------
+
+R"""
+repeats = c("65ab052d1e112ab8611d762d", "664ab329e0b7a59dc3afcf69", "6650da43a82f01840447bcbe", "6650f3da72e0dcc860312e62")
+participants %>%
+    filter(workerid %in% repeats) %>%
+    select(M, wid)
+
+"""
+R"""
+participants %>%
+    filter(generation > 1) %>%
+    group_by(workerid) %>%
+    filter(n() > 1)  %>%
+    select(workerid, pop_name, generation) %>%
+    arrange(workerid)
+
+participants %>%
+    filter(generation == 4, pop_name == "M5") %>%
+    select(uid)
+"""
+
+# %% --------
+
+
+all_observed = ffmap(trials) do t
+    @require lookup(t, :generation) == 4
+    @require lookup(t, :M) == 5
+    @require t.trial_number == 1
+    t.knowledge
+end
+
+mean(all_observed) do edge
+    edge.src == 5 || edge.dst == 5
+end
+
+
+# %% --------
+
+
+
+possible = unique(reduce(vcat, get_solutions(pop, 4)))
+
+# %% --------
+
+
+R"""
+tdf %>%
+    group_by(M, generation, pid) %>%
+    summarise(
+        comp_known = mean(known_path_length == 2),
+        comp_used = mean(path_length == 2)
+    ) %>%
+    ggplot(aes(generation, comp_known)) +
+    point_line() +
+    facet_wrap(~M)
+
+fig()
+"""
 
 # %% ==================== evolution of compositionality ====================
 
-
-sim = run_sims(30, 11, S=4, N=10, K=5, M=[5, 20, 50], ε=.14)
+sim = run_sims(30, 11, S=4, N=12, K=7, M=[5, 20, 50], ε=.14)
 @rput sim
+
+t = filter(trials) do t
+    endswith(t.uid, "wd09aa4d")
+end |> first
+t.knowledge
+
+R"""
+
+participants %>%
+    filter(M==5, generation==5) %>%
+    left_join(
+        tdf %>%
+        filter(start != 5, goal !=5)
+        group_by(pid) %>%
+        summarise(compositionality = mean(path_length == 2))
+    ) %>%
+    select(workerid, compositionality, condition)
+
+"""
 
 R"""
 human = tdf %>%
@@ -130,8 +330,6 @@ human = tdf %>%
     group_by(M, population, generation) %>%
     summarise(compositionality = mean(path_length == 2)) %>%
     mutate(agent = "human")
-
-
 
 # df = bind_rows(mutate(sim, agent="model", population=100+population), human)
 
@@ -145,6 +343,8 @@ sim %>%
 fig(w=5)
 
 """
+
+# %% --------
 
 R"""
 sim %>%

@@ -65,7 +65,7 @@ function load_participants(versions...; all_generations=false, keep_incomplete=f
         idents = invert(JSON.parsefile("../machine-task/data/raw/$version/identifiers.json"))
 
         df = @chain CSV.read("../machine-task/data/raw/$version/participants.csv", DataFrame) begin
-            @rsubset :mode == "live"
+            # @rsubset :mode == "live"
             @rtransform! @astable begin
                 :version = version
                 :uid = string(version, "-", :wid)
@@ -74,8 +74,10 @@ function load_participants(versions...; all_generations=false, keep_incomplete=f
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
                 :total_time = (events[end]["time"] - events[1]["time"]) / 60000
             end
-            select(Not([:assignmentId, :hitId, :useragent, :status, :counterbalance, :mode]))
         end
+        # if version < "vM7"
+        #     select!(df, Not([:assignmentId, :hitId, :status, :counterbalance, :mode]))
+        # end
         if keep_incomplete
             return df
         end
