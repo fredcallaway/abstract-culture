@@ -115,32 +115,25 @@ else
     ]
 end
 
-pop = Population("M5", 1; M=5)
-gen = 4
-get_solutions(pop, gen)
 
-# %% --------
-
-monte_carlo() do
-    g = DiGraph(11)
-    knowledge = sample_recipes(pop, 5)
-    for recipe in knowledge
-        add_edge!(g, Edge(recipe[1], recipe[2]))
-    end
-    mean(sample_tasks(pop)) do (start, goal)
-        known_path_length = length(a_star(g, start, goal))
-        known_path_length == 2
+map(populations) do pop
+    monte_carlo() do
+        g = DiGraph(11)
+        knowledge = sample_recipes(pop, 5)
+        for recipe in knowledge
+            add_edge!(g, Edge(recipe[1], recipe[3]))
+        end
+        mean(sample_tasks(pop)) do (start, goal)
+            known_path_length = length(a_star(g, start, goal))
+            known_path_length == 2
+        end
     end
 end
-# %% --------
 
 
-mean(x->length(x)>1,
-
-
-# mkpath("envs")
-# for pop in populations
-#     serialize("envs/$(pop.name)", pop.env)
-#     write_configs(pop, gen)
-# end
+mkpath("envs")
+for pop in populations
+    serialize("envs/$(pop.name)", pop.env)
+    write_configs(pop, gen)
+end
 
