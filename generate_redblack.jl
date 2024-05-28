@@ -116,21 +116,6 @@ else
 end
 
 
-map(populations) do pop
-    monte_carlo() do
-        g = DiGraph(11)
-        knowledge = sample_recipes(pop, 5)
-        for recipe in knowledge
-            add_edge!(g, Edge(recipe[1], recipe[3]))
-        end
-        mean(sample_tasks(pop)) do (start, goal)
-            known_path_length = length(a_star(g, start, goal))
-            known_path_length == 2
-        end
-    end
-end
-
-
 mkpath("envs")
 for pop in populations
     serialize("envs/$(pop.name)", pop.env)

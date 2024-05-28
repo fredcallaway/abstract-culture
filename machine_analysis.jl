@@ -8,6 +8,7 @@ using DataFrames, RCall
 
 # %% --------
 
+N_STATE = 11
 version = "vM7"
 
 FIGS_PATH = "figs/machine/$version-"
@@ -74,20 +75,21 @@ end
 lookup(t::Trial, key) = lookup(t.uid, key)
 
 
-# gtrials = Dictionaries.sortkeys(map(g->collect(group(get(:uid), g)), group(generation, trials)))
+
+function known_path_length(knowledge::Vector{<:Edge}, start, goal)
+    g = DiGraph(N_STATE)
+    for e in t.knowledge
+        add_edge!(g, e)
+    end
+    known_path_length = length(a_star(g, t.start, t.goal))
+end
+known_path_length(t::Trial; knowledge=t.knowledge) = known_path_length(knowledge, t.start, t.goal)
 
 tdf = pframe() do uid
-    n_state = get_params(uid)["nChemical"]
     map(load_trials(uid)) do t
         discovered = setdiff(t.traversed, t.knowledge)
-        g = DiGraph(n_state)
-        for e in t.knowledge
-            add_edge!(g, e)
-        end
-        known_path_length = length(a_star(g, t.start, t.goal))
-
         (;t.trial_number, t.start, t.goal, duration=(t.end_time - t.start_time) / 1000,
-            path_length = length(t.path), known_path_length,
+            path_length = length(t.path), known_path_length=known_path_length(t),
             comp_start_known = Edge(t.start, 5) in t.knowledge,
             comp_goal_known = Edge(5, t.goal) in t.knowledge,
             n_pull=length(t.attempts), n_discovered=length(discovered), n_known=length(t.knowledge),
@@ -122,6 +124,95 @@ end
 @rput times
 
 # %% ==================== debug ====================
+
+R"""
+tdf %>%
+    filter(generation == 5) %>%
+    filter(trial_number == 5) %>%
+    group_by(M) %>%
+    summarise(mean(known_path_length == 2))
+"""
+
+uid = participants.uid[40]
+
+# %% --------
+
+function social_information(uid::String)
+    map(get_params(uid)["recipes"]) do (a, _, b)
+        Edge(a+1, b+1)
+    end
+end
+
+
+
+df = pframe() do uid
+    knowledge = social_information(uid)
+    map(load_trials(uid)) do t
+        comp_start_known = Edge(t.start, 5) in knowledge
+        comp_goal_known = Edge(5, t.goal) in knowledge
+        (;
+            comp_start_known,
+            comp_goal_known,
+            direct_known = Edge(t.start, t.goal) in knowledge,
+            comp_known = comp_start_known & comp_goal_known,
+            compositional = length(t.path) == 2,
+        )
+    end
+end
+@rput df
+
+R"""
+df %>%
+    filter(M==5) %>%
+    group_by(generation) %>%
+    summarise(
+        full = mean(comp_known & !direct_known),
+        start = mean(comp_start_known & !direct_known),
+        goal = mean(comp_goal_known & !direct_known),
+    )
+
+"""
+
+# %% --------
+sim = flatmap(1:10000) do agent
+    gen = 5
+    pop = Population("M5", 1; M=5)
+    observed_solutions = sample(get_solutions(pop, gen-1), pop.env.M; replace=true)
+    knowledge = unique(reduce(vcat, observed_solutions))
+    map(sample_tasks(pop)) do (start, goal)
+        comp_start_known = Edge(start, 5) in knowledge
+        comp_goal_known = Edge(5, goal) in knowledge
+        (;
+            agent,
+            comp_start_known,
+            comp_goal_known,
+            direct_known = Edge(start, goal) in knowledge,
+            comp_known = comp_start_known & comp_goal_known,
+            # compositional = length(path) == 2,
+        )
+    end
+end |> DataFrame
+@rput sim
+
+R"""
+sim %>%
+    group_by(population=floor(agent / 12)) %>%
+    summarise(
+        full = mean(comp_known & !direct_known),
+        start = mean(comp_start_known & !direct_known),
+        goal = mean(comp_goal_known & !direct_known),
+    ) %>%
+    summarise(
+        full = quantile(full, .99),
+        start = quantile(start, .99),
+        goal = quantile(goal, .99),
+)
+
+"""
+# 0.0952 0.286 0.238
+
+# %% --------
+
 repeats = ("65ab052d1e112ab8611d762d", "664ab329e0b7a59dc3afcf69", "6650da43a82f01840447bcbe", "6650f3da72e0dcc860312e62")
 
 ffmap(trials) do t
@@ -232,11 +323,8 @@ get_params(t.uid)["tasks"]
 
 R"""
 tdf %>%
-    filter(pid == 140) %>%
-    select(comp_start_known, comp_goal_known, path_length, duration, n_pull)
-
-
-
+    filter(M==5, generation==5, known_path_length == 0, path_length == 2) %>%
+    select(pid, n_pull)
 """
 
 
