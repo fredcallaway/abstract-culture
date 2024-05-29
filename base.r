@@ -546,7 +546,11 @@ fancy_names = list(
     pid = "Participant",
     n_fix = "# Fixations",
     n_fixated = "# States Fixated",
-    advantage = "Compositional Learning Advantage"
+    advantage = "Compositional Learning Advantage",
+    M = "# Demonstrations",
+    K = "# Trials",
+    gen = "Generation",
+    red = "Compositionality"
 )
 
 fancy_replacements = c(

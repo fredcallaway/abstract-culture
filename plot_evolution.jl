@@ -2,39 +2,7 @@
 @everywhere using NamedTupleTools
 include("r.jl")
 
-# %% ==================== setup ====================
-
-function run_sim_infinite(;n_gen=30, init=NaN,
-                 p_0 = [1e-6],
-                 p_brr = [0.5],
-                 p_r = [0.5],
-                 n = [5, 10, 20],
-                 m = 2 .* [5, 10, 20])
-
-    g = grid(; p_0, p_brr, p_r, n, m)
-    df = dataframe(g) do prm
-        env = Environment(;prm...)
-        sim = simulate(env, n_gen; init)
-        map(enumerate(sim)) do (gen, red)
-            (;gen, red)
-        end
-    end
-    @rput df
-    df
-end
-
-R"""
-FIGS_PATH = "figs/velez/"
-MAKE_PDF = FALSE
-DPI = 500
-plot_red = function(...) {
-    df %>%
-        ggplot(aes(gen, red, ...)) +
-        geom_line() +
-        facet_grid(m ~ n, labeller=label_glue(cols='S={n}', rows='M={m}'))
-
-}
-"""
+# %% ======
 
 
 
