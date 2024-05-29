@@ -1,5 +1,5 @@
 using Test
-include("black_red.jl")
+include("red_black.jl")
 
 
 function consistency_test()

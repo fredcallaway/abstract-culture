@@ -7,7 +7,7 @@ include("utils.jl")
 # use hub if travel_cost + rand_cost < hub_discount
 
 
-@kwdef struct Environment
+@kwdef struct GraphEnv
     graph::SimpleDiGraph{Int64}
 
     M::Int = 5  # number of models
@@ -58,11 +58,11 @@ function edge_costs(env, observed)
     X
 end
 
-function initial_population(env::Environment)
+function initial_population(env::GraphEnv)
     fill([Int[]], env.N)
 end
 
-@memoize function tasks(env::Environment)
+@memoize function tasks(env::GraphEnv)
     filter(collect(Iterators.product(env.starts, env.goals))) do (s,g)
         s != g
     end
@@ -80,7 +80,7 @@ function observed_edges(pop_behavior)
     observed
 end
 
-function transition(env::Environment, pop::Vector{Vector{Vector{Int}}})
+function transition(env::GraphEnv, pop::Vector{Vector{Vector{Int}}})
     (;M, K, N, graph, ε) = env
     @assert env.hub_discovery_discount == 0  # assumed below
     map(1:N) do i
@@ -119,7 +119,7 @@ function transition(env::Environment, pop::Vector{Vector{Vector{Int}}})
     end
 end
 
-function simulate(env::Environment, n_gen; init=initial_population(env))
+function simulate(env::GraphEnv, n_gen; init=initial_population(env))
     pop = init
     # note: initial pop is a dummy, containing no cultural knowledge
     repeatedly(n_gen) do
@@ -129,7 +129,7 @@ function simulate(env::Environment, n_gen; init=initial_population(env))
 end
 
 
-function edge_counts(env::Environment, pop)
+function edge_counts(env::GraphEnv, pop)
     S = nv(env.graph)
     X = zeros(Int, S, S)
     for solutions in pop
@@ -154,7 +154,7 @@ function red_black_graph(n_start, n_goal)
     graph
 end
 
-function compositionality(env::Environment, pop::Vector{Vector{Vector{Int64}}})
+function compositionality(env::GraphEnv, pop::Vector{Vector{Vector{Int64}}})
     S = nv(env.graph)
     C = CartesianIndices((S, S))
     middle_node = cld(S, 2)
@@ -175,7 +175,7 @@ function compositionality(env::Environment, pop::Vector{Vector{Vector{Int64}}})
     num / denom
 end
 
-function compositionality(env::Environment, behavior::Vector{Vector{Int64}})
+function compositionality(env::GraphEnv, behavior::Vector{Vector{Int64}})
     S = nv(env.graph)
     C = CartesianIndices((S, S))
     middle_node = cld(S, 2)
@@ -208,7 +208,7 @@ end
 
 function red_black_env(;S, kws...)
     graph = red_black_graph(S, S)
-    Environment(;graph, starts=1:S+1, goals=S+1:2S+1, kws...)
+    GraphEnv(;graph, starts=1:S+1, goals=S+1:2S+1, kws...)
 end
 
 function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)

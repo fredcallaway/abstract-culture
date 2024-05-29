@@ -52,7 +52,6 @@ end
 
 # %% ==================== General Purpose ====================
 
-
 function ensure_keys(d::Dict{K,V}, keys) where {K,V}
     d1 = Dict{Union{K,eltype(keys)}, Union{V,Missing}}(d)
     for k in keys
@@ -380,6 +379,7 @@ nanreduce(f, x) = f(filter(!isnan, x))
 nanmean(x) = nanreduce(mean, x)
 nanstd(x) = nanreduce(std, x)
 normalize(x) = x ./ sum(x)
+normalize!(x) = x ./= sum(x)
 
 zero_index(x::Int) = x - 1
 zero_index(x::AbstractArray) = map(zero_index, x)

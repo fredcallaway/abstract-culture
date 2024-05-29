@@ -1,5 +1,5 @@
 using GraphMakie
-include("black_red.jl")
+include("red_black.jl")
 include("find_compositions.jl")
 include("figure.jl")
 

@@ -88,6 +88,7 @@ default_palettes = list(
 )
 
 
+
 yesno_pal = scale_colour_manual(values=c(
     `FALSE`="gray50",
     `TRUE`= BLUE
@@ -418,6 +419,9 @@ no_xaxis_ticks = theme(
     axis.ticks.x=element_blank()
 )
 
+xbreaks = function(...) scale_x_continuous(breaks=scales::pretty_breaks(...))
+ybreaks = function(...) scale_y_continuous(breaks=scales::pretty_breaks(...))
+
 no_yaxis_ticks = theme(
     # axis.title.x=element_blank(),
     axis.text.y=element_blank(),
@@ -541,7 +545,8 @@ element_grob.element_text_transform <- function(element, label = "", ...) {
 fancy_names = list(
     pid = "Participant",
     n_fix = "# Fixations",
-    n_fixated = "# States Fixated"
+    n_fixated = "# States Fixated",
+    advantage = "Compositional Learning Advantage"
 )
 
 fancy_replacements = c(
@@ -664,8 +669,9 @@ FIGS_PATH = maybe(FIGS_PATH, "figs/")
 MAKE_PDF = maybe(MAKE_PDF, FALSE)
 WIDTH = maybe(WIDTH, 3.5)
 HEIGHT = maybe(HEIGHT, 2.5)
+DPI = maybe(DPI, 160)
 
-fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=160, pdf=MAKE_PDF, ...) {
+fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_PDF, ...) {
     if (isTRUE(getOption('knitr.in.progress'))) {
         show(last_plot())
         return()
