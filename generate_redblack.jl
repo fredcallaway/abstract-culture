@@ -49,9 +49,8 @@ end
     @assert allunique(participants.uid)
     @assert all(participants.generation .== gen)
     @assert all(participants.complete)
-
     if gen != 1
-        @rsubset! participants :population == string(pop.name, "-", pop.id)
+        participants = @rsubset participants :population == string(pop.name, "-", pop.id)
     end
     @assert all(isequal(pop.env.M), participants.M)
 
