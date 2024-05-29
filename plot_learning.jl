@@ -2,6 +2,12 @@ include("black_red.jl")
 include("r.jl")
 using Optim
 
+R"""
+FIGS_PATH = "figs/velez/"
+MAKE_PDF = FALSE
+DPI = 500
+"""
+
 # %% --------
 
 g = grid(
@@ -27,11 +33,12 @@ df %>%
     scale_colour_manual(values=c(BLACK, RED ), aesthetics=c("fill", "colour"), name="") +
     no_legend +
     geom_line() +
-    labs(x="n (number of starts/goals)", y="p(observe my solution)") +
-    facet_wrap(~m, nrow=1, labeller=label_glue('m = {m}',))
+    labs(x="S (number of starts/goals)", y="p(observe my solution)") +
+    facet_wrap(~m, nrow=1, labeller=label_glue('M = {m}',))
 
 fig("p_observe", w=6, h=2)
 """
+
 # %% --------
 
 g = grid(
@@ -49,7 +56,6 @@ end
 @rput df
 
 R"""
-
 df %>%
     pivot_longer(c(red, black), names_to="name", values_to="value", names_prefix="") %>%
     ggplot(aes(m, value, color=name)) +
@@ -59,9 +65,26 @@ df %>%
     no_legend +
     geom_line() +
     labs(x="m (number of observations)", y="p(observe my solution)") +
-    facet_wrap(~n, nrow=1, labeller=label_glue('n = {n}',))
+    facet_wrap(~n, nrow=1, labeller=label_glue('S = {n}',))
 
 fig("p_observe2", w=6, h=2)
+"""
+# %% --------
+
+R"""
+df %>%
+    filter(n==8) %>%
+    pivot_longer(c(red, black), names_to="name", values_to="value", names_prefix="") %>%
+    ggplot(aes(m, value, color=name)) +
+    scale_colour_manual(values=c(
+        BLACK, RED
+    ), aesthetics=c("fill", "colour"), name="") +
+    no_legend +
+    geom_line() +
+    labs(x="M", y="p(observe)") +
+    facet_wrap(~n, nrow=1, labeller=label_glue('S = {n}',))
+
+fig("p_observe2_simple", w=2, h=2)
 """
 
 # %% --------

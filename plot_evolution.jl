@@ -6,8 +6,8 @@ include("r.jl")
 
 function run_sim_infinite(;n_gen=30, init=NaN,
                  p_0 = [1e-6],
-                 p_brr = [0.],
-                 p_r = [1.],
+                 p_brr = [0.5],
+                 p_r = [0.5],
                  n = [5, 10, 20],
                  m = 2 .* [5, 10, 20])
 
@@ -24,15 +24,14 @@ function run_sim_infinite(;n_gen=30, init=NaN,
 end
 
 R"""
-WIDTH = 5.5
-HEIGHT = 4
+FIGS_PATH = "figs/velez/"
+MAKE_PDF = FALSE
+DPI = 500
 plot_red = function(...) {
     df %>%
         ggplot(aes(gen, red, ...)) +
-        # ggplot(aes(gen, red, color=factor(p_r))) +
         geom_line() +
-        ylab("proportion using red") +
-        facet_grid(m ~ n, labeller=label_glue(cols='n={n}', rows='m={m}'))
+        facet_grid(m ~ n, labeller=label_glue(cols='S={n}', rows='M={m}'))
 
 }
 """
@@ -42,7 +41,17 @@ plot_red = function(...) {
 # %% ==================== m and n ====================
 
 
-run_sim_infinite(p_0 = [.01])
+run_sim_infinite(p_0 = [.01], m=[10,40,80])
+
+R"""
+df %>%
+    filter(n==10, m==20) %>%
+    ggplot(aes(gen, red)) +
+    geom_line(color=RED) +
+    ylab("Compositionality")
+
+fig("basic_single", w=4, h=2)
+"""
 
 
 R"""
@@ -50,7 +59,7 @@ plot_red(color="red") +
     scale_colour_manual(values=c(RED)) +
     no_legend
 
-fig("basic", w=4.5)
+fig("basic", w=6)
 """
 
 # %% ==================== neither ====================
@@ -59,10 +68,10 @@ run_sim_infinite(p_0 = .1 .^ (1:6))
 
 R"""
 plot_red(color=factor(p_0)) +
-    discrete_sequential("Oranges", name="p(red|neither)") +
-    rev_legend
+    discrete_sequential("Oranges", name="Spontaneous Compositionality Rate") +
+    rev_legend +
 
-fig("neither")
+fig("neither", w=7.5)
 """
 
 # %% ==================== both ====================
@@ -83,10 +92,10 @@ run_sim_infinite(p_r = 0:.2:1; n_gen=100)
 
 R"""
 plot_red(color=factor(p_r)) +
-    discrete_sequential("TealGrn", name="p(red|partial)") +
+    discrete_sequential("TealGrn", name="Compositional Completion Rate") +
     rev_legend
 
-fig("partial")
+fig("partial", w=7.5)
 """
 
 # %% --------
@@ -124,7 +133,7 @@ df %>%
     expand_limits(y=0.4) +
     discrete_sequential("Greens", name="p(red|partial)") +
     rev_legend +
-    facet_grid(m ~ n, labeller=label_glue(cols='n={n}', rows='m={m}')) +
+    facet_grid(m ~ n, labeller=label_glue(cols='S={n}', rows='M={m}')) +
 fig("partial", w=5.5, h=4)
 """
 
@@ -237,15 +246,15 @@ df %>%
     ggplot(aes(gen, red, color=factor(N))) +
     geom_line(mapping=aes(group = interaction(N, pop)), data=filter(df, pop < 5), linewidth=.2, alpha=.7) +
     lines(mean, linewidth=.7) +
-    ylab("proportion using red") +
-    teals_pal(rev=T) +
+    ylab("Compositionality") +
+    teals_pal(rev=T, name="Population Size") +
     expand_limits(y=0.4) +
     guides(color = guide_legend(reverse=TRUE)) +
     facet_grid(m ~ n, labeller=label_glue(
-        cols='n = {n}',
-        rows='m = {m}'
+        cols='S = {n}',
+        rows='M = {m}'
     ))
-fig("vary_N", w=5.5, h=4)
+fig("vary_N", w=7.5, h=4)
 """
 
 # %% ==================== vary k ====================
