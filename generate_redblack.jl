@@ -18,7 +18,7 @@ end
 @kwdef struct Population
     name::String
     id::Int
-    env::Environment
+    env::GraphEnv
     rng::MersenneTwister
     T::Matrix{Int}
 end

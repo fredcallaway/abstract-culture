@@ -129,12 +129,6 @@ end
 sim = run_sims(30, 11, S=4, N=12, K=7, M=[5, 20, 50], ε=.14)
 @rput sim
 
-t = filter(trials) do t
-    endswith(t.uid, "wd09aa4d")
-end |> first
-t.knowledge
-
-
 R"""
 human = tdf %>%
     filter(start != 5, goal != 5) %>%
@@ -144,14 +138,16 @@ human = tdf %>%
 
 # df = bind_rows(mutate(sim, agent="model", population=100+population), human)
 
-sim %>%
+plt = sim %>%
     ggplot(aes(generation, 1*compositionality, group=population)) +
     geom_line(linewidth=.5, color="#18BAFB", alpha=0.5) +
-    geom_line(linewidth=1, data=human) +
-    ylab("Two-Step Solution Rate") +
-    facet_wrap(~M)
+    facet_wrap(~M, labeller=label_glue("{M} Demonstrations"))
 
-fig(w=5)
+fig("evolution_predicitions", w=6, dpi=500)
+
+plt + geom_line(linewidth=1, data=human)
+fig("evolution", w=6, dpi=500)
+
 
 """
 

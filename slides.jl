@@ -105,7 +105,7 @@ end
 R"""
 plot_advantage = function(df, ...) {
     df %>%
-        ggplot(aes(..., color=factor(S))) +
+        ggplot(aes(..., color=fct_rev(factor(S)))) +
         geom_line() +
         scale_color_discrete_sequential("Purples", l1=20, l2=80, c2=40, name="# Tasks")
 }
@@ -113,12 +113,18 @@ plot_advantage = function(df, ...) {
 df %>%
     mutate(S = S^2, advantage = red-black) %>%
     plot_advantage(M, advantage)
+
     # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
     # no_gridlines +
     # scale_fill_continuous_sequential(h1=0, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
 
 fig("advantage_lines", w=4.5, h=3)
+"""
 
+R"""
+df %>%
+    mutate(S = S^2, advantage = red-black) %>%
+    plot_advantage(M, advantage)
 """
 
 # %% ==================== individual ====================
@@ -135,6 +141,7 @@ R"""
 indi %>%
     mutate(discovery=red_discovery, travel=red_travel) %>%
     mutate(S = S^2) %>% filter(S < 101) %>%
+    mutate(advantage = advantage / K) %>%
     plot_advantage(K, advantage) +
     facet_grid(travel~discovery) +
     geom_hline(yintercept=0)
@@ -144,11 +151,14 @@ fig("indi_advantage", w=8, h=7)
 
 R"""
 indi %>%
+    filter(K > 2) %>%
     mutate(discovery=red_discovery, travel=red_travel) %>%
-    filter(discovery == 1, travel == 0) %>%
+    filter(discovery == 0.95, travel == 0) %>%
     mutate(S = S^2) %>% filter(S < 101) %>%
+    mutate(advantage = advantage / K) %>%
     plot_advantage(K, advantage) +
     geom_hline(yintercept=0)
+    # expand_limits(y=2)
 
 fig("indi_single", w=4.5, h=3)
 
@@ -212,14 +222,60 @@ df %>%
 fig("limit_lines", w=4.5, h=3)
 """
 
-# %% ====================  ====================
+# %% ==================== innovation ====================
 
 run_sim_infinite(p_0 = .1 .^ (3:9))
 
 R"""
 df %>% ggplot(aes(gen, red, color=factor(p_0))) +
     geom_line() +
-    scale_color_discrete_sequential("Oranges", name="Innovation Rate")
+    scale_color_discrete_sequential("Oranges", name="Innovation Rate", l2=80, c2=40) +
+    rev_legend
 
 fig("neither", w=4)
 """
+
+# %% --------
+
+run_sim_infinite(p_0 = .1 .^ (3:9), S=[3, 5, 7], M=[5, 10, 20], n_gen=100)
+
+R"""
+df %>% ggplot(aes(gen, red, color=factor(p_0))) +
+    geom_line() +
+    scale_color_discrete_sequential("Oranges", name="Innovation Rate", l2=80, c2=40) +
+    rev_legend +
+    facet_grid(M ~ S, labeller=label_glue(rows='{M} Demos', cols='{S} Tasks'))
+
+fig("neither_facets", w=6, h=3.5)
+"""
+
+# %% ==================== completion ====================
+
+
+run_sim_infinite(p_r = .5 .^ (0:3), n_gen=100)
+
+R"""
+df %>% ggplot(aes(gen, red, color=factor(p_r))) +
+    scale_color_discrete_sequential("TealGrn", name="Completion Rate", rev=T, l2=80) +
+    geom_line() +
+    scale_color_discrete_sequential("TealGrn", name="Completion Rate") +
+    rev_legend
+
+fig("partial", w=4)
+"""
+
+# %% --------
+
+run_sim_infinite(p_r = .5 .^ (0:3), S=[3, 5, 7], M=[5, 10, 20], n_gen=100)
+
+R"""
+df %>% ggplot(aes(gen, red, color=factor(p_r))) +
+    geom_line() +
+    scale_color_discrete_sequential("TealGrn", name="Completion Rate", rev=T, l2=80) +
+    rev_legend +
+    facet_grid(M ~ S, labeller=label_glue(rows='{M} Demos', cols='{S} Tasks')) +
+
+
+fig("partial_facets", w=6, h=3.5)
+"""
+

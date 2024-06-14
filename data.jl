@@ -84,13 +84,13 @@ end
         @subset! df :complete
         if version ≥ "vM5"
             df = @chain df begin
-                @rtransform! $AsTable = extract_parameters(:uid, "generation", "pop_name", "pop_id")
+                @rtransform! $AsTable = extract_parameters(:uid, "generation", "pop_name", "pop_id", "N", "M", "K")
                 @rtransform! @astable begin
                     pn = :pop_name
-                    env = deserialize("envs/$pn")
-                    :N = env.N
-                    :M = env.M
-                    :K = env.K
+                    # env = deserialize("envs/$pn")
+                    # :N = env.N
+                    # :M = env.M
+                    # :K = env.K
                     :population = string(:pop_name, "-", :pop_id)
                 end
                 @orderby :population :generation
