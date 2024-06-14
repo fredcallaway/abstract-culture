@@ -155,7 +155,8 @@ function transition(env::RedBlackEnv, p_red::Float64)
         env.p_0
     else
         b = prob_observe(¬p_red / (S^2), M)
-        # prob observe one of the desired red edges (not both)
+        # prob observe the right bottom/top red edge (not both)
+        # these are independent events because you observe M bottom and M top
         r = prob_observe(p_red / S, M)
 
         prob_learn_red(env, b, r)
