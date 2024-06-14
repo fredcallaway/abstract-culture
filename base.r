@@ -685,10 +685,17 @@ fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_
     stamp = format(Sys.time(), "%m-%d-%H-%M-%S")
     p = glue('".fighist/{gsub("/", "-", name)}-{stamp}.png"')
     system(glue('mv /tmp/fig.png {p}'))
-    system(glue('mkdir -p `dirname {path}{name}.png`'))
-    system(glue('cp {p} {path}{name}.png'))
-    print(glue("{path}{name}.png"))
-    if (pdf && name != "tmp") ggsave(glue("{path}{name}.pdf"), width=w, height=h, ...)
+    if (name != "tmp") {
+        system(glue('mkdir -p `dirname {path}{name}.png`'))
+        if (pdf) {
+            ggsave(glue("{path}{name}.pdf"), width=w, height=h, ...)
+            print(glue("{path}{name}.pdf"))
+        } else {
+            system(glue('cp {p} {path}{name}.png'))
+            print(glue("{path}{name}.png"))
+        }
+
+    }
     # invisible(dev.off())
     # knitr::include_graphics(p)
 }
