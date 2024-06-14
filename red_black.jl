@@ -1,7 +1,7 @@
 
 using Memoize
 include("utils.jl")
-include("find_compositions.jl")
+# include("find_compositions.jl")
 
 ¬(p::Real) = 1 - p
 prob_observe(p, M) = ¬((¬p) ^ M)
