@@ -2,10 +2,10 @@
     include("red_black.jl")
 
     @kwdef struct Costs
-        black_travel = 0.
-        red_travel = 0.1
-        black_discovery = 1.
-        red_discovery = 1.
+        black_travel::Float64 = 0.
+        red_travel::Float64 = 0.1
+        black_discovery::Float64 = 1.
+        red_discovery::Float64 = 1.
     end
 
     numunique(x) = length(unique(x))
@@ -30,22 +30,13 @@
 
 end
 
-function simulate(;S, K, red_travel, red_discovery)
-    @showprogress pmap(grid(;S, K, red_travel, red_discovery)) do prm
-        costs = Costs(;prm.red_travel, prm.red_discovery)
-        (;prm..., advantage = red_advantage(RedBlackEnv(;prm.S, prm.K), costs))
-    end
-end
-
-mkpath("tmp")
-result = simulate(K=2:1:100, S=2:1:100, red_travel=[0., .05, .1, .2], red_discovery=[.5, .75, .95, 1])
-serialize("tmp/individual", result)
 
 # %% --------
-
-
-# result = simulate(K=2:1:100, S=2:1:100)
-
-
-
-
+mkpath("tmp")
+# previous:  K=2:1:100, S=2:1:100, red_travel=[0., .05, .1, .2], red_discovery=[.5, .75, .95, 1]
+g = collect(grid(K=1:1:100, S=1:1:10, red_travel=[0.05], red_discovery=[.95]))
+result = dataframe(g; parallel=true) do prm
+    costs = Costs(;prm.red_travel, prm.red_discovery)
+    (;advantage = red_advantage(RedBlackEnv(;prm.S, prm.K), costs))
+end
+serialize("tmp/individual-jun14", result)
