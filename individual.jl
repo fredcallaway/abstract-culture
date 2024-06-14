@@ -34,7 +34,7 @@ end
 # %% --------
 mkpath("tmp")
 # previous:  K=2:1:100, S=2:1:100, red_travel=[0., .05, .1, .2], red_discovery=[.5, .75, .95, 1]
-g = collect(grid(K=1:1:100, S=1:1:10, red_travel=[0.05], red_discovery=[.95]))
+g = collect(grid(K=1:1:100, S=1:1:100, red_travel=[0., .05], red_discovery=[1., .9]))
 result = dataframe(g; parallel=true) do prm
     costs = Costs(;prm.red_travel, prm.red_discovery)
     (;advantage = red_advantage(RedBlackEnv(;prm.S, prm.K), costs))

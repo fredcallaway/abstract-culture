@@ -200,8 +200,8 @@ fig("advantage_heat_alt", w=4)
 # %% ==================== cost advantage ====================
 
 g = grid(
-    M=2:1:100,
-    S=2:10
+    M=1:100,
+    S=1:100,
 )
 
 df = dataframe(g) do (;S, M)
@@ -225,23 +225,65 @@ df %>%
     mutate(S = S^2, advantage = black-red) %>%
     plot_advantage(M, advantage)
 
+fig("cost_advantage_heat", w=4.5, h=3)
+
+"""
+
+# %% --------
+
+R"""
+
+df %>%
+    mutate(S = S^2, advantage = black-red) %>%
+    plot_advantage(M, advantage)
+
 fig("cost_advantage_lines", w=4.5, h=3)
 
 """
 
 # %% ==================== individual ====================
 
-g = collect(grid(K=2:1:100, S=2:1:100, red_travel=[0., .05, .1, .2], red_discovery=[.5, .75, .95, 1]))
 indi = deserialize("tmp/individual-jun14")
-
 @rput indi
+
+
+R"""
+indi %>%
+    # mutate(S = S^2) %>% filter(S < 101) %>%
+    ggplot(aes(S, K, fill=advantage)) +
+    geom_tile() +
+    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
+    no_gridlines +
+    scale_fill_continuous_diverging() +
+    facet_grid(red_discovery ~ red_travel)
+    # coord_cartesian(expand=F, ylim=c(2,100)) +
+    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
+
+fig("tmp", w=6, h=5)
+"""
+
+R"""
+df %>%
+    # mutate(S = S^2) %>% filter(S < 101) %>%
+    ggplot(aes(S, M, fill=black-red)) +
+    geom_tile() +
+    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
+    no_gridlines +
+    scale_fill_continuous_diverging()
+    # coord_cartesian(expand=F, ylim=c(2,100)) +
+    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
+
+fig("tmp")
+"""
+
+# %% --------
 
 
 R"""
 indi %>%
     # filter(K > 2) %>%
     # mutate(discovery=red_discovery, travel=red_travel) %>%
-    # filter(discovery == 0.95, travel == 0) %>%
+    filter(red_discovery == 0.95, red_travel == 0) %>%
     mutate(S = S^2) %>% filter(S < 101) %>%
     plot_advantage(K, advantage) +
     geom_hline(yintercept=0)
