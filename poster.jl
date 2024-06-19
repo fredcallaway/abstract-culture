@@ -146,11 +146,6 @@ end
 
 
 R"""
-theme_update(
-    legend.key.width=unit(0.5, "inches"),
-    legend.key.height=unit(0.9, "inches"),
-)
-
 advantage_heat = list(
     rasterise(geom_tile(), dpi=500),
     # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
@@ -158,7 +153,12 @@ advantage_heat = list(
     labs(fill=""),
     scale_fill_continuous_diverging(h1=197, h2=10, c1=200, l1=20, l2=70, p1=1, p2=1, limits=c(-.85, .85)),
     coord_fixed(expand=F),
-    theme(axis.line = element_blank())
+    theme(
+        axis.line = element_blank(),
+        legend.key.width=unit(0.5, "inches"),
+        legend.key.height=unit(0.9, "inches"),
+    )
+
 )
 
 df %>%
@@ -180,16 +180,35 @@ indi = deserialize("tmp/individual-jun14")
 
 
 R"""
-indi %>%
+library(grDevices)
+p = indi %>%
     filter(red_discovery == .9, red_travel == .05) %>%
     # mutate(S = S^2) %>% filter(S < 101) %>%
     mutate(advantage = advantage / K) %>%
     ggplot(aes(K, S, fill=advantage)) +
-    advantage_heat
+    advantage_heat + no_legend + ylab("Env Size")
 
 
-fig("indi_advantage_heat", w=9, h=6)
+fig("indi_advantage_heat", w=6, h=5)
 """
+
+# %% --------
+
+R"""
+
+indi %>%
+    filter(red_discovery == .9, red_travel == .05) %>%
+    ggplot(aes(K, advantage / K, color=name)) +
+    scale_colour_manual(values=c(
+        BLACK, RED
+    ), aesthetics=c("fill", "colour"), name="") +
+    no_legend +
+    geom_line() +
+    labs(y="learning cost")
+
+fig("learning_cost")
+"""
+
 
 # %% ==================== evolution ====================
 
@@ -206,25 +225,6 @@ df %>%
 fig("basic_single", w=7.5)
 """
 
-# %% ====================  ====================
-
-run_sim_infinite(S=[3, 5, 7], M=[3, 15, 75])
-
-R"""
-df %>%
-    mutate(S = S**2) %>%
-    ggplot(aes(gen, red)) +
-    geom_line(color=RED) +
-    facet_grid(M ~ S) +
-    no_legend +
-    theme(
-        panel.border = element_rect(color = "black", fill = NA, size = 3)
-    ) +
-    no_axes
-
-fig("SM", w=10, h=10)
-"""
-
 # %% ==================== limits ====================
 
 
@@ -234,8 +234,6 @@ g = grid(
 )
 df = dataframe(g) do (;M, S)
     env = RedBlackEnv(;M, S, p_0=.01)
-    env = RedBlackEnv(M=10, S=5)
-    get_limit(env; max_gen=1000)
     red, gen = get_limit(env; max_gen=1000)
     [(;gen, red)]
 end
@@ -243,89 +241,100 @@ end
 
 R"""
 df %>%
-    mutate(S = S^2) %>%
-    plot_advantage(M, red) +
-    ylab("Asymptotic Compositionality")
+    ggplot(aes(M, S, fill=red)) +
+    advantage_heat +
+    scale_fill_continuous_sequential(h1=10, h2=NA, c1=200,  l1=20, l2=70, p1=1, p2=1,
+        labels=scales::percent_format(), limits=c(0,1)
+    ) +
+    theme(
+        legend.key.height=unit(0.7, "inches")
+    )
+    # scale_fill_continuous_sequential(h1=10, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
 
-fig("limit_lines", w=4.5, h=3)
+fig("asymptotic", w=8.5)
 """
 
-# %% ==================== limit heatmap ====================
+# %% ==================== SM ====================
 
-g = grid(
-    M=2:1:100,
-    S=(2:100)
-)
-df = dataframe(g) do (;M, S)
-    env = RedBlackEnv(;M, S, p_0=.01)
-    red, gen = get_limit(env; max_gen=1000)
-    [(;gen, red)]
-end
-@rput df
+
+run_sim_infinite(S=[10, 30], M=[10, 30]; n_gen=50)
 
 R"""
 df %>%
-    mutate(S = S^2) %>%
-    plot_advantage(M, red) +
-    ylab("Asymptotic Compositionality")
+    mutate(S = fct_rev(factor(S))) %>%
+    rename(D = M) %>%
+    ggplot(aes(gen, red)) +
+    geom_line(color=RED) +
+    # facet_grid(S ~ M, labeller=label_value) +
+    facet_grid(S ~ D) +
+    no_legend +
+    # coord_cartesian(xlim=c(-1, 31), ylim=c(-.1, 1.1)) +
+    theme(
+        axis.line=element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, size = 3)
+    ) +
+    no_xaxis_ticks + no_yaxis_ticks
 
-fig("limit_lines", w=4.5, h=3)
+fig("SM")
 """
+
+
+
 
 # %% ==================== innovation ====================
 
-run_sim_infinite(p_0 = .1 .^ (3:9))
+run_sim_infinite(p_0 = .1 .^ (3:2:9))
 
 R"""
 df %>% ggplot(aes(gen, red, color=factor(p_0))) +
     geom_line() +
-    scale_color_discrete_sequential("Oranges", name="Innovation Rate", l2=80, c2=40) +
-    rev_legend
-
-fig("neither", w=4)
-"""
-
-# %% --------
-
-run_sim_infinite(p_0 = .1 .^ (3:9), S=[3, 5, 7], M=[5, 10, 20], n_gen=100)
-
-R"""
-df %>% ggplot(aes(gen, red, color=factor(p_0))) +
-    geom_line() +
-    scale_color_discrete_sequential("Oranges", name="Innovation Rate", l2=80, c2=40) +
+    scale_color_discrete_sequential("Oranges", name="Innovation Probability", l2=80, c2=40) +
     rev_legend +
-    facet_grid(M ~ S, labeller=label_glue(rows='{M} Demos', cols='{S} Tasks'))
+    theme(legend.key.width=unit(0.6, "inches"))
 
-fig("neither_facets", w=6, h=3.5)
+fig("innovation", w=8.5)
 """
+
 
 # %% ==================== completion ====================
 
 
-run_sim_infinite(p_r = .5 .^ (0:3), n_gen=100)
-
-R"""
-df %>% ggplot(aes(gen, red, color=factor(p_r))) +
-    scale_color_discrete_sequential("TealGrn", name="Completion Rate", rev=T, l2=80) +
-    geom_line() +
-    scale_color_discrete_sequential("TealGrn", name="Completion Rate") +
-    rev_legend
-
-fig("partial", w=4)
-"""
-
-# %% --------
-
-run_sim_infinite(p_r = .5 .^ (0:3), S=[3, 5, 7], M=[5, 10, 20], n_gen=100)
+run_sim_infinite(p_r = [1, .75, .5, .25], n_gen=30)
 
 R"""
 df %>% ggplot(aes(gen, red, color=factor(p_r))) +
     geom_line() +
-    scale_color_discrete_sequential("TealGrn", name="Completion Rate", rev=T, l2=80) +
+    scale_color_discrete_sequential("TealGrn", name="Completion Probability") +
     rev_legend +
-    facet_grid(M ~ S, labeller=label_glue(rows='{M} Demos', cols='{S} Tasks')) +
+    theme(legend.key.width=unit(0.6, "inches"))
 
-
-fig("partial_facets", w=6, h=3.5)
+fig("completion", w=8.5)
 """
 
+# %% ==================== experiment ====================
+
+(;sim, tdf) = deserialize("tmp/experiment")
+@rput sim tdf
+
+
+R"""
+human = tdf %>%
+    filter(start != 5, goal != 5) %>%
+    group_by(M, population, generation) %>%
+    summarise(compositionality = mean(path_length == 2)) %>%
+    mutate(agent = "human")
+
+# df = bind_rows(mutate(sim, agent="model", population=100+population), human)
+
+sim %>%
+    filter(generation < 9) %>%
+    ggplot(aes(generation, 1*compositionality, group=population)) +
+    geom_line(linewidth=1, color="#BA1109", alpha=0.3) +
+    # geom_line(linewidth=.5, color="#BA1109", alpha=0.5) +
+    geom_line(data=human) +
+    facet_wrap(~M, labeller=label_glue("{M} Demos"), scales="free_y") +
+    expand_limits(y=1.)
+
+
+fig("experiment", w=14,  h=5, pdf=T)
+"""
