@@ -460,7 +460,7 @@ stat_mean_and_quantiles = function(rng=.9, ...) {
     )
 }
 
-theme_set(theme_bw(base_size = 12))
+theme_set(theme_bw(base_size = 32))
 theme_update(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
@@ -477,8 +477,8 @@ theme_update(
 update_geom_defaults("vline", list(linetype="dashed"))
 update_geom_defaults("abline", list(linetype="dashed"))
 update_geom_defaults("hline", list(linetype="dashed"))
-update_geom_defaults("line", list(linewidth = 1.2))
 update_geom_defaults("smooth", list(color="black"))
+update_geom_defaults("line", list(linewidth = 1.2))
 update_geom_defaults("pointrange", list(size=.3))
 
 tight_margin = function(cm=.05) theme(plot.margin = unit(c(cm,cm,cm,cm), "cm"))
@@ -546,6 +546,7 @@ element_grob.element_text_transform <- function(element, label = "", ...) {
 fancy_names = list(
     pid = "Participant",
     n_fix = "# Fixations",
+    S = "Environment Size",
     n_fixated = "# States Fixated",
     advantage = "Compositional Learning Advantage",
     M = "# Demonstrations",

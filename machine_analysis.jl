@@ -74,14 +74,16 @@ function lookup(uid::String, key)
 end
 lookup(t::Trial, key) = lookup(t.uid, key)
 
+# %% --------
+
 
 
 function known_path_length(knowledge::Vector{<:Edge}, start, goal)
     g = DiGraph(N_STATE)
-    for e in t.knowledge
+    for e in knowledge
         add_edge!(g, e)
     end
-    known_path_length = length(a_star(g, t.start, t.goal))
+    known_path_length = length(a_star(g, start, goal))
 end
 known_path_length(t::Trial; knowledge=t.knowledge) = known_path_length(knowledge, t.start, t.goal)
 
@@ -99,7 +101,6 @@ tdf = pframe() do uid
     end
 end
 @rput tdf
-
 
 times = pframe() do uid
     events = load_events(uid)
@@ -140,14 +141,14 @@ human = tdf %>%
 
 plt = sim %>%
     ggplot(aes(generation, 1*compositionality, group=population)) +
-    geom_line(linewidth=.5, color="#18BAFB", alpha=0.5) +
+    geom_line(linewidth=.5, color="#BA1109", alpha=0.3) +
+    # geom_line(linewidth=.5, color="#BA1109", alpha=0.5) +
     facet_wrap(~M, labeller=label_glue("{M} Demonstrations"))
 
-fig("evolution_predicitions", w=6, dpi=500)
+fig("evolution_predicitions", w=6, pdf=T)
 
 plt + geom_line(linewidth=1, data=human)
-fig("evolution", w=6, dpi=500)
-
+fig("evolution", w=6, pdf=T)
 
 """
 

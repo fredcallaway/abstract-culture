@@ -5,24 +5,39 @@ using Optim
 # %% --------
 
 R"""
-FIGS_PATH = "figs/spp2/"
+FIGS_PATH = "spp-poster/"
 MAKE_PDF = TRUE
 DPI = 500
+WIDTH = 5.2
+HEIGHT = 5
 RED = "#C82506"
-theme_set(theme_bw(base_size = 12))
+library(ggrastr)
+theme_set(theme_classic(base_size = 32))
 theme_update(
+    text = element_text(family = "Helvetica"),
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
     panel.grid.minor.y = element_blank(),
-    # panel.grid.major.y = element_blank(),
-    panel.grid.major.y = element_line(color="#EDEDED"),
+    # panel.border = element_rect(color = "black", fill = NA, size = 3),
+    panel.grid.major.y = element_blank(),
+    # panel.grid.major.y = element_line(color="#EDEDED"),
     strip.background = element_blank(),
-    strip.text.x = element_text(size=12),
-    strip.text.y = element_text(size=12),
+    strip.text.x = element_text(size=32),
+    strip.text.y = element_text(size=32),
     legend.position="right",
     panel.spacing = unit(1, "lines"),
 )
 
+theme_update(
+    axis.title.x = element_text_transform(transform = fancy_name),
+    axis.title.y = element_text_transform(transform = fancy_name),
+    # legend.text = element_text(),
+    legend.title = element_text_transform(transform = fancy_name_compact),
+    strip.text = element_text_transform(transform = fancy_name)
+)
+
+update_geom_defaults("line", list(linewidth = 2.5))
+update_geom_defaults("pointrange", list(size=.3))
 
 facet_grid = function(form, labeller=purrr::partial(label_both, sep = " = "), ...) {
     ggplot2::facet_grid(form, labeller=labeller, ...)
@@ -52,96 +67,12 @@ function run_sim_infinite(;n_gen=30, init=NaN,
     df
 end
 
-# %% ==================== learning ====================
-
-g = grid(
-    M=1:200,
-    S=[5,10,20]
-)
-
-df = dataframe(g) do (;S, M)
-    black = prob_observe(1 / (S^2), M)
-    # prob observe both red edges
-    red = prob_observe(1 / S, M)^2
-    (;black, red)
-end
-
-@rput df
-
-
-R"""
-theme_set(theme_bw(base_size = 12))
-theme_update(
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.minor.y = element_blank(),
-    # panel.grid.major.y = element_blank(),
-    panel.grid.major.y = element_line(color="#EDEDED"),
-    strip.background = element_blank(),
-    strip.text.x = element_text(size=12),
-    strip.text.y = element_text(size=12),
-    legend.position="right",
-    panel.spacing = unit(1, "lines"),
-)
-
-df %>%
-    mutate(S = S**2) %>%
-    pivot_longer(c(red, black), names_to="name", values_to="value", names_prefix="") %>%
-    ggplot(aes(M, value, color=name)) +
-    scale_colour_manual(values=c(
-        BLACK, RED
-    ), aesthetics=c("fill", "colour"), name="") +
-    no_legend +
-    geom_line() +
-    labs(y="p(observe solution)") +
-    facet_S
-
-fig("p_observe", w=6, h=2.3, scale=.8)
-"""
-
-# %% ==================== learning advantage ====================
-
-g = grid(
-    M=2:1:100,
-    S=2:10
-)
-
-df = dataframe(g) do (;S, M)
-    black = prob_observe(1 / (S^2), M)
-    red = prob_observe(1 / S, M)^2
-    (;black, red)
-end
-
-@rput df
-
-# %% --------
-
-R"""
-plot_advantage = function(df, ...) {
-    df %>%
-        ggplot(aes(..., color=fct_rev(factor(S)))) +
-        geom_line() +
-        scale_color_discrete_sequential("Purples", l1=20, l2=80, c2=40, name="# Tasks")
-}
-
-df %>%
-    mutate(S = S^2, advantage = red-black) %>%
-    plot_advantage(M, advantage)
-
-    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
-    # no_gridlines +
-    # scale_fill_continuous_sequential(h1=0, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
-
-fig("advantage_lines", w=4.5, h=3)
-"""
-
 # %% ==================== cost ====================
-
 @kwdef struct Costs
-    black_travel = 0.
-    red_travel = 0.
-    black_discovery = 1.
-    red_discovery = 1.
+    black_travel::Float64 = 0.
+    red_travel::Float64 = 0.1
+    black_discovery::Float64 = 1.
+    red_discovery::Float64 = 1.
 end
 
 costs = Costs()
@@ -166,10 +97,9 @@ end
 
 @rput df
 
-
 R"""
 df %>%
-    mutate(S = S**2) %>%
+    filter(S==10) %>%
     pivot_longer(c(red, black), names_to="name", values_to="value", names_prefix="") %>%
     ggplot(aes(M, value, color=name)) +
     scale_colour_manual(values=c(
@@ -177,27 +107,22 @@ df %>%
     ), aesthetics=c("fill", "colour"), name="") +
     no_legend +
     geom_line() +
-    labs(y="learning cost") +
-    facet_S
+    labs(y="learning cost")
 
-fig("learning_cost", w=6, h=2.3)
+fig("learning_cost")
 """
 
-R"""
-df %>%
-    # mutate(S = S^2) %>% filter(S < 101) %>%
-    ggplot(aes(S, M, fill=black-red)) +
-    geom_tile() +
-    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
-    no_gridlines +
-    scale_fill_continuous_sequential(h1=0, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format())
-    # coord_cartesian(expand=F, ylim=c(2,100)) +
-    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
-
-fig("advantage_heat_alt", w=4)
-"""
 
 # %% ==================== cost advantage ====================
+
+@kwdef struct Costs
+    black_travel::Float64 = 0.
+    red_travel::Float64 = 0.05
+    black_discovery::Float64 = 1.
+    red_discovery::Float64 = .9
+end
+
+costs = Costs()
 
 g = grid(
     M=1:100,
@@ -219,26 +144,33 @@ end
 
 @rput df
 
-R"""
-
-df %>%
-    mutate(S = S^2, advantage = black-red) %>%
-    plot_advantage(M, advantage)
-
-fig("cost_advantage_heat", w=4.5, h=3)
-
-"""
-
-# %% --------
 
 R"""
+theme_update(
+    legend.key.width=unit(0.5, "inches"),
+    legend.key.height=unit(0.9, "inches"),
+)
+
+advantage_heat = list(
+    rasterise(geom_tile(), dpi=500),
+    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
+    no_gridlines,
+    labs(fill=""),
+    scale_fill_continuous_diverging(h1=197, h2=10, c1=200, l1=20, l2=70, p1=1, p2=1, limits=c(-.85, .85)),
+    coord_fixed(expand=F),
+    theme(axis.line = element_blank())
+)
 
 df %>%
-    mutate(S = S^2, advantage = black-red) %>%
-    plot_advantage(M, advantage)
+    # mutate(S = S^2) %>% filter(S < 101) %>%
+    mutate(advantage = black - red) %>%
+    ggplot(aes(M, S, fill=advantage)) +
+    advantage_heat
 
-fig("cost_advantage_lines", w=4.5, h=3)
+    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
 
+
+fig("advantage_heat", w=9, h=6)
 """
 
 # %% ==================== individual ====================
@@ -249,87 +181,15 @@ indi = deserialize("tmp/individual-jun14")
 
 R"""
 indi %>%
+    filter(red_discovery == .9, red_travel == .05) %>%
     # mutate(S = S^2) %>% filter(S < 101) %>%
-    ggplot(aes(S, K, fill=advantage)) +
-    geom_tile() +
-    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
-    no_gridlines +
-    scale_fill_continuous_diverging() +
-    facet_grid(red_discovery ~ red_travel)
-    # coord_cartesian(expand=F, ylim=c(2,100)) +
-    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
-
-fig("tmp", w=6, h=5)
-"""
-
-R"""
-df %>%
-    # mutate(S = S^2) %>% filter(S < 101) %>%
-    ggplot(aes(S, M, fill=black-red)) +
-    geom_tile() +
-    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
-    no_gridlines +
-    scale_fill_continuous_diverging()
-    # coord_cartesian(expand=F, ylim=c(2,100)) +
-    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
-
-fig("tmp")
-"""
-
-# %% --------
-
-
-R"""
-indi %>%
-    # filter(K > 2) %>%
-    # mutate(discovery=red_discovery, travel=red_travel) %>%
-    filter(red_discovery == 0.95, red_travel == 0) %>%
-    mutate(S = S^2) %>% filter(S < 101) %>%
-    plot_advantage(K, advantage) +
-    geom_hline(yintercept=0)
-    # expand_limits(y=2)
-
-fig("indi_advantage", w=4.5, h=3)
-"""
-# %% --------
-
-R"""
-indi %>%
-    mutate(discovery=red_discovery, travel=red_travel) %>%
-    filter(S < 11) %>%
-    filter(discovery == 1., travel == 0) %>%
-    filter(advantage > 0)
-"""
-
-
-R"""
-indi %>%
-    mutate(discovery=red_discovery, travel=red_travel) %>%
-    mutate(S = S^2) %>% filter(S < 101) %>%
     mutate(advantage = advantage / K) %>%
-    plot_advantage(K, advantage) +
-    facet_grid(travel~discovery) +
-    geom_hline(yintercept=0)
+    ggplot(aes(K, S, fill=advantage)) +
+    advantage_heat
 
-fig("indi_advantage", w=8, h=7)
+
+fig("indi_advantage_heat", w=9, h=6)
 """
-
-
-R"""
-indi %>%
-    # mutate(S = S^2) %>% filter(S < 101) %>%
-    ggplot(aes(S, M, fill=red-black)) +
-    geom_tile() +
-    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
-    no_gridlines +
-    scale_fill_continuous_sequential(h1=0, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
-    coord_cartesian(expand=F, ylim=c(2,100)) +
-    labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
-
-fig("advantage_heat_alt", w=4)
-
-"""
-
 
 # %% ==================== evolution ====================
 
@@ -340,14 +200,10 @@ run_sim_infinite(S=10, M=25)
 R"""
 
 df %>%
-    ggplot(aes(gen, red))
-fig("basic_empty", w=4.5, h=2.5)
-
-df %>%
     ggplot(aes(gen, red)) +
     geom_line(color=RED)
 
-fig("basic_single", w=4.5, h=2.5)
+fig("basic_single", w=7.5)
 """
 
 # %% ====================  ====================
@@ -359,18 +215,46 @@ df %>%
     mutate(S = S**2) %>%
     ggplot(aes(gen, red)) +
     geom_line(color=RED) +
-    facet_grid(M ~ S, labeller=label_glue(rows='{M} Demos', cols='{S} Tasks')) +
-    no_legend
+    facet_grid(M ~ S) +
+    no_legend +
+    theme(
+        panel.border = element_rect(color = "black", fill = NA, size = 3)
+    ) +
+    no_axes
 
-fig("SM", w=5, h=3.5)
+fig("SM", w=10, h=10)
 """
 
 # %% ==================== limits ====================
 
 
 g = grid(
+    M=1:1:100,
+    S=1:100
+)
+df = dataframe(g) do (;M, S)
+    env = RedBlackEnv(;M, S, p_0=.01)
+    env = RedBlackEnv(M=10, S=5)
+    get_limit(env; max_gen=1000)
+    red, gen = get_limit(env; max_gen=1000)
+    [(;gen, red)]
+end
+@rput df
+
+R"""
+df %>%
+    mutate(S = S^2) %>%
+    plot_advantage(M, red) +
+    ylab("Asymptotic Compositionality")
+
+fig("limit_lines", w=4.5, h=3)
+"""
+
+# %% ==================== limit heatmap ====================
+
+g = grid(
     M=2:1:100,
-    S=(2:10)
+    S=(2:100)
 )
 df = dataframe(g) do (;M, S)
     env = RedBlackEnv(;M, S, p_0=.01)
