@@ -257,7 +257,7 @@ fig("asymptotic", w=8.5)
 # %% ==================== SM ====================
 
 
-run_sim_infinite(S=[10, 30], M=[10, 30]; n_gen=50)
+run_sim_infinite(S=[4, 20], M=[10, 30]; n_gen=30)
 
 R"""
 df %>%
@@ -270,15 +270,39 @@ df %>%
     no_legend +
     # coord_cartesian(xlim=c(-1, 31), ylim=c(-.1, 1.1)) +
     theme(
+        # strip.text.x = element_blank(),
+        # strip.text.y = element_blank(),
         axis.line=element_blank(),
         panel.border = element_rect(color = "black", fill = NA, size = 3)
     ) +
     no_xaxis_ticks + no_yaxis_ticks
 
-fig("SM")
+fig("SM", w=WIDTH+1, h=HEIGHT+1)
 """
 
+R"""
 
+do_plot = function(...) {
+    df %>%
+        filter(...) %>%
+        ggplot(aes(gen, red)) +
+        geom_line(color=RED) +
+        expand_limits(y=c(0,1)) +
+        theme(
+            # axis.line=element_blank(),
+            axis.text.x=element_blank(),
+            axis.text.y=element_blank(),
+            # axis.ticks=element_blank(),
+            axis.title.x=element_blank(),
+            axis.title.y=element_blank(),
+        )
+}
+
+(do_plot(M==10, S==20) | do_plot(M==30, S==20)) /
+(do_plot(M==10, S==4) | do_plot(M==30, S==4))
+
+fig("SM2")
+"""
 
 
 # %% ==================== innovation ====================
