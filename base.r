@@ -460,7 +460,7 @@ stat_mean_and_quantiles = function(rng=.9, ...) {
     )
 }
 
-theme_set(theme_bw(base_size = 32))
+theme_set(theme_bw(base_size = 12))
 theme_update(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
