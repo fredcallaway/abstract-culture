@@ -127,7 +127,7 @@ end
 
 # %% ==================== evolution of compositionality ====================
 
-sim = run_sims(30, 11, S=4, N=12, K=7, M=[5, 20, 50], ε=.14)
+sim = run_sims(30, 10, S=4, N=12, K=7, M=[5, 20, 50], ε=.14)
 
 serialize("tmp/experiment", (;sim, tdf))
 @rput sim
