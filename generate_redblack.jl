@@ -8,14 +8,11 @@ include("data.jl")
 include("graph.jl")
 
 n_mode = 8
-version = "vM7"
-if !@isdefined(gen)
-    gen =  parse(Int, ARGS[1])
-end
 
 # Random.seed!(hash(version))  # this shouldn't be necessary but just in case
 
 @kwdef struct Population
+    version::String
     name::String
     id::Int
     env::GraphEnv
@@ -23,7 +20,7 @@ end
     T::Matrix{Int}
 end
 
-function Population(name, id; S=4, N=12, K=7, M)
+function Population(version, name, id; S=4, N=12, K=7, M)
     env = red_black_env(;S, N, K, M)
     rng = MersenneTwister(hash(version * string(id)))
     n_state = nv(env.graph)
@@ -31,7 +28,7 @@ function Population(name, id; S=4, N=12, K=7, M)
     for t in tasks(env)
         T[t...] = rand(rng, 1:n_mode)
     end
-    Population(name, id, env, rng, T)
+    Population(version, name, id, env, rng, T)
 end
 
 function edges_to_recipes(pop::Population, edges)
@@ -42,7 +39,8 @@ function edges_to_recipes(pop::Population, edges)
 end
 
 @memoize function get_solutions(pop, gen)
-    env = pop.env
+    (;env, version, name, id, T) = pop
+
     @assert gen ≥ 1
 
     participants = load_participants("$(version)g$gen")
@@ -50,16 +48,16 @@ end
     @assert all(participants.generation .== gen)
     @assert all(participants.complete)
     if gen != 1
-        participants = @rsubset participants :population == string(pop.name, "-", pop.id)
+        participants = @rsubset participants :population == string(name, "-", id)
     end
-    @assert all(isequal(pop.env.M), participants.M)
+    @assert all(isequal(env.M), participants.M)
 
     if nrow(participants) != env.N
         error("Incorrect number of participants: $(nrow(participants))")
     end
 
     # make sure the transition structure hasn't changed
-    jsonT = JSON.parse(json(zero_index(transpose(pop.T))))
+    jsonT = JSON.parse(json(zero_index(transpose(T))))
     @assert all(participants.uid) do uid
         get_params(uid)["transitions"] == jsonT
     end
@@ -104,20 +102,39 @@ function write_configs(pop::Population, generation::Int)
     end
 end
 
-if gen == 1
-    populations = [Population("initial", 1; M=0)]
-else
-    populations = [
-        Population("M5", 1; M=5),
-        Population("M20", 1; M=20),
-        Population("M50", 1; M=50),
-    ]
+function generate_M()
+    version = "vM7"
+    if !@isdefined(gen)
+        gen =  parse(Int, ARGS[1])
+    end
+
+    if gen == 1
+        populations = [Population(version, "initial", 1; M=0)]
+    else
+        populations = [
+            Population(version, "M5", 1; M=5),
+            Population(version, "M20", 1; M=20),
+            Population(version, "M50", 1; M=50),
+        ]
+    end
+
+    mkpath("envs")
+    for pop in populations
+        serialize("envs/$(pop.name)", pop.env)
+        write_configs(pop, gen)
+    end
 end
 
+function generate_asocial()
+    version = "vA1"
 
-mkpath("envs")
-for pop in populations
-    serialize("envs/$(pop.name)", pop.env)
-    write_configs(pop, gen)
+    populations = [Population(version, "asocial", 1; M=0, N=1, K=30)]
+
+    mkpath("envs")
+    for pop in populations
+        serialize("envs/$(pop.name)", pop.env)
+        write_configs(pop, 1)
+    end
 end
 
+generate_asocial()
