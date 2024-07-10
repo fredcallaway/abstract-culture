@@ -12,9 +12,12 @@ prob_observe(p, M) = ¬((¬p) ^ M)
     M::Int = 5  # number of models
     K::Int = 1  # number of tasks per agent
     ε::Float64 = 0. # lapse rate
-    T::Matrix{Float64} = normalize!(ones(S, S))  # task distribution
     N::Real = Inf # population size
+
     foresight::Bool = false  # choose composition in advance?
+    replace_tasks::Bool = false  # sample tasks with replacement?
+    replace_demos::Bool = true  # sample demonstrations with replacement?
+
     # red frequencies for ambiguous cases
     p_0::Float64 = 0.  # no info
     p_r::Float64 = 1.  # part red
@@ -24,15 +27,10 @@ prob_observe(p, M) = ¬((¬p) ^ M)
     knowledege::BitMatrix = falses(S, S+2)
 end
 
-@memoize function taskdist(T::Matrix{Float64})
-    S = size(T, 1)
-    map(CartesianIndices(T)[:]) do c
-        s, g = c.I
-        (s, g+S)
-    end
-    # SetSampler(get.(CartesianIndices(T), :I)[:], T[:])
+@memoize function all_tasks(S::Int)
+    collect(Iterators.product(1:S, S+1:2S))[:]
 end
-taskdist(env::RedBlackEnv) = taskdist(env.T)
+all_tasks(env::RedBlackEnv) = all_tasks(env.S)
 
 struct Behavior
     s::Int
@@ -87,7 +85,6 @@ function black_known(knowledege, s, g)
     knowledege[s, g]
 end
 
-
 function behave(env, tasks, observed)
     knowledege = env.knowledege
     fill!(knowledege, false)
@@ -115,18 +112,14 @@ function behave(env, tasks, observed)
 end
 
 function transition(env::RedBlackEnv, pop::Matrix{Behavior})
-    (;S, M, T, K, N) = env
+    (;S, M, K, N, replace_tasks, replace_demos) = env
     @assert N == size(pop, 2)
 
     pop1 = similar(pop)
-    # tasks = rand(taskdist(env), K, N)
-    tasks = mapreduce(hcat, 1:N) do i
-        sample(taskdist(env), K; replace=true)
-    end
-
 
     for agent in 1:N
-        observed = sample(pop, M)
+        observed = M == -1 ? pop : sample(pop, M; replace=replace_demos)
+        tasks = sample(all_tasks(env), K; replace=replace_tasks)
         pop1[:, agent] = behave(env, tasks[:, agent], observed)
     end
     pop1
