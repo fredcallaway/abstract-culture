@@ -119,6 +119,25 @@ glue = glue::glue
 
 # %% ==================== Miscellany ====================
 
+human_model_frame = function(human, model) {
+    bind_rows(
+        mutate(model, agent="model"),
+        mutate(human, agent="human")
+    )
+}
+
+bind_named = function(...) {
+    args <- list(...)
+    names <- as.character(substitute(list(...)))[-1]
+
+    dfs <- mapply(function(df, name) {
+        mutate(df, name = name)
+    }, args, names, SIMPLIFY = FALSE)
+
+    bind_rows(dfs)
+}
+
+
 agg = function(data, y, grp=pid, fun=mean, na.rm=T) {
     data %>%
         group_by(pick({{grp}}), .add=T) %>%
