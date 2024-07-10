@@ -85,7 +85,7 @@ end
 function write_configs(pop::Population, generation::Int)
     dir = "../machine-task/static/json/$(pop.name)-$(pop.id)"
     mkpath(dir)
-    foreach(1:100) do i
+    foreach(1:3) do i
         write("$dir/$i.json", json((;
             pop_name = pop.name,
             pop_id = pop.id,
@@ -128,7 +128,7 @@ end
 function generate_asocial()
     version = "vA1"
 
-    populations = [Population(version, "asocial", 1; M=0, N=1, K=30)]
+    populations = [Population(version, "asocial", 1; M=0, N=1, K=60)]
 
     mkpath("envs")
     for pop in populations
