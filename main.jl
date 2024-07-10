@@ -1,328 +1,417 @@
-include("remote.jl")
-# connect_repl("d64")
-# RemoteREPL._repl_client_connection = nothing
-@remote gethostname()
-
-# %% --------
-
-@both @everywhere include("graph.jl")
-include("graph_plots.jl")
+@everywhere include("red_black.jl")
+@everywhere using NamedTupleTools
 include("r.jl")
+using Optim
+
+# %% ==================== setup ====================
+
+function run_sim_infinite(;n_gen=30, init=NaN,
+                 p_0 = 1e-6,
+                 p_brr = 0.,
+                 p_r = 1.,
+                 S = 10,
+                 M = 25
+                 )
+
+    g = grid(; p_0, p_brr, p_r, S, M)
+    df = dataframe(g) do prm
+        env = RedBlackEnv(;prm...)
+        sim = simulate(env, n_gen; init)
+        map(enumerate(sim)) do (gen, red)
+            (;gen, red)
+        end
+    end
+    @rput df
+    df
+end
+
+function run_sim_finite(;n_gen=30, init=NaN,
+                 p_0 = 1e-6,
+                 p_brr = 0.,
+                 p_r = 1.,
+                 S = 10,
+                 M = 25,
+                 K = 1,
+                 N = 10,
+                 repeats = 5
+                 )
+
+    g = grid(; p_0, p_brr, p_r, S, M, K, N, pop=1:repeats)
+    df = dataframe(g; parallel=true) do prm
+        env = RedBlackEnv(;delete(prm, :pop)...)
+        sim = simulate(env, n_gen)
+        map(enumerate(sim)) do (gen, pop)
+            (;gen, red = red_rate(pop))
+        end
+    end
+    @rput df
+    df
+end
+
+R"""
+cpal = scale_colour_manual(values=c(
+    compositional=RED,
+    idiosyncratic=GRAY
+), aesthetics=c("fill", "colour"), name="")
+
+"""
+
+# %% ==================== individual cost ====================
+
+@everywhere function expected_unique_red(env)
+    monte_carlo() do
+        t = sample(all_tasks(env), env.K; replace=env.replace_tasks)
+        length(unique(first, t)) + length(unique(last, t))
+    end
+end
+
+params = flatmap([5,10,20]) do S
+    map(1:S^2) do K
+        (;S, K)
+    end
+end
+
+df = dataframe(params; parallel=true) do (;S, K)
+    env = RedBlackEnv(;S, K, replace_tasks=false)
+    (;compositional = expected_unique_red(env))
+end
+
+@rput df
+
+R"""
+df %>%
+    mutate(idiosyncratic = K, frac = K / S^2) %>%
+    pivot_longer(c(compositional, idiosyncratic), names_to="name", values_to="value") %>%
+    ggplot(aes(K, value/K, color=name)) +
+    geom_line() +
+    cpal +
+    facet_wrap(~S, scales="free_x") +
+    labs(x="# Unique Tasks", y="Discovery Cost") +
+    no_legend
+
+fig(w=6)
+"""
+
+
+# %% ==================== cost ====================
+
+@kwdef struct Costs
+    black_travel::Float64 = 0.
+    red_travel::Float64 = 0.1
+    black_discovery::Float64 = 1.
+    red_discovery::Float64 = 1.
+end
+
+costs = Costs()
+
+g = grid(
+    M=0:200,
+    S=[5,10,20]
+)
+
+df = dataframe(g) do (;S, M)
+    b = prob_observe(1 / (S^2), M)
+    # prob observe ONE red edges (not both)
+    r = prob_observe(1 / S, M)
+    (;
+        black = costs.black_travel + ¬b * costs.black_discovery,
+        red = costs.red_travel +
+            r^2 * 0 +
+            2 * r * ¬r * costs.red_discovery +
+            ¬r * ¬r * 2 * costs.red_discovery
+    )
+end
+
+@rput df
+
+R"""
+df %>%
+    filter(S==10) %>%
+    pivot_longer(c(red, black), names_to="name", values_to="value", names_prefix="") %>%
+    ggplot(aes(M, value, color=name)) +
+    scale_colour_manual(values=c(
+        BLACK, RED
+    ), aesthetics=c("fill", "colour"), name="") +
+    no_legend +
+    geom_line() +
+    labs(y="learning cost")
+
+fig("learning_cost")
+"""
+
+
+# %% ==================== cost advantage ====================
+
+@kwdef struct Costs
+    black_travel::Float64 = 0.
+    red_travel::Float64 = 0.05
+    black_discovery::Float64 = 1.
+    red_discovery::Float64 = .9
+end
+
+costs = Costs()
+
+g = grid(
+    M=1:100,
+    S=1:100,
+)
+
+df = dataframe(g) do (;S, M)
+    b = prob_observe(1 / (S^2), M)
+    # prob observe ONE red edges (not both)
+    r = prob_observe(1 / S, M)
+    (;
+        black = costs.black_travel + ¬b * costs.black_discovery,
+        red = costs.red_travel +
+            r^2 * 0 +
+            2 * r * ¬r * costs.red_discovery +
+            ¬r * ¬r * 2costs.red_discovery
+    )
+end
+
+@rput df
+
+R"""
+library(ggrastr)
+advantage_heat = list(
+    rasterise(geom_tile(), dpi=500),
+    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
+    no_gridlines,
+    labs(fill=""),
+    scale_fill_continuous_diverging(h1=197, h2=10, c1=200, l1=20, l2=70, p1=1, p2=1, limits=c(-.85, .85)),
+    coord_fixed(expand=F)
+)
+
+df %>%
+    # mutate(S = S^2) %>% filter(S < 101) %>%
+    mutate(advantage = black - red) %>%
+    ggplot(aes(M, S, fill=advantage)) +
+    advantage_heat
+
+    # labs(fill="Compositional Learning Advantage\n", x="Environment Size (S)", y="Demonstrations (M)")
+
+
+fig("advantage_heat")
+"""
+
+# %% ==================== individual ====================
+
+indi = deserialize("tmp/individual-jun14")
+@rput indi
+
+
+R"""
+p = indi %>%
+    filter(red_discovery == .9, red_travel == .05) %>%
+    # mutate(S = S^2) %>% filter(S < 101) %>%
+    mutate(advantage = advantage / K) %>%
+    ggplot(aes(K, S, fill=advantage)) +
+    advantage_heat
+
+
+fig("indi_advantage_heat")
+"""
 
 # %% --------
 
-FIGS_PATH = "figs/graphs/"
-@rput FIGS_PATH
+R"""
 
-# %% ==================== social learning ====================
+indi %>%
+    filter(red_discovery == .9, red_travel == .05) %>%
+    ggplot(aes(K, advantage / K, color=name)) +
+    scale_colour_manual(values=c(
+        BLACK, RED
+    ), aesthetics=c("fill", "colour"), name="") +
+    no_legend +
+    geom_line() +
+    labs(y="learning cost")
 
-env = Environment(S=5, discovery_cost=4., travel_cost=1.)
-(;S, M, K, N, graph) = env
-
-figure() do
-    plot!(env.graph)
-end
-
-function num_paths(S)
-    map(0:S-2) do n
-        factorial(S - 2) ÷ factorial(S - 2 - n)
-    end
-end
-
-function possible_paths(env, s, g)
-    (;S, graph) = env
-    map(all_simple_paths(graph, s, g)) do path
-        map(sliding_window(path, 2)) do (src, dst)
-            LinearIndices((S, S))[src, dst]
-        end
-    end
-end
-
-function possible_paths(env)
-    (;S, graph) = env
-    flatmap(tasks(env)) do (s, g)
-        possible_paths(env, s, g)
-    end
-end
-
-function observation_probability(env::Environment, len, N=100000)
-    paths = unique(Set.(filter(x->length(x) == len, possible_paths(env))))
-    my_paths = possible_paths(env, 1, 2)
-    observation_probability(paths, my_paths, env.M, N)
-end
-
-function observation_probability(paths, my_paths, M, N)
-    sort!(my_paths, by=length)
-    c = zeros(Int, maximum(length.(my_paths)))
-    for i in 1:N
-        observed = reduce(union, rand(paths, M))
-        for p in my_paths
-            if all(e in observed for e in p)
-                c[length(p)] += 1
-                break
-            end
-        end
-    end
-    c ./ N
-end
+fig("learning_cost")
+"""
 
 
 # %% ==================== evolution ====================
 
-@both function run_sims(params::AbstractArray{<:NamedTuple}; generations=30)
-    dataframe(params, parallel=true) do prm
-        prm = delete(prm, :population)
-        env = Environment(;prm..., discovery_cost=8., travel_cost=1.)
-        @require env.N * env.K ≥ env.M
-        map(enumerate(simulate(env, generations))) do (generation, pop)
-            compositionality = mean(pop) do solutions
-                mean(solutions) do edges
-                    length(edges) > 1
-                end
-            end
-            F = normalize(edge_frequency(env, pop))
-            (;generation, compositionality, entropy=entropy(F), unique_edges=sum(F .> 0))
-        end
-    end
+# run_sim_infinite(p_0=[1e-6], p_brr = [0.], p_r = [1])
+
+run_sim_infinite(S=10, M=25)
+
+R"""
+
+df %>%
+    ggplot(aes(gen, red)) +
+    geom_line(color=RED)
+
+fig("basic_single", w=7.5)
+"""
+
+# %% ==================== limits ====================
+
+
+g = grid(
+    M=1:1:100,
+    S=1:100
+)
+df = dataframe(g) do (;M, S)
+    env = RedBlackEnv(;M, S, p_0=.01)
+    red, gen = get_limit(env; max_gen=1000)
+    [(;gen, red)]
 end
-
-@both function run_sims(repeats=1, generations=30; kws...)
-    run_sims(grid(;kws..., population=1:repeats); generations)
-end
-
-
-# %% ==================== simple ====================
-
-@time df = run_sims(100, 10, S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1);
 @rput df
 
 R"""
 df %>%
-    ggplot(aes(generation, unique_edges, color=factor(K))) +
-    point_line()
+    ggplot(aes(M, S, fill=red)) +
+    advantage_heat +
+    scale_fill_continuous_sequential(h1=10, h2=NA, c1=200,  l1=20, l2=70, p1=1, p2=1,
+        labels=scales::percent_format(), limits=c(0,1)
+    ) +
+    theme(
+        legend.key.height=unit(0.7, "inches")
+    )
+    # scale_fill_continuous_sequential(h1=10, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
+
+fig("asymptotic", w=8.5)
+"""
+
+# %% ==================== SM ====================
+
+
+run_sim_infinite(S=[4, 20], M=[10, 30]; n_gen=30)
+
+R"""
+df %>%
+    mutate(S = fct_rev(factor(S))) %>%
+    rename(D = M) %>%
+    ggplot(aes(gen, red)) +
+    geom_line(color=RED) +
+    # facet_grid(S ~ M, labeller=label_value) +
+    facet_grid(S ~ D) +
+    no_legend +
+    # coord_cartesian(xlim=c(-1, 31), ylim=c(-.1, 1.1)) +
+    theme(
+        # strip.text.x = element_blank(),
+        # strip.text.y = element_blank(),
+        axis.line=element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, size = 3)
+    ) +
+    no_xaxis_ticks + no_yaxis_ticks
+
+fig("SM", w=WIDTH+1, h=HEIGHT+1)
+"""
+
+R"""
+
+do_plot = function(...) {
+    df %>%
+        filter(...) %>%
+        ggplot(aes(gen, red)) +
+        geom_line(color=RED) +
+        expand_limits(y=c(0,1)) +
+        theme(
+            # axis.line=element_blank(),
+            axis.text.x=element_blank(),
+            axis.text.y=element_blank(),
+            # axis.ticks=element_blank(),
+            axis.title.x=element_blank(),
+            axis.title.y=element_blank(),
+        )
+}
+
+(do_plot(M==10, S==20) | do_plot(M==30, S==20)) /
+(do_plot(M==10, S==4) | do_plot(M==30, S==4))
+
+fig("SM2")
+"""
+
+
+# %% ==================== innovation ====================
+
+run_sim_infinite(p_0 = .1 .^ (3:2:9))
+
+R"""
+df %>% ggplot(aes(gen, red, color=factor(p_0))) +
+    geom_line() +
+    scale_color_discrete_sequential("Oranges", name="Innovation Probability", l2=80, c2=40) +
+    rev_legend +
+    theme(legend.key.width=unit(0.6, "inches"))
+
+fig("innovation", w=8.5)
+"""
+
+
+# %% ==================== completion ====================
+
+
+run_sim_infinite(p_r = [1, .75, .5, .25], n_gen=30)
+
+R"""
+df %>% ggplot(aes(gen, red, color=factor(p_r))) +
+    geom_line() +
+    scale_color_discrete_sequential("TealGrn", name="Completion Probability") +
+    rev_legend +
+    theme(legend.key.width=unit(0.6, "inches"))
+
+fig("completion", w=8.5)
+"""
+
+# %% ==================== experiment ====================
+
+(;sim, tdf) = deserialize("tmp/experiment")
+@rput sim tdf
+
+
+R"""
+human = tdf %>%
+    filter(start != 5, goal != 5) %>%
+    group_by(M, population, generation) %>%
+    summarise(compositionality = mean(path_length == 2)) %>%
+    mutate(agent = "human")
+
+# df = bind_rows(mutate(sim, agent="model", population=100+population), human)
+
+sim %>%
+    filter(generation < 9) %>%
+    ggplot(aes(generation, 1*compositionality, group=population)) +
+    geom_line(linewidth=1, color="#BA1109", alpha=0.3) +
+    # geom_line(linewidth=.5, color="#BA1109", alpha=0.5) +
+    geom_line(data=human) +
+    facet_wrap(~M, labeller=label_glue("{M} Demos"), scales="free_y") +
+    expand_limits(y=1.)
+
+
+fig("experiment", w=14,  h=5, pdf=T)
+"""
+
+
+# %% ==================== individual with memory ====================
+
+
+
+run_sim_finite(;n_gen=30, p_0 = .01, repeats=10, N=30)
+
+R"""
+df %>%
+    ggplot(aes(gen, red)) +
+    geom_line(aes(group=pop), linewidth=.5, alpha=.5) +
+    mean_line(color=RED)
+
 fig()
 """
 
-# %% ==================== vary M ====================
-
-@time df = run_sims(100, 10, S=[6], M=[10], N=[5, 10, 15, 20]);
-@rput df
-
-R"""
-df %>%
-    ggplot(aes(generation, compositionality, color=factor(N))) +
-    point_line()
-fig()
-"""
-
-
-# %% ==================== vary M and S ====================
-
-task = @asyncremote run_sims(10, S=2:30, M=0:5:150, N=[500])
-df_zoom = fetch(task)
-
 # %% --------
+M = 80
 
-# df_ms = fetch(task)
-serialize("tmp/df_ms", df_ms)
-@rput df_ms
-
-R"""
-heat = df_ms %>%
-    filter(generation == max(generation)) %>%
-    agg(compositionality, c(S, M)) %>%
-    ggplot(aes(S, M, fill=compositionality)) +
-    geom_tile() +
-    scale_fill_continuous_sequential(h1=0, h2=NA, c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
-    coord_cartesian(expand=F)
-
-
-fig("heatmap", w=4)
-"""
-
-# %% ==================== zoom in ====================
-
-task = @asyncremote run_sims(10, S=2:60, M=0:60, N=[500])
-fetch(task)
-
-# %% --------
-
-# df_ms = fetch(task)
-serialize("tmp/df_zoom", df_zoom)
-@rput df_zoom
+social = run_sim_finite(;n_gen=30, p_r=0.5, p_0 = .005, repeats=100, N=M, K=1, M=M)
+indiv = run_sim_finite(;n_gen=30, p_r=0.5, p_0 = .005, repeats=1000, N=1, K=M, M=M)
+@rput social indiv
 
 R"""
-heat2 = df_zoom %>%
-    filter(generation == max(generation)) %>%
-    agg(compositionality, c(S, M)) %>%
-    ggplot(aes(S, M, fill=compositionality)) +
-    geom_tile() +
-    scale_fill_continuous_sequential(h1=0, h2=NA, c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
-    coord_cartesian(expand=F)
+d = bind_named(social, indiv)
 
+ggplot(d, aes(gen, red, color=name)) +
+    geom_line(aes(group=interaction(pop, name)), filter(d, pop < 10), linewidth=.5, alpha=.5) +
+    mean_line()
 
-fig("heatmap_zoom", w=4)
-"""
-
-
-
-# %% ==================== vary a lot ====================
-
-df = run_sims(30, S=[6, 8], M=[10, 15, 20], N=[10, 15], K=[1,5])
-@rput df
-R"""
-
-df %>%
-    ggplot(aes(generation, unique_edges, color=factor(M), linetype=factor(N))) +
-    # geom_line(mapping=aes(group=population), linewidth=.1) +
-    mean_line(min_n=0) +
-    # geom_hline(yintercept=30) +
-    scale_y_continuous(breaks = scales::pretty_breaks()) +
-    scale_x_continuous(breaks = scales::pretty_breaks()) +
-df %>% ggplot(aes(generation, entropy, color=factor(M), linetype=factor(N))) +
-    # geom_line(mapping=aes(group=population), linewidth=.1) +
-    mean_line(min_n=0) +
-    scale_x_continuous(breaks = scales::pretty_breaks()) +
-    plot_layout(guides = 'collect') +
-    labs(y="Edge Entropy") &
-    facet_grid(S ~ K, labeller=label_both)
-
-fig(w=8, h=4)
-"""
-
-
-# %% ==================== dynamics ====================
-
-
-task = run_sims(10, S = [5, 10, 20], M = [10, 20, 40])
-df = fetch(task)
-@rput df
-R"""
-df %>%
-    # filter(S %in% $keep_s, M %in% $keep_m) %>%
-    filter(generation < 31) %>%
-    ggplot(aes(generation, compositionality)) +
-    geom_line(aes(group=population), linewidth=.2, alpha=0.5) +
-    facet_grid(M ~ S, labeller=label_glue(cols='S={S}', rows='M={M}'))
-
-fig("MS-evolution", w=5,h=4)
-"""
-
-# %% ==================== population size ====================
-
-task = @async run_sims(500, S = [5, 10, 20], M = [10, 20, 40], N=[10, 20, 40, 80])
-df_n = fetch(task)
-@rput df_n
-
-R"""
-df_n %>%
-    ggplot(aes(generation, compositionality, color=factor(N))) +
-    # geom_line(mapping=aes(group = interaction(N, population)), data=filter(df_n, population < 5), linewidth=.2, alpha=.7) +
-    lines(mean, linewidth=.7) +
-    # ylab("proportion using red") +
-    teals_pal(rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(M ~ S, labeller=label_glue(cols='S={S}', rows='M={M}'))
-fig("popsize", w=5, h=4)
-"""
-
-# %% --------
-
-R"""
-df_n %>%
-    ggplot(aes(generation, compositionality, color=factor(M/N))) +
-    # geom_line(mapping=aes(group = interaction(N, population)), data=filter(df_n, population < 5), linewidth=.2, alpha=.7) +
-    lines(mean, linewidth=.7) +
-    # ylab("proportion using red") +
-    teals_pal(rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(M ~ S, labeller=label_glue(cols='S={S}', rows='M={M}'))
-fig("tmp", w=5, h=4)
-"""
-
-
-# %% ==================== structure ====================
-
-env = Environment(S=6)
-figure("graphs/graph", size=(300,300)) do
-    plot!(env.graph)
-end
-
-# %% --------
-
-function plot_chain(name, env, seed=1; generations=10, chunk_size=1)
-    Random.seed!(seed)
-    sims = repeatedly(3) do
-        sim = simulate(env, generations);
-        map(chunks(sim, chunk_size)) do chunk
-            reduce(vcat, reduce(vcat, chunk))
-        end
-    end
-
-    facet_grid(name, length(sims[1]), length(sims)) do col, row
-        pop = sims[row][col]
-        plot_edge_frequency!(env, pop)
-    end
-end
-
-
-plot_chain("structure-v4", Environment(S=6, M=10, N=10, K=10, discovery_cost=4, travel_cost=1.))
-plot_chain("structure-v4K1", Environment(S=6, M=10, N=10, K=1, discovery_cost=8, travel_cost=1.))
-
-plot_chain("structure-v4K1alt", Environment(S=6, M=20, N=20, K=1, discovery_cost=4, travel_cost=1.))
-
-plot_chain("structure-v4K1N30", Environment(S=6, M=10, N=30, K=1, discovery_cost=4, travel_cost=1.))
-
-# %% --------
-
-plot_chain("structure10", Environment(S=6, M=10, N=10, discovery_cost=4, travel_cost=1.); generations=8, chunk_size=1)
-
-# %% --------
-
-
-plot_chain("structure10", Environment(S=5, M=10, N=10))
-plot_chain("structure50", Environment(S=5, M=10, N=50); generations=30, chunk_size=5)
-plot_chain("structure-hub10", Environment(S=5, M=10, N=10, hub_travel_discount=.005); generations=30, chunk_size=5)
-plot_chain("structure-hub50", Environment(S=5, M=10, N=50, hub_travel_discount=.005); generations=30, chunk_size=5)
-
-# %% --------
-
-# env = Environment(S=5, M=10, N=10)
-
-# sim = simulate(env, 100);
-
-# fig, ax, gp = graphplot(env.graph, layout=Shell(), node_size=25, arrow_size=ones(env.S^2-env.S), arrow_shift=:end; edge_width=ones(env.S^2-env.S))
-
-# ax = current_axis()
-# hidedecorations!(ax); hidespines!(ax)
-# ax.aspect = DataAspect()
-
-# # animation settings
-# framerate = 10
-
-# record(fig, "anim.mp4", sim; framerate = framerate) do pop
-#     E = edge_frequency(env, pop)
-#     edge_width = 20 .* [E[e.src, e.dst] for e in edges(env.graph)]
-#     gp.edge_width[] = edge_width
-#     gp.arrow_size[] = 10 .* (edge_width .^ 0.5)
-#     gp.arrow_size[]
-# end
-# run(`open anim.mp4`)
-
-# %% ==================== vary hub cost ====================
-
-df_hub = run_sims(10, S=[10], M=[15], N=[500], hub_travel_discount=range(.004, .006, step=.0005), rand_cost=[.002])
-@rput df_hub
-
-R"""
-
-df_hub %>%
-    ggplot(aes(generation, compositionality, color=factor(hub_travel_discount))) +
-    lines() +
-    # geom_line(aes(group=interaction(hub_travel_discount, population)), linewidth=.2, alpha=0.5) +
-    # geom_line(aes(group=interaction(hub_travel_discount, population)), linewidth=.2, alpha=0.5) +
-    discrete_sequential("Greens", name="hub discount") +
-fig()
+fig(w=6)
 """
