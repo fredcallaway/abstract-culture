@@ -419,6 +419,7 @@ point_smooth_bin = function(bins, min_n=2, ...) {
 }
 
 no_legend = theme(legend.position="none")
+top_legend = theme(legend.position="top")
 rev_legend = guides(color = guide_legend(reverse=TRUE))
 
 no_gridlines = theme(

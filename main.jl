@@ -49,47 +49,84 @@ function run_sim_finite(;n_gen=30, init=NaN,
 end
 
 R"""
+RED = "#CB0900"
+TEAL = "#07A9C0"
+FIGS_PATH = "figs/paper/"
+MAKE_PDF = TRUE
+
 cpal = scale_colour_manual(values=c(
-    compositional=RED,
-    idiosyncratic=GRAY
+    idiosyncratic=TEAL,
+    compositional=RED
 ), aesthetics=c("fill", "colour"), name="")
 
 """
 
 # %% ==================== individual cost ====================
 
-@everywhere function expected_unique_red(env)
-    monte_carlo() do
-        t = sample(all_tasks(env), env.K; replace=env.replace_tasks)
-        length(unique(first, t)) + length(unique(last, t))
-    end
-end
+expected_unique(N, K) = N * (1 - (1 - 1/N)^K)
 
-params = flatmap([5,10,20]) do S
-    map(1:S^2) do K
-        (;S, K)
-    end
-end
 
-df = dataframe(params; parallel=true) do (;S, K)
-    env = RedBlackEnv(;S, K, replace_tasks=false)
-    (;compositional = expected_unique_red(env))
+indi_cost = dataframe(grid(S=1:100, K=1:100)) do (;S, K)
+    (;
+        compositional = 2 * expected_unique(S, K),
+        idiosyncratic = expected_unique(S^2, K),
+    )
 end
+@rput indi_cost
 
-@rput df
+# %% --------
 
 R"""
-df %>%
-    mutate(idiosyncratic = K, frac = K / S^2) %>%
-    pivot_longer(c(compositional, idiosyncratic), names_to="name", values_to="value") %>%
-    ggplot(aes(K, value/K, color=name)) +
+indi_cost %>%
+    filter(S == 5) %>%
+    pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="value") %>%
+    ggplot(aes(K, value, color=name)) +
+    geom_line() +
+    cpal +
+    labs(y="Discovery Cost") +
+    top_legend
+
+fig("indi_cost", w=3)
+"""
+
+R"""
+indi_cost %>%
+    filter(S %in% c(5, 10, 20)) %>%
+    pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="value") %>%
+    ggplot(aes(K, value, color=name)) +
     geom_line() +
     cpal +
     facet_wrap(~S, scales="free_x") +
-    labs(x="# Unique Tasks", y="Discovery Cost") +
+    labs(y="Discovery Cost") +
     no_legend
 
-fig(w=6)
+fig("indi_cost_panels", w=6)
+"""
+
+# %% --------
+
+R"""
+library(ggrastr)
+advantage_heat = list(
+    rasterise(geom_tile(), dpi=500),
+    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
+    no_gridlines,
+    labs(fill="Relative Cost"),
+    # scale_fill_continuous_diverging(h1=197, h2=10, c1=200, l1=20, l2=70, p1=1, p2=1, limits=c(-1, 1))
+    scale_fill_continuous_diverging(h1=197, h2=10, c1=200, l1=20, l2=90, p1=1, p2=1, rev=T),
+    coord_fixed(expand=F)
+)
+
+indi_cost %>%
+    mutate(
+        compositional = compositional,
+        advantage = -(idiosyncratic - compositional),
+        # advantage = 2 * (advantage > 0) - 1
+    ) %>%
+    ggplot(aes(K, S, fill=advantage)) +
+    advantage_heat
+
+fig("indi_cost_heat")
 """
 
 
