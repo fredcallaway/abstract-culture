@@ -572,7 +572,8 @@ fancy_names = list(
     M = "# Demonstrations",
     K = "# Trials",
     gen = "Generation",
-    red = "Compositionality"
+    red = "Compositionality",
+    cost = "Discovery Cost"
 )
 
 fancy_replacements = c(

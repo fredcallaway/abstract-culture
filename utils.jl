@@ -303,7 +303,14 @@ macro require(ex)
     end |> esc
 end
 
-function dataframe(f, params; parallel=false, pbar=parallel)
+function splatify(f::Function)
+    foo(x::Tuple) = f(x...)
+    foo(x::NamedTuple) = f(;x...)
+    foo
+end
+
+
+function dataframe(f, params; parallel=false, pbar=parallel, splat=false)
 
     map_fun = if pbar
         parallel ? progress_pmap : progress_map
@@ -311,6 +318,9 @@ function dataframe(f, params; parallel=false, pbar=parallel)
         parallel ? pmap : map
     end
 
+    if splat
+        f = splatify(f)
+    end
     results = map_fun(f, params)
 
     flatmap(params, results) do prm, rows

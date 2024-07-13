@@ -1,4 +1,4 @@
-
+using Roots
 using Memoize
 include("utils.jl")
 # include("find_compositions.jl")
@@ -182,3 +182,28 @@ function get_limit(env::RedBlackEnv; init=initial_population(env), max_gen=10000
     missing, missing
 end
 
+
+function find_stable_points(;params...)
+    env = RedBlackEnv(;params...)
+    stable = find_zeros(0, 1) do x
+        transition(env, x) - x
+    end
+    @assert stable[1] == 0.
+    if length(stable) == 1
+        @infiltry @assert transition(env, .5) < .5
+        (;start=NaN, stop=NaN)
+    elseif length(stable) == 2
+        if transition(env, 1e-6) > 1e-6
+            return (;zero=0, start=NaN, stop=stable[2])
+        else
+            return (;zero=0, start=NaN, stop=NaN)
+        end
+    elseif length(stable) == 3
+        @assert transition(env, stable[2] - 1e-6) < stable[2] - 1e-6
+        @assert transition(env, stable[2] + 1e-6) > stable[2] + 1e-6
+        @assert transition(env, stable[3] + 1e-6) < stable[3] + 1e-6
+        return (;zero=0, start=stable[2], stop=stable[3])
+    else
+        @assert false
+    end
+end
