@@ -20,6 +20,8 @@ library(formula.tools)
 library(colorspace)
 library(tune)
 library(infer)
+library(ggrastr)
+
 # library(kableExtra)
 
 # %% ==================== Project-specific ====================

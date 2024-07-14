@@ -189,21 +189,58 @@ function find_stable_points(;params...)
         transition(env, x) - x
     end
     @assert stable[1] == 0.
+
     if length(stable) == 1
-        @infiltry @assert transition(env, .5) < .5
-        (;start=NaN, stop=NaN)
-    elseif length(stable) == 2
-        if transition(env, 1e-6) > 1e-6
-            return (;zero=0, start=NaN, stop=stable[2])
+        if transition(env, .5) < .5
+            return (;start=NaN, stop=NaN)
         else
-            return (;zero=0, start=NaN, stop=NaN)
+            @assert transition(env, .99999) > .99999
+            return (;start=0., stop=1.)
         end
-    elseif length(stable) == 3
-        @assert transition(env, stable[2] - 1e-6) < stable[2] - 1e-6
-        @assert transition(env, stable[2] + 1e-6) > stable[2] + 1e-6
-        @assert transition(env, stable[3] + 1e-6) < stable[3] + 1e-6
-        return (;zero=0, start=stable[2], stop=stable[3])
-    else
-        @assert false
     end
+
+    start = findfirst(stable) do x
+        x ≈ 1 && return false
+        x += 1e-8
+        transition(env, x) > x
+    end
+
+    stop = findlast(stable) do x
+        x ≈ 0 && return false
+        x -= 1e-8
+        transition(env, x) > x
+    end
+
+    map((;start, stop)) do x
+        isnothing(x) ? NaN : stable[x]
+    end
+
+    # if length(stable) == 1
+    #     stable
+    #     if transition(env, .5) < .5
+    #         return (;zero=NaN, start=NaN, stop=NaN)
+    #     else
+    #         @assert transition(env, .9999) > .9999
+    #         return (;zero=0., start=0.)
+    #     end
+    # elseif length(stable) == 2
+    #     if transition(env, 1e-6) > 1e-6
+    #         return (;zero=0, start=0, stop=stable[2])
+    #     else
+    #         return (;zero=0, start=NaN, stop=NaN)
+    #     end
+    # elseif length(stable) == 3
+    #     @label stable3
+    #     @infiltry @assert transition(env, stable[2] - 1e-6) < stable[2] - 1e-6
+    #     @infiltry @assert transition(env, stable[2] + 1e-6) > stable[2] + 1e-6
+    #     @infiltry @assert transition(env, stable[3] + 1e-6) < stable[3] + 1e-6
+    #     return (;zero=0, start=stable[2], stop=stable[3])
+    # elseif length(stable) == 4
+    #     # ignore the case at exactly 1. for now
+    #     @infiltry @assert stable[end] ≈ 1.
+    #     @assert transition(env, .9999) < .9999
+    #     @goto stable3
+    # else
+    #     @assert false
+    # end
 end

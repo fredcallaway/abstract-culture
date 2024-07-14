@@ -120,7 +120,6 @@ fig("indi_cost", h=3)
 
 
 R"""
-library(ggrastr)
 advantage_heat = list(
     rasterise(geom_tile(), dpi=500),
     # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
@@ -310,45 +309,13 @@ fig("social_cost_heat")
 
 # %% ==================== dynamical systems analysis ====================
 
-
-# %% --------
-
-
 curve = dataframe(grid(p0=0:.001:1, S=6, M=25, p_r=0)) do (;p0, S, M, p_r)
     env = RedBlackEnv(;S, M, p_r)
     (;p0, p1=transition(env, p0))
 end |> DataFrame
-
-find_stable_points(S=6, M=25, p_r=0)
-stable = DataFrame([find_stable_points(S=6, M=25, p_r=0)])
-@rput curve stable
+@rput curve
 
 R"""
-
-
-
-fig()
-
-"""
-R"""
-
-
-    ggplot(aes(p0, p1)) +
-    geom_line(
-        size=.5,
-        mapping=aes(group=segment),
-        # data=filter(curve, p0 %in% c(0.3, 0.5, 0.7)),
-        arrow = arrow(angle = 30, ends = "last", type = "open", length = unit(0.25, "inches")),
-    )
-
-fig()
-"""
-
-
-# %% --------
-
-R"""
-
 D = curve %>%
     mutate(
         delta=p1 - p0,
@@ -379,71 +346,77 @@ fig("rate_rate", w=2.9)
 
 # %% --------
 
-R"""
-curve %>%
-    mutate(delta = p1 - p0) %>%
-    ggplot(aes(p0, p0+delta, color=delta, alpha=1)) +
-    # geom_hline(yintercept=0) +
-    geom_abline() +
-    geom_line() +
-    labs(x="compositionality rate", y="change in rate") +
-    scale_color_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=.5, p2=.5) + no_legend
+# df = dataframe(grid(S=3:50, M=1:50, p_r = 0:.2:1)) do (;S, M, p_r)
+df = dataframe(grid(S=[5, 25, 125], MpS=1:2:200, p_r = 0:.2:1)) do (;S, MpS, p_r)
+    M = MpS * S
+    find_stable_points(;S, M, p_r)
+end
+df
 
-fig()
+@rput df
+
+R"""
+df %>%
+    # filter(MpS < 30) %>%
+    ggplot(aes(MpS, stop, color=factor(p_r))) +
+    geom_line() +
+    # xlim(10, 150) +
+    facet_wrap(~S, nrow=1) +
+    teals_pal()
+
+fig(w=8)
 """
 
 # %% --------
-
-df = dataframe(grid(p0=0:.001:1, S=10, M=30, p_r=[0, .125, .25, .5, 1])) do (;p0, S, M, p_r)
-    env = RedBlackEnv(;S, M, p_r)
-    (;p0, p1=transition(env, p0))
-end |> DataFrame
-@rput df
 
 
 R"""
 df %>%
-    mutate(delta = p1 - p0) %>%
-    ggplot(aes(p0, delta, color=delta)) +
+    rename(min=start, max=stop) %>%
+    pivot_longer(c(min, max), names_to="name", values_to="value") %>%
+    ggplot(aes(MpS, value, color=name)) +
     geom_line() +
-    geom_hline(yintercept=0) +
-    labs(x="compositionality rate", y="change in rate") +
-    scale_color_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=.5, p2=.5) + no_legend +
-    facet_wrap(~p_r, nrow=1) +
-    xbreaks(3)
+    # xlim(10, 150) +
+    facet_wrap(~S, nrow=1)
 
-fig(w=6, )
+fig(w=8)
+"""
+# %% --------
+
+R"""
+D = df %>%
+    filter(M < 70) %>%
+    pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
+    drop_na()
+
+D2 = df %>%
+    filter(M < 70) %>%
+    replace_na(list(stop = 0, start=0, zero=0))
+
+ggplot(D, aes(M)) +
+    geom_ribbon(data=D2, mapping=aes(ymin=stop, ymax=1), fill=TEAL, alpha=0.3) +
+    geom_ribbon(data=D2, mapping=aes(ymin=start, ymax=stop), fill=RED, alpha=0.3) +
+    geom_ribbon(data=D2, mapping=aes(ymin=0, ymax=start), fill=TEAL, alpha=0.3) +
+    # geom_line(mapping=aes(group=name, y=value), linewidth=.5, color=GRAY) +
+    geom_line(
+        data=filter(D, mod(M, 5) == 0),
+        mapping=aes(group=M, y=value),
+        arrow = arrow(ends='last', length = unit(.1, "in")),
+        color=RED
+    ) +
+    facet_wrap(~S)
+    facet_wrap(~S)
+
+fig(h=4, w=7)
 """
 
-
 # %% --------
 
-# %% --------
 
-# df = dataframe(grid(S=3:50, M=1:50, p_r = 0:.2:1)) do (;S, M, p_r)
-df = dataframe(grid(S=[10, 20], M=[40, 80], p_r = 0:.01:1)) do (;S, M, p_r)
-    env = RedBlackEnv(;S, M, p_r)
-    stable = find_zeros(0, 1) do x
-        transition(env, x) - x
-    end
-    @assert stable[1] == 0.
-    if length(stable) == 1
-        @infiltry @assert transition(env, .5) < .5
-        (;start=NaN, stop=NaN)
-    elseif length(stable) == 2
-        if transition(env, 1e-6) > 1e-6
-            return (;start=0., stop=stable[2])
-        else
-            return (;start=NaN, stop=NaN)
-        end
-    elseif length(stable) == 3
-        @assert transition(env, stable[2] - 1e-6) < stable[2] - 1e-6
-        @assert transition(env, stable[2] + 1e-6) > stable[2] + 1e-6
-        @assert transition(env, stable[3] + 1e-6) < stable[3] + 1e-6
-        return (;start=stable[2], stop=stable[3])
-    else
-        @assert false
-    end
+
+df = dataframe(grid(S=3:50, M=1:50, p_r = 0:.2:1)) do (;S, M, p_r)
+# df = dataframe(grid(S=[10, 20], M=[40, 80], p_r = 0:.01:1)) do (;S, M, p_r)
+    find_stable_points(;S, M, p_r)
 end
 
 @rput df
@@ -455,7 +428,7 @@ df %>%
     pivot_longer(c(min, max), names_to="name", values_to="value") %>%
     ggplot(aes(p_r, value, color=name)) +
     geom_line() +
-    facet_grid(M~S) +
+    # facet_grid(M~S) +
     labs(x="Completion Rate", y="Compositionality", color="")
 
 fig(h=4, w=7)
