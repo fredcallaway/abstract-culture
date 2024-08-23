@@ -1,0 +1,240 @@
+@everywhere include("red_black.jl")
+@everywhere using NamedTupleTools
+include("r.jl")
+using Optim
+
+# %% ==================== individual cost ====================
+
+expected_unique(N, K) = N * (1 - (1 - 1/N)^K)
+
+function individual_costs(;S, K, γ=1.)
+    (;
+        compositional = 2 * expected_unique(S, K),
+        idiosyncratic = expected_unique(S^2, K),
+    )
+end
+individual_costs(x::NamedTuple) = individual_costs(;x...)
+
+indi_cost = dataframe(individual_costs, grid(S=1:100, K=1:100))
+@rput indi_cost
+
+indi_equality = map(3:100) do S
+    res = optimize(1, S^2) do K
+        a, b = individual_costs(S, K)
+        abs(a - b)
+    end
+    K = res.minimizer
+    @assert abs(res.minimum) < 1e-5
+    return (;S, K)
+end |> DataFrame
+@rput indi_equality
+
+@with indi_equality :K ./ :S
+
+# %% --------
+
+R"""
+indi_cost %>%
+    filter(S == 20) %>%
+    pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="cost") %>%
+    ggplot(aes(K, cost, color=name)) +
+    geom_vline(xintercept=filter(indi_equality, S==20)$K, linewidth=.4) +
+    geom_line() +
+    cpal +
+    labs(y="Discovery Cost") +
+    top_legend
+
+fig("indi_cost", h=3)
+"""
+
+
+# %% --------
+
+
+R"""
+advantage_heat = list(
+    rasterise(geom_tile(), dpi=500),
+    # geom_line(aes(fill=NULL), df2, color="white", linewidth=.5) +
+    no_gridlines,
+    labs(fill="Compositional Savings"),
+    # scale_fill_continuous_diverging(h1=197, h2=10, c1=200, l1=20, l2=70, p1=1, p2=1, limits=c(-1, 1))
+    scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=1.5, rev=F),
+    coord_fixed(expand=F)
+)
+
+indi_cost %>%
+    mutate(
+        compositional = compositional,
+        advantage = idiosyncratic - compositional,
+        # advantage = 2 * (advantage > 0) - 1
+    ) %>%
+    ggplot(aes(K, S, fill=advantage)) +
+    advantage_heat +
+    geom_line(aes(fill=NaN), data=filter(indi_equality, K <= 100), linewidth=.4, linetype="dashed")
+
+
+fig("indi_cost_heat", w=4)
+"""
+
+# %% ==================== discounting ====================
+
+
+indi_discount = dataframe(grid(S=1:101, γ=[.95, .96, .97, .98, .99, 1.])) do (;S, γ)
+    maxK = 1000
+    x = map(invert(individual_costs.(S, 0:maxK))) do c
+        y = diff(c) .* γ .^ (0:maxK-1)
+        cumsum(y)
+    end
+    map(invert(x), 1:maxK) do t, K
+        (;t..., K)
+    end
+end
+
+@rput indi_discount
+
+# %% --------
+
+R"""
+indi_discount %>%
+    filter(S == 20, γ %in% c(.95, 1.), K<100) %>%
+    pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="value") %>%
+    ggplot(aes(K, value, color=name, alpha=factor(γ), linewidth=factor(γ))) +
+    scale_alpha_manual(values=c(
+        `1` = 0.2,
+        `0.95` = 1
+    )) +
+    scale_linewidth_manual(values=c(
+        `1` = 0.5,
+        `0.95` = 1
+    )) +
+    coord_cartesian(xlim=c(NULL), ylim=c(0, 50)) +
+    # scale_linetype_manual(values=c(
+    #     `1` = "solid",
+    #     `0.95` = "dashed"
+    # )) +
+    geom_line() +
+    ylab("Discounted Cost") +
+    cpal + no_legend
+
+fig("indi_discount")
+"""
+
+R"""
+indi_discount %>%
+    tibble %>%
+    filter(compositional < idiosyncratic) %>%
+    filter(S == 20, γ %in% c(.95, 1.), K<100) %>%
+    group_by(γ) %>%
+    filter(K == min(K))
+"""
+
+R"""
+discount_boundaries = indi_discount %>%
+    tibble %>%
+    filter(compositional < idiosyncratic) %>%
+    group_by(K, γ) %>%
+    filter(S == max(S), S < 101)
+
+discount_boundaries %>%
+    filter(K < 301) %>%
+    ggplot(aes(K, S, color=factor(γ))) +
+    no_gridlines +
+    # coord_cartesian(expand=F) +
+    coord_cartesian(expand=F) +
+    geom_line(linewidth=.8) +
+    scale_color_discrete_sequential("Purples", name="Discount Factor", l2=80, c2=20) +
+    rev_legend
+
+fig("indi_discount_boundaries")
+"""
+
+R"""
+indi_discount %>%
+    filter(γ %in% c(.95, .97, .99)) %>%
+    ggplot(aes(K, S, fill=idiosyncratic - compositional)) +
+    advantage_heat +
+    geom_line(
+        data=discount_boundaries %>% filter(γ %in% c(.95, .97, .99)),
+        linewidth=.4, linetype="dashed",
+    ) +
+    # geom_line(aes(fill=NaN), data=filter(indi_equality, K <= 100), linewidth=.4, linetype="dashed") +
+    facet_wrap(~γ) +
+    labs(fill="Discounted Compositional Savings") +
+    coord_cartesian()
+
+fig("indi_discount_heat", w=7)
+"""
+
+
+# %% ==================== social cost ====================
+
+@kwdef struct Costs
+    black_travel::Float64 = 0.
+    red_travel::Float64 = 0.
+    black_discovery::Float64  = 1.
+    red_discovery::Float64 = 1.
+end
+
+function social_costs(S, M; costs = Costs(), revert_to_idio=false)
+    b = prob_observe(1 / (S^2), M)
+    # prob observe ONE compositional edges (not both)
+    r = prob_observe(1 / S, M)
+    idiosyncratic = costs.black_travel + ¬b * costs.black_discovery
+    compositional = costs.red_travel +
+        r^2 * 0 +
+        2 * r * ¬r * costs.red_discovery +
+        ¬r * ¬r * 2 * costs.red_discovery
+    if revert_to_idio
+        compositional = min(compositional, idiosyncratic)
+    end
+    (;compositional, idiosyncratic)
+end
+social_costs((;S, M)) = social_costs(S, M)
+
+
+social_cost = dataframe(social_costs, grid(M=1:100, S=1:100))
+@rput social_cost
+
+
+social_equality = map(1:100) do S
+    res = optimize(1, S) do M
+        a, b = social_costs(S, M)
+        abs(a - b)
+    end
+    M = res.minimizer
+    @assert abs(res.minimum) < 1e-5
+    return (;S, M)
+end |> DataFrame
+
+@rput social_equality
+
+@with social_equality :M ./ :S
+
+# %% --------
+
+R"""
+S1 = 6
+social_cost %>%
+    filter(S==S1) %>%
+    pivot_longer(c(compositional, idiosyncratic), names_to="name", values_to="value", names_prefix="") %>%
+    ggplot(aes(M, value, color=name)) +
+    geom_vline(xintercept=filter(social_equality, S==S1)$M, linewidth=.4) +
+    geom_line() +
+    cpal +
+    no_legend +
+    labs(y="discovery cost")
+
+fig("social_cost")
+"""
+
+
+R"""
+social_cost %>%
+    # mutate(S = S^2) %>% filter(S < 101) %>%
+    mutate(advantage = idiosyncratic - compositional) %>%
+    ggplot(aes(M, S, fill=advantage)) +
+    advantage_heat +
+    geom_line(aes(fill=NaN), data=filter(social_equality, M <= 100), linewidth=.4, linetype="dashed")
+
+fig("social_cost_heat")
+"""

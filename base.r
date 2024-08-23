@@ -26,6 +26,24 @@ library(ggrastr)
 
 # %% ==================== Project-specific ====================
 
+RED = "#E62A65"
+TEAL = "#07A9C0"
+
+cpal = scale_colour_manual(values=c(
+    idiosyncratic=TEAL,
+    compositional=RED,
+    `-1` = TEAL,
+    `1` = RED
+), aesthetics=c("fill", "colour"), name="")
+
+facet_grid = function(form, labeller=purrr::partial(label_both, sep = " = "), ...) {
+    ggplot2::facet_grid(form, labeller=labeller, ...)
+}
+
+facet_wrap = function(form, labeller=purrr::partial(label_both, sep = " = "), ...) {
+    ggplot2::facet_wrap(form, labeller=labeller, ...)
+}
+
 plot_model_cor = function(data, var) {
     data %>%
         group_by(agent, pid) %>%
@@ -73,7 +91,7 @@ plot_posteriors2d = function(df, xvar, yvar) {
 
 # %% ==================== Options ====================
 
-RED = "#E41A1C"
+# RED = "#E41A1C"
 BLUE = "#377EB8"
 GREEN = "#4DAF4A"
 PURPLE = "#984EA3"
@@ -602,7 +620,7 @@ fancy_name = function(lab) {
         str_replace_all(words) %>%
         str_to_title %>%
         gsub("Rt", "RT", .) %>%
-        gsub("(?!^)\\b(Of|In|On|The|Up|To|Vs|Per|A)\\b", "\\L\\1", ., perl=TRUE)
+        gsub("(?!^)\\b(Of|In|On|The|Up|To|Vs|Per|A|Or|And|For)\\b", "\\L\\1", ., perl=TRUE)
 }
 
 fancy_name_compact = function(lab) {

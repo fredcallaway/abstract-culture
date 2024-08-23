@@ -15,7 +15,7 @@ prob_observe(p, M) = ¬((¬p) ^ M)
     N::Real = Inf # population size
 
     foresight::Bool = false  # choose composition in advance?
-    replace_tasks::Bool = false  # sample tasks with replacement?
+    replace_tasks::Bool = true  # sample tasks with replacement?
     replace_demos::Bool = true  # sample demonstrations with replacement?
 
     # red frequencies for ambiguous cases
@@ -120,7 +120,7 @@ function transition(env::RedBlackEnv, pop::Matrix{Behavior})
     for agent in 1:N
         observed = M == -1 ? pop : sample(pop, M; replace=replace_demos)
         tasks = sample(all_tasks(env), K; replace=replace_tasks)
-        pop1[:, agent] = behave(env, tasks[:, agent], observed)
+        pop1[:, agent] = behave(env, tasks, observed)
     end
     pop1
 end

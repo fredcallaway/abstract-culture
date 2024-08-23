@@ -1,268 +1,148 @@
 @everywhere include("red_black.jl")
 @everywhere using NamedTupleTools
 include("r.jl")
-
-# %% ======
-
+using Optim
 
 
-# %% ==================== m and n ====================
+function run_sim_infinite(;n_gen=30, init=NaN,
+                 p_0 = 1e-6,
+                 p_brr = 0.,
+                 p_r = 1.,
+                 S = 10,
+                 M = 25
+                 )
 
-
-run_sim_infinite(p_0 = [.01], m=[10,40,80])
-
-R"""
-df %>%
-    filter(n==10, m==20) %>%
-    ggplot(aes(gen, red)) +
-    geom_line(color=RED) +
-    ylab("Compositionality")
-
-fig("basic_single", w=4, h=2)
-"""
-
-
-R"""
-plot_red(color="red") +
-    scale_colour_manual(values=c(RED)) +
-    no_legend
-
-fig("basic", w=6)
-"""
-
-# %% ==================== neither ====================
-
-run_sim_infinite(p_0 = .1 .^ (1:6))
-
-R"""
-plot_red(color=factor(p_0)) +
-    discrete_sequential("Oranges", name="Spontaneous Compositionality Rate") +
-    rev_legend +
-
-fig("neither", w=7.5)
-"""
-
-# %% ==================== both ====================
-
-run_sim_infinite(p_brr = 0:.2:1, m=10 .* [5, 10, 20])
-
-R"""
-plot_red(color=factor(p_brr)) +
-    discrete_sequential("Purples", name="p(red|both)") +
-    rev_legend
-
-fig("both")
-"""
-
-# %% ==================== partial ====================
-
-run_sim_infinite(p_r = 0:.2:1; n_gen=100)
-
-R"""
-plot_red(color=factor(p_r)) +
-    discrete_sequential("TealGrn", name="Compositional Completion Rate") +
-    rev_legend
-
-fig("partial", w=7.5)
-"""
-
-# %% --------
-
-
-simulate(Environment(p_0 = .01, p_r=1., p_brr=0., n=100, m=300), 100; init=1.)
-
-
-# %% ==================== partial ====================
-
-
-g = grid(
-    p_0 = [1/1_000_000],
-    p_brr = [0.],
-    p_r = 0:.2:1,
-    n = [5, 10, 20],
-    m = 2 .* [5, 10, 20],
-)
-
-df = dataframe(g) do prm
-    env = Environment(;prm...)
-    sim = simulate(env, 100)
-    map(enumerate(sim)) do (gen, red)
-        (;gen, red)
-    end
-end
-@rput df
-
-R"""
-df %>%
-    ggplot(aes(gen, red, color=factor(p_r))) +
-    # ggplot(aes(gen, red, color=factor(p_r))) +
-    geom_line() +
-    ylab("proportion using red") +
-    expand_limits(y=0.4) +
-    discrete_sequential("Greens", name="p(red|partial)") +
-    rev_legend +
-    facet_grid(m ~ n, labeller=label_glue(cols='S={n}', rows='M={m}')) +
-fig("partial", w=5.5, h=4)
-"""
-
-# %% ==================== event horizon ====================
-
-df = dataframe(grid(init=[.01, .02, .04, .08], p_r = [0, .01, .05, .1, .2])) do (;init, p_r)
-    sim = simulate(Environment(;n=10, m=80, p_0=1e-6, p_r), 30; init)
-    map(enumerate(sim)) do (gen, red)
-        (;gen, red)
-    end
-end
-
-@rput df
-
-R"""
-df %>% ggplot(aes(gen, red, color=factor(p_r))) +
-    geom_line() +
-    discrete_sequential("Greens", name="p(red|partial)") +
-    ylab("proportion using red") +
-    rev_legend +
-    facet_wrap(~init, labeller=label_glue("init = {init}"), nrow=1)
-
-fig("horizon", w=7, h=2)
-"""
-
-# %% ==================== m and n in limit ====================
-
-
-g = grid(
-    p_0 = [.001, .01, .1],
-    m = 2 .^ (0:5),
-    n = 1:32,
-)
-
-df = dataframe(g) do (;p_0, m, n)
-    env = Environment(;p_0, m, n)
-    red, gen = get_limit(env)
-    [(;gen, red)]
-end
-@rput df
-
-R"""
-df %>%
-    filter(p_0 == .001) %>%
-    ggplot(aes(n, red, color=factor(m))) +
-    geom_line() +
-    ylab("proportion using red") +
-    teals_pal(rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE))
-fig("red_black_limits", w=5,)
-"""
-
-
-
-# %% ==================== finite populations ====================
-
-function run_sim_finite(;n_gen=30, init=NaN,
-                 p_0 = [0],
-                 p_brr = [0.],
-                 p_r = [1.],
-                 n = [5, 10, 20],
-                 m = 2 .* [5, 10, 20],
-                 k = [1],
-                 N = [500],
-                 foresight = [false],
-                 repeats = 5)
-
-    g = grid(; p_0, p_brr, p_r, n, m, k, N, foresight, pop=1:repeats)
-    df = dataframe(g; parallel=true) do prm
-        env = Environment(;delete(prm, :pop)...)
-        sim = simulate(env, n_gen)
-        map(enumerate(sim)) do (gen, pop)
-            (;gen, red = red_rate(pop))
+    g = grid(; p_0, p_brr, p_r, S, M)
+    df = dataframe(g) do prm
+        env = RedBlackEnv(;prm...)
+        sim = simulate(env, n_gen; init)
+        map(enumerate(sim)) do (gen, compositionality)
+            (;gen, compositionality)
         end
     end
     @rput df
     df
 end
-# %% --------
-
-inf = run_sim_infinite(p_0 = [.01])
-finite = run_sim_finite(N=[10000], p_0=[.01], repeats=5)
-
-@rput finite inf
 
 R"""
-finite %>%
-    ggplot(aes(gen, red)) +
-    geom_line(data=inf, color="red", linewidth=1) +
-    geom_line(mapping=aes(group=pop), linewidth=.5, alpha=0.5) +
-    ylab("proportion using red") +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(m ~ n, labeller=label_glue(
-        cols='n = {n}',
-        rows='m = {m}'
-    ))
-fig("finite", w=5.5, h=4)
+advantage_heat = list(
+    rasterise(geom_tile(), dpi=500),
+    no_gridlines,
+    coord_fixed(expand=F)
+)
 """
 
-# %% ==================== vary N ====================
+# %% ==================== evolution ====================
 
-run_sim_finite(N=[10,40,160,640], p_0=[.01], repeats=100)
+# run_sim_infinite(p_0=[1e-6], p_brr = [0.], p_r = [1])
 
-
-R"""
-
-df %>%
-    ggplot(aes(gen, red, color=factor(N))) +
-    geom_line(mapping=aes(group = interaction(N, pop)), data=filter(df, pop < 5), linewidth=.2, alpha=.7) +
-    lines(mean, linewidth=.7) +
-    ylab("Compositionality") +
-    teals_pal(rev=T, name="Population Size") +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(m ~ n, labeller=label_glue(
-        cols='S = {n}',
-        rows='M = {m}'
-    ))
-fig("vary_N", w=7.5, h=4)
-"""
-
-# %% ==================== vary k ====================
-
-df = run_sim_finite(N=[50], k=[1,4,16,64], p_0=[.01], repeats=100)
+run_sim_infinite(S=10, M=25)
 
 R"""
 df %>%
-    ggplot(aes(gen, red, color=factor(k))) +
-    geom_line(mapping=aes(group = interaction(k, pop)), data=filter(df, pop < 5), linewidth=.2, alpha=.7) +
-    lines(mean, linewidth=.7) +
-    ylab("proportion using red") +
-    discrete_sequential("Purple-Orange", rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(m ~ n, labeller=label_glue(
-        cols='n = {n}',
-        rows='m = {m}'
-    ))
-fig("vary_k", w=5.5, h=4)
+    ggplot(aes(gen, compositionality)) +
+    geom_line(color=RED)
+
+fig("basic_single")
 """
 
-# %% ==================== foresight ====================
+# %% ==================== limits ====================
 
-df = run_sim_finite(N=[50], k=[1,4,16,64], foresight=[true], p_r = [0.5], p_0 = [0.], repeats=100, n_gen=100)
+asymptotic = dataframe(grid(M=1:1:100, S=1:100)) do (;M, S)
+    env = RedBlackEnv(;M, S, p_0=1e-8, p_r=1, p_brr=0.)
+    compositional, gen = get_limit(env; max_gen=1000)
+    [(;gen, compositional)]
+end
+@rput asymptotic
 
+R"""
+asymptotic %>%
+    ggplot(aes(M, S, fill=compositional)) +
+    advantage_heat +
+    scale_fill_continuous_sequential(h1=350, h2=NA, c1=180, l1=20, l2=95, p1=1, p2=1.5,
+        name="Asymptotic Compositionality", labels=scales::percent_format())
+    # scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=1.5, rev=F),
+    # scale_fill_continuous_sequential(h1=10, h2=NA, c1=200,  l1=20, l2=70, p1=1, p2=1, limits=c(0,1))
+    # scale_fill_continuous_sequential(h1=10, h2=NA, limits=c(0,1), c1=200, l1=30, l2=70, p1=1, p2=1, labels=scales::percent_format()) +
+
+fig("asymptotic", w=4)
+"""
+
+# %% ==================== SM ====================
+
+
+run_sim_infinite(S=[4, 20], M=[10, 30]; n_gen=30)
 
 R"""
 df %>%
-    ggplot(aes(gen, red, color=factor(k))) +
-    geom_line(mapping=aes(group = interaction(k, pop)), data=filter(df, pop < 5), linewidth=.2, alpha=.7) +
-    lines(mean, linewidth=.7) +
-    ylab("proportion using red") +
-    discrete_sequential("Purple-Orange", rev=T) +
-    expand_limits(y=0.4) +
-    guides(color = guide_legend(reverse=TRUE)) +
-    facet_grid(m ~ n, labeller=label_glue(
-        cols='n = {n}',
-        rows='m = {m}'
-    ))
-fig("foresight", w=5.5, h=4)
+    mutate(S = fct_rev(factor(S))) %>%
+    rename(D = M) %>%
+    ggplot(aes(gen, compositional)) +
+    geom_line(color=RED) +
+    # facet_grid(S ~ M, labeller=label_value) +
+    facet_grid(S ~ D) +
+    no_legend +
+    # coord_cartesian(xlim=c(-1, 31), ylim=c(-.1, 1.1)) +
+    theme(
+        # strip.text.x = element_blank(),
+        # strip.text.y = element_blank(),
+        axis.line=element_blank(),
+        panel.border = element_rect(color = "idiosyncratic", fill = NA, size = 3)
+    ) +
+    no_xaxis_ticks + no_yaxis_ticks
+
+fig("SM", w=WIDTH+1, h=HEIGHT+1)
 """
 
+R"""
+
+do_plot = function(...) {
+    df %>%
+        filter(...) %>%
+        ggplot(aes(gen, compositional)) +
+        geom_line(color=RED) +
+        expand_limits(y=c(0,1)) +
+        theme(
+            # axis.line=element_blank(),
+            axis.text.x=element_blank(),
+            axis.text.y=element_blank(),
+            # axis.ticks=element_blank(),
+            axis.title.x=element_blank(),
+            axis.title.y=element_blank(),
+        )
+}
+
+(do_plot(M==10, S==20) | do_plot(M==30, S==20)) /
+(do_plot(M==10, S==4) | do_plot(M==30, S==4))
+
+fig("SM2")
+"""
+
+
+# %% ==================== innovation ====================
+
+run_sim_infinite(p_0 = .1 .^ (3:2:9))
+
+R"""
+df %>% ggplot(aes(gen, compositionality, color=factor(p_0))) +
+    geom_line() +
+    scale_color_discrete_sequential("Oranges", name="Innovation Probability", l2=80, c2=40) +
+    rev_legend
+
+fig("innovation")
+"""
+
+
+# %% ==================== completion ====================
+
+
+run_sim_infinite(p_r = [1, .75, .5, .25], n_gen=30)
+
+R"""
+df %>% ggplot(aes(gen, compositionality, color=factor(p_r))) +
+    geom_line() +
+    scale_color_discrete_sequential("TealGrn", name="Completion Probability") +
+    rev_legend
+
+fig("completion")
+"""
