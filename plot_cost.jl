@@ -2,51 +2,92 @@
 @everywhere using NamedTupleTools
 include("r.jl")
 using Optim
+# %% --------
+R"""
+FIGS_PATH = "~/papers/cultural-abstractions/figs/"
+MAKE_PDF = TRUE
+"""
 
 # %% ==================== individual cost ====================
 
 expected_unique(N, K) = N * (1 - (1 - 1/N)^K)
 
+function expected_unique_nodes(;S, K)
+    env = RedBlackEnv(;S, K)
+    tasks = all_tasks(env)
+    monte_carlo(100) do
+        sub = sample(tasks, K; replace=false)
+        length(unique(first, sub)) + length(unique(last, sub))
+    end
+end
+
 function individual_costs(;S, K, γ=1.)
     (;
-        compositional = 2 * expected_unique(S, K),
-        idiosyncratic = expected_unique(S^2, K),
+        compositional = expected_unique_nodes(;S, K),
+        idiosyncratic = K,
     )
 end
+
+
 individual_costs(x::NamedTuple) = individual_costs(;x...)
 
-indi_cost = dataframe(individual_costs, grid(S=1:100, K=1:100))
+indi_cost = dataframe(individual_costs, grid(S=10, K=1:100))
 @rput indi_cost
 
-indi_equality = map(3:100) do S
-    res = optimize(1, S^2) do K
-        a, b = individual_costs(S, K)
-        abs(a - b)
-    end
-    K = res.minimizer
-    @assert abs(res.minimum) < 1e-5
-    return (;S, K)
-end |> DataFrame
-@rput indi_equality
+# indi_equality = map(3:100) do S
+#     res = optimize(1, S^2) do K
+#         a, b = individual_costs(;S, K)
+#         abs(a - b)
+#     end
+#     K = res.minimizer
+#     @assert abs(res.minimum) < 1e-5
+#     return (;S, K)
+# end |> DataFrame
+# @rput indi_equality
 
-@with indi_equality :K ./ :S
-
-# %% --------
+# @with indi_equality :K ./ :S
 
 R"""
 indi_cost %>%
-    filter(S == 20) %>%
     pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="cost") %>%
     ggplot(aes(K, cost, color=name)) +
-    geom_vline(xintercept=filter(indi_equality, S==20)$K, linewidth=.4) +
+    # geom_vline(xintercept=filter(indi_equality, S==20)$K, linewidth=.4) +
     geom_line() +
+    ybreaks(6) +
     cpal +
-    labs(y="Discovery Cost") +
-    top_legend
+    labs(x="# Tasks to Solve", y="Discovery Cost") +
+    no_legend
 
-fig("indi_cost", h=3)
+fig("indi_cost", h=2, w=2.5)
 """
 
+# %% ==================== new cost ====================
+function expected_unique_nodes(;S, K)
+    env = RedBlackEnv(;S, K)
+    tasks = all_tasks(env)
+    monte_carlo(100_000) do
+        sub = sample(tasks, K; replace=false)
+        length(unique(first, sub)) + length(unique(last, sub))
+    end
+end
+
+df = dataframe(grid(S=10, K=1:100)) do
+    (
+        compositional = expected_unique_nodes(;S, K),
+        idiosyncratic =
+    )
+
+    (;cost =
+end
+
+# %% --------
+
+monte_carlo() do
+    tasks = sample(all_tasks(env),env. K; replace=false)
+    length(unique(first, tasks)) + length(unique(last, tasks))
+end
+
+individual_costs(;S=5, K=5)
 
 # %% --------
 

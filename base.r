@@ -27,6 +27,7 @@ library(ggrastr)
 # %% ==================== Project-specific ====================
 
 RED = "#E62A65"
+PINK = "#ECA2CB"
 TEAL = "#07A9C0"
 
 cpal = scale_colour_manual(values=c(

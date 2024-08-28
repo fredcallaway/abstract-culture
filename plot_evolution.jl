@@ -4,20 +4,22 @@ include("r.jl")
 using Optim
 
 
-function run_sim_infinite(;n_gen=30, init=NaN,
+function run_sim_infinite(;n_gen=30,
+                 init=NaN,
                  p_0 = 1e-6,
                  p_brr = 0.,
-                 p_r = 1.,
+                 p_r = 0.,
                  S = 10,
                  M = 25
                  )
 
-    g = grid(; p_0, p_brr, p_r, S, M)
+    g = grid(; p_0, p_brr, p_r, S, M, init)
     df = dataframe(g) do prm
-        env = RedBlackEnv(;prm...)
-        sim = simulate(env, n_gen; init)
+
+        env = RedBlackEnv(;delete(prm, :init)...)
+        sim = simulate(env, n_gen; prm.init)
         map(enumerate(sim)) do (gen, compositionality)
-            (;gen, compositionality)
+            (;gen=gen-1, compositionality)
         end
     end
     @rput df
@@ -34,17 +36,122 @@ advantage_heat = list(
 
 # %% ==================== evolution ====================
 
+
+
+
+# %% --------
+
+
 # run_sim_infinite(p_0=[1e-6], p_brr = [0.], p_r = [1])
 
-run_sim_infinite(S=10, M=25)
+run_sim_infinite(S=10, M=300, p_0=.01)
 
 R"""
 df %>%
     ggplot(aes(gen, compositionality)) +
-    geom_line(color=RED)
+    geom_line(color=RED) + expand_limits(y=0)
 
 fig("basic_single")
 """
+
+# %% --------
+
+
+run_sim_infinite(S=10, M=[5, 20, 200])
+
+R"""
+df %>%
+    ggplot(aes(gen, compositionality)) +
+    facet_wrap(~M) +
+    geom_line(color=RED) +
+    facet_wrap(~M, labeller=label_glue("{M} demos"))
+
+fig("basic_varyM", w=6)
+"""
+
+
+# %% --------
+
+run_sim_infinite(S=10, M=[40, 80, 160], init=[.04, .1])
+
+R"""
+df %>%
+    ggplot(aes(gen, compositionality, color=factor(init))) +
+    geom_line() + expand_limits(y=c(0, 1)) +
+    scale_colour_manual(values=c(
+        PINK, RED
+    ), aesthetics=c("fill", "colour"), name="") +
+    no_legend +
+    geom_point(data=filter(df, gen == 0)) +
+    facet_wrap(~M, labeller=label_glue("{M} demos"))
+
+fig("basic_varyMinit", w=6)
+"""
+
+# %% --------
+
+run_sim_infinite(S = 20 .* [1, 2], M = 50 .* [1, 2, 4, 8, 16], init=[.01, .1], n_gen=20)
+
+R"""
+df %>%
+    ggplot(aes(gen, compositionality, color=factor(init))) +
+    geom_line() + expand_limits(y=c(0, 1)) +
+    scale_colour_manual(values=c(
+        PINK, RED
+    ), aesthetics=c("fill", "colour"), name="") +
+    no_legend +
+    geom_point(data=filter(df, gen == 0)) +
+    facet_grid(S~M) +
+    ybreaks(3) + xbreaks(3) + no_gridlines
+
+fig("basic_varyMSinit", w=6, h=2.8)
+"""
+
+# %% --------
+
+
+run_sim_infinite(S = 10 .* [1, 2, 4], M = 60 .* [1, 2, 4, 8], init=0.05)
+
+R"""
+df %>%
+    ggplot(aes(gen, compositionality)) +
+    geom_line(color=RED) + expand_limits(y=c(0, 1)) +
+    no_legend +
+    # geom_point(data=filter(df, gen == 0), color=RED) +
+    facet_grid(S~M)
+
+fig("basic_varyMS", w=6, h=4)
+"""
+
+# %% ==================== separate panels ====================
+
+S = 10; M = 100; init = .05
+run_sim_infinite(;S = 5 .* [1, 2, 3, 4], M, init)
+
+R"""
+plot_panel = function(df, var) {
+    df %>%
+        ggplot(aes(gen, compositionality, color=factor({{var}}))) +
+        geom_line() +
+        expand_limits(y=c(0, 1))
+        # no_legend +
+}
+
+plot_panel(df, S) + scale_color_discrete_sequential(palette = "TealGrn", l1=40, l2=80, c2=40)
+fig()
+"""
+
+# %% --------
+
+run_sim_infinite(;S, M=50 .* [1,2,3,4], init)
+
+R"""
+plot_panel(df, M) + scale_color_discrete_sequential(palette = "TealGrn", l1=40, l2=80, c2=40)
+fig()
+"""
+
+
+
 
 # %% ==================== limits ====================
 

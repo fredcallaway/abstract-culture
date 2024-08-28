@@ -8,7 +8,73 @@ MAKE_PDF = FALSE
 DPI = 500
 """
 
+
+# %% ==================== new learning ====================
+
+
+df = dataframe(grid(S=[5, 10, 20])) do (;S)
+    map([1:10S; 10S:S:3_000]) do D
+        idiosyncratic = prob_observe(1 / (S^2), D)
+        r = prob_observe(1 / S, D)
+        compositional = r ^ 2
+        # partial = r * ¬r
+        (;D, idiosyncratic, compositional)
+    end
+end
+@rput df
+
+R"""
+df %>%
+    # filter(D > S) %>%
+    pivot_longer(c(compositional, idiosyncratic), names_to="name", values_to="value", names_prefix="") %>%
+    ggplot(aes(D, value, color=name)) +
+    scale_colour_manual(values=c(compositional=RED, partial=lighten(RED, .5), idiosyncratic=TEAL ), aesthetics=c("fill", "colour"), name="") +
+    # no_legend +
+    geom_line() +
+    # labs(x="S (number of starts/goals)", y="p(observe my solution)") +
+    scale_x_log10(labels=scales::comma) +
+    facet_wrap(~S, nrow=1) +
+    gridlines +
+    labs(x="Number of demonstrations", y="observation probability")
+    theme()
+
+
+fig("p_observe", w=8)
+"""
+
 # %% --------
+df = dataframe(grid(S=2:100)) do (;S)
+    idiosyncratic = optimize(0, 100 * S^2) do D
+        idiosyncratic = prob_observe(1 / (S^2), D)
+        abs(idiosyncratic - 0.5)
+    end
+    compositional = optimize(0, 100 * S) do D
+        r = prob_observe(1 / S, D)
+        compositional = r ^ 2
+        abs(compositional - 0.5)
+    end
+    map(Optim.minimizer, (;idiosyncratic, compositional))
+end
+@rput df
+
+R"""
+df %>%
+    filter(S < 21) %>%
+    pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="value") %>%
+    ggplot(aes(S, value, color=name)) +
+    cpal + no_legend +
+    geom_line() +
+    # scale_x_log10() +
+    # scale_y_luog10() +
+    ylab("Demonstrations for\n 50% Observation Prob")
+fig("necessary")
+"""
+
+
+
+
+# %% ==================== old ====================
+
 
 g = grid(
     n=1:40,

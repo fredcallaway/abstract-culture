@@ -29,8 +29,8 @@ function run_sim_finite(;n_gen=30, init=NaN,
 end
 
 R"""
-FIGS_PATH = " ~/obsidian/Web/cultural-abstractions/figs/abstract/2024-07-12-"
-MAKE_PDF = FALSE
+FIGS_PATH = "~/papers/cultural-abstractions/figs/"
+MAKE_PDF = TRUE
 """
 
 # %% ==================== individual ====================

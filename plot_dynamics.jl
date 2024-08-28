@@ -3,115 +3,32 @@
 include("r.jl")
 using Optim
 
-R"""
-FIGS_PATH = " ~/obsidian/Web/cultural-abstractions/figs/abstract/2024-07-12-"
-MAKE_PDF = FALSE
-"""
-
-# %% ==================== learning ====================
-
-df = dataframe(grid(S=[5, 10, 20])) do (;S)
-    map([1:10S; 10S:S:3_000]) do D
-        idiosyncratic = prob_observe(1 / (S^2), D)
-        r = prob_observe(1 / S, D)
-        compositional = r ^ 2
-        # partial = r * ¬r
-        (;D, idiosyncratic, compositional)
-    end
-end
-@rput df
-
-R"""
-df %>%
-    # filter(D > S) %>%
-    pivot_longer(c(compositional, idiosyncratic), names_to="name", values_to="value", names_prefix="") %>%
-    ggplot(aes(D, value, color=name)) +
-    scale_colour_manual(values=c(compositional=RED, partial=lighten(RED, .5), idiosyncratic=TEAL ), aesthetics=c("fill", "colour"), name="") +
-    # no_legend +
-    geom_line() +
-    # labs(x="S (number of starts/goals)", y="p(observe my solution)") +
-    scale_x_log10(labels=scales::comma) +
-    facet_wrap(~S, nrow=1) +
-    gridlines +
-    labs(x="Number of demonstrations", y="observation probability")
-    theme()
-
-
-fig("p_observe", w=8)
-"""
-
 # %% --------
-df = dataframe(grid(S=2:100)) do (;S)
-    idiosyncratic = optimize(0, 100 * S^2) do D
-        idiosyncratic = prob_observe(1 / (S^2), D)
-        abs(idiosyncratic - 0.5)
-    end
-    compositional = optimize(0, 100 * S) do D
-        r = prob_observe(1 / S, D)
-        compositional = r ^ 2
-        abs(compositional - 0.5)
-    end
-    map(Optim.minimizer, (;idiosyncratic, compositional))
-end
-@rput df
 
 R"""
-df %>%
-    filter(S < 21) %>%
-    pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="value") %>%
-    ggplot(aes(S, value, color=name)) +
-    cpal + no_legend +
-    geom_line() +
-    # scale_x_log10() +
-    # scale_y_luog10() +
-    ylab("Demonstrations for\n 50% Observation Prob")
-fig("necessary")
+FIGS_PATH = "~/papers/cultural-abstractions/figs/"
+MAKE_PDF = TRUE
 """
 
+# %% ==================== one-step ====================
+
+$1 - (1 - 1/S)^D$
+$1 - \left(1-\frac{x_t}{S}\right)^D$
+
+S = 10; D = 20; x = .2
+prob_observe(x / S, D)
 
 
-# %% ==================== bottleneck breaks ====================
+# %% ==================== fixed points ====================
 
-
-df = dataframe(grid(S=[100], x0=0:.01:1)) do (;S, x0)
-   map([250, 10S, S^2, 5 * S^2]) do D
-       idiosyncratic = prob_observe((1-x0) / (S^2), D)
-       partial = prob_observe(x0 / S, D)
-       compositional = partial ^ 2
-       (;D, idiosyncratic, partial, compositional)
-   end
-end
-@rput df
-
-R"""
-df %>%
-   pivot_longer(c(compositional, partial, idiosyncratic), names_to="name", values_to="value", names_prefix="") %>%
-   mutate(`D/S` = factor(D/S, labels=c(2.5, 10, "S", "5S"))) %>%
-   filter(name != "partial") %>%
-   ggplot(aes(x0, value, color=name)) +
-   scale_colour_manual(values=c(compositional=RED, partial=lighten(RED, .5), idiosyncratic=TEAL ), aesthetics=c("fill", "colour"), name="") +
-   # no_legend +
-   geom_abline(linetype="dashed", color=RED, alpha=0.5) +
-   geom_abline(linetype="dashed", color=TEAL, alpha=0.5, slope=-1, intercept=1) +
-   geom_line(linewidth=.8) +
-   no_gridlines +
-   facet_grid(~`D/S`) +
-   xbreaks(3) + ybreaks(3) +
-   labs(x="Compositionality Rate", y="Observation probability") +
-
-   # labs(x="Bottleneck Size (D/S)", y="observation probability")
-   theme()
-
-fig("bottleneck_breaks", w=8, h=2.2)
-"""
-
-# %% ==================== curve ====================
-
-curve = dataframe(grid(p0=0:.001:1, S=20, M=70, p_r=0)) do (;p0, S, M, p_r)
-    env = RedBlackEnv(;S, M, p_r)
+curve = dataframe(grid(p0=0:.001:1, S=20, M=60)) do (;p0, S, M)
+    env = RedBlackEnv(;S, M, p_r=0)
     (;p0, p1=transition(env, p0))
 end |> DataFrame
 @rput curve
+
+stable = find_stable_points(;S=20, M=20)
+@rput stable
 
 R"""
 D = curve %>%
@@ -122,10 +39,12 @@ D = curve %>%
     group_by(segment) %>%
     mutate(direction = sign(last(delta)))
 
-ggplot(D) +
+
+
+p1 = ggplot(D) +
     geom_abline(linetype="solid", color=GRAY) +
     annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
-    annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .1, fill=RED) +
+    annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .25, fill=RED) +
     lapply(split(D, D$segment), function(df)
       geom_line(data = df, aes(p0, p1),
                 size=.8,
@@ -134,14 +53,16 @@ ggplot(D) +
                      ends = if (first(df$direction) < 0) 'first' else 'last',
                 ))
     ) +
+    geom_point(x=stable$start, y=stable$start) +
     # gridlines +
     coord_fixed(expand=T) +
     # labs(x="previous compositionality rate", y="new compositionality rate") +
     labs(x="previous compositionality", y="new compositionality") +
     cpal + no_legend
 
-fig("rate_rate", w=2.9)
+# fig("fixed_points", w=2.9)
 """
+
 
 R"""
 D = curve %>%
@@ -152,12 +73,11 @@ D = curve %>%
     group_by(segment) %>%
     mutate(direction = sign(last(delta)))
 
-ggplot(D) +
+p2 = ggplot(D) +
     geom_hline(yintercept=0, linetype="solid", color=GRAY) +
     geom_line(mapping=aes(p0, delta), linewidth=.5) +
-    geom_point(mapping=aes(stable$start, 0)) +
-    annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
-    annotate("rect", xmin = stable$start, xmax = stable$stop, ymin = -Inf, ymax = Inf, alpha = .1, fill=RED) +
+    # annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
+    # annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .25, fill=RED) +
     lapply(split(D, D$segment), function(df)
       geom_line(data = df, aes(p0, 0, color = factor(direction)),
                 size=.8,
@@ -166,14 +86,76 @@ ggplot(D) +
                      ends = if (first(df$direction) < 0) 'first' else 'last',
                 ))
     ) +
-    # gridlines +
+    geom_point(x=stable$start, y=0) +
+    geom_point(x=stable$stop, y=0) +
+    no_gridlines +
     # coord_fixed(expand=T) +
     # labs(x="previous compositionality rate", y="new compositionality rate") +
     labs(x="compositionality", y="change in compositionality") +
     cpal + no_legend
 
-fig("rate_rate", w=2.9)
+# fig("rate_rate", w=2.9)
 """
+
+R"""
+p1 + p2
+fig(w=6)
+"""
+
+# %% ==================== bottleneck ====================
+
+
+SS = 20
+d100 = dataframe(grid(S=SS)) do (;S)
+    map([1:10S; 10S:S:1000S]) do M
+        (;M, find_stable_points(;S, M, p_r=0.5, p_brr=0)...)
+    end
+end
+@rput d100 SS
+
+R"""
+
+plot_zones = function(SS) {
+    zone_data = tibble(
+        xmin=c(0, 2.5, 10, SS, 5*SS),
+     ) %>% mutate(xmax = lead(xmin, default=Inf), zone=factor(row_number()))
+    text_data = tibble(
+        x=c(1.6, 25, 5*SS),
+        name=c("too narrow", "just right", "too wide"),
+     ) %>% mutate(zone=factor(row_number()))
+    list(
+        geom_rect(
+            data=zone_data,
+            mapping=aes(xmin=xmin, xmax=xmax, fill=zone, x=NULL, y=NULL, color=NULL, group=NULL),
+            ymin=-Inf, ymax=Inf, alpha=.3,
+        ),
+        geom_text(data=text_data, mapping=aes(x=x, label=name, color=zone), y=1.12, hjust=0.5, nudge_x=.1),
+        coord_cartesian(expand=T, xlim=c(1, 1000), ylim=c(0, 1), clip='off'),
+        scale_fill_manual(values=c(TEAL, "#94DCE6", RED, "#94DCE6", TEAL)),
+        scale_color_manual(values=c(TEAL, RED, TEAL)),
+        theme(plot.margin=margin(t=15, l=5, r=5, b=5)),
+        no_gridlines,
+        # scale_fill_manual(values=c(TEAL, GRAY, RED, GRAY, TEAL)),
+        no_legend
+    )
+}
+
+
+d100 %>%
+    # filter(M > S) %>%
+    pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
+    ggplot(aes(M/S, value, group=name)) +
+    plot_zones(SS) +
+    geom_line(linewidth=.8) +
+    scale_x_log10() +
+    labs(y="Compositionality", x="Bottleneck Size (D/S)") +
+    # coord_cartesian(xlim=c(NULL), ylim=c(0, .01)) +
+    theme()
+
+fig("start_stop")
+"""
+
+
 
 # %% ==================== MpS stable ====================
 
@@ -209,82 +191,6 @@ fig("start_stop_grid", w=6, h=4)
 
 # %% --------
 
-SS = 100
-d100 = dataframe(grid(S=SS, p_r = 0., p_brr = 0.)) do (;S, p_r, p_brr)
-    map([1:10S; 10S:S:1000S]) do M
-        (;M, find_stable_points(;S, M, p_r, p_brr)...)
-    end
-end
-d100
-@rput d100 SS
-
-R"""
-
-plot_zones = function(SS) {
-    zone_data = tibble(
-        xmin=c(0, 2.5, 10, SS, 5*SS),
-     ) %>% mutate(xmax = lead(xmin, default=Inf), zone=factor(row_number()))
-    text_data = tibble(
-        x=c(1.6, 25, 5*SS),
-        name=c("too narrow", "just right", "too wide"),
-     ) %>% mutate(zone=factor(row_number()))
-    list(
-        geom_rect(
-            data=zone_data,
-            mapping=aes(xmin=xmin, xmax=xmax, fill=zone, x=NULL, y=NULL, color=NULL, group=NULL),
-            ymin=-Inf, ymax=Inf, alpha=.3,
-        ),
-        geom_text(data=text_data, mapping=aes(x=x, label=name, color=zone), y=1.12, hjust=0.5, nudge_x=.1),
-        coord_cartesian(expand=T, xlim=c(1, 1000), ylim=c(0, 1), clip='off'),
-        scale_fill_manual(values=c(TEAL, "#94DCE6", RED, "#94DCE6", TEAL)),
-        scale_color_manual(values=c(TEAL, RED, TEAL)),
-        theme(plot.margin=margin(t=15, l=5, r=5, b=5)),
-        no_gridlines,
-        # scale_fill_manual(values=c(TEAL, GRAY, RED, GRAY, TEAL)),
-        no_legend
-    )
-}
-
-d100 %>%
-    filter(M > S) %>%
-    pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
-    ggplot(aes(M/S, value, group=name)) +
-    plot_zones(SS) +
-    geom_line(linewidth=.8) +
-    scale_x_log10() +
-    labs(y="Compositionality", x="Bottleneck Size (D/S)") +
-    theme()
-
-fig("start_stop")
-"""
-
-# %% --------
-
-R"""
-SS = 100
-d100 %>%
-    filter(M > S) %>%
-    filter(p_r == 0, p_brr == 0, S==SS) %>%
-    pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
-    ggplot(aes(M, value, group=name)) +
-    annotate("rect", xmin = SS*0, xmax = SS*2.5, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
-    annotate("rect", xmin = SS*2.5, xmax = SS*10, ymin = -Inf, ymax = Inf, alpha = .1, fill=RED) +
-    annotate("rect", xmin = SS*10, xmax = SS*SS, ymin = -Inf, ymax = Inf, alpha = .3, fill=RED) +
-    annotate("rect", xmin = SS*SS, xmax = SS*Inf, ymin = -Inf, ymax = Inf, alpha = .2, fill=TEAL) +
-    geom_line(linewidth=.8) +
-    scale_x_log10(breaks=c(250, 1000, 10000)) +
-    theme()
-
-fig("start_stop")
-"""
-
-
-# %% --------
-
-
-
-# %% --------
-
 
 R"""
 D = df %>%
@@ -311,6 +217,42 @@ ggplot(D, aes(M)) +
     facet_wrap(~S)
 
 fig(h=4, w=7)
+"""
+
+
+# %% ==================== bottleneck breaks ====================
+
+
+df = dataframe(grid(S=[100], x0=0:.01:1)) do (;S, x0)
+   map([250, 10S, S^2, 5 * S^2]) do D
+       idiosyncratic = prob_observe((1-x0) / (S^2), D)
+       partial = prob_observe(x0 / S, D)
+       compositional = partial ^ 2
+       (;D, idiosyncratic, partial, compositional)
+   end
+end
+@rput df
+
+R"""
+df %>%
+   pivot_longer(c(compositional, partial, idiosyncratic), names_to="name", values_to="value", names_prefix="") %>%
+   mutate(`D/S` = factor(D/S, labels=c(2.5, 10, "S", "5S"))) %>%
+   filter(name != "partial") %>%
+   ggplot(aes(x0, value, color=name)) +
+   scale_colour_manual(values=c(compositional=RED, partial=lighten(RED, .5), idiosyncratic=TEAL ), aesthetics=c("fill", "colour"), name="") +
+   # no_legend +
+   geom_abline(linetype="dashed", color=RED, alpha=0.5) +
+   geom_abline(linetype="dashed", color=TEAL, alpha=0.5, slope=-1, intercept=1) +
+   geom_line(linewidth=.8) +
+   no_gridlines +
+   facet_grid(~`D/S`) +
+   xbreaks(3) + ybreaks(3) +
+   labs(x="Compositionality Rate", y="Observation probability") +
+
+   # labs(x="Bottleneck Size (D/S)", y="observation probability")
+   theme()
+
+fig("bottleneck_breaks", w=8, h=2.2)
 """
 
 # %% ==================== MS stable ====================

@@ -145,7 +145,8 @@ plt = sim %>%
     ggplot(aes(generation, 1*compositionality, group=population)) +
     geom_line(linewidth=.5, color="#BA1109", alpha=0.3) +
     # geom_line(linewidth=.5, color="#BA1109", alpha=0.5) +
-    facet_wrap(~M, labeller=label_glue("{M} Demonstrations"))
+    facet_wrap(~M, labeller=label_glue("{M} Demonstrations")) +
+    xbreaks()
 
 fig("evolution_predicitions", w=6, pdf=T)
 
