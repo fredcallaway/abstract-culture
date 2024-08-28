@@ -20,7 +20,7 @@ prob_observe(p, M) = ¬((¬p) ^ M)
 
     # red frequencies for ambiguous cases
     p_0::Float64 = 0.  # no info
-    p_r::Float64 = 1.  # part red
+    p_r::Float64 = 0.  # part red
     p_brr::Float64 = 0.  # full both
 
     # used to avoid memory allocation
@@ -119,7 +119,7 @@ function transition(env::RedBlackEnv, pop::Matrix{Behavior})
 
     for agent in 1:N
         observed = M == -1 ? pop : sample(pop, M; replace=replace_demos)
-        tasks = sample(all_tasks(env), K; replace=replace_tasks)
+        tasks = sample(allntasks(env), K; replace=replace_tasks)
         pop1[:, agent] = behave(env, tasks, observed)
     end
     pop1
@@ -156,14 +156,13 @@ function transition(env::RedBlackEnv, p_red::Float64)
     end
 end
 
-
 function simulate(env::RedBlackEnv, n_gen; init=initial_population(env))
-    pop = init
-    # note: initial pop is a dummy, containing no cultural knowledge
-    repeatedly(n_gen) do
-        pop = transition(env, pop)
-        pop
+    x = zeros(n_gen+1)
+    x[1] = init
+    for i in 1:n_gen
+        x[i+1] = transition(env, x[i])
     end
+    x
 end
 
 function get_limit(env::RedBlackEnv; init=initial_population(env), max_gen=100000)
