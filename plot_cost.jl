@@ -15,6 +15,7 @@ expected_unique(N, K) = N * (1 - (1 - 1/N)^K)
 function expected_unique_nodes(;S, K)
     env = RedBlackEnv(;S, K)
     tasks = all_tasks(env)
+    # could be done with a hypergeometric?
     monte_carlo(100) do
         sub = sample(tasks, K; replace=false)
         length(unique(first, sub)) + length(unique(last, sub))
@@ -216,10 +217,10 @@ fig("indi_discount_heat", w=7)
     red_discovery::Float64 = 1.
 end
 
-function social_costs(S, M; costs = Costs(), revert_to_idio=false)
-    b = prob_observe(1 / (S^2), M)
+function social_costs(S, D; costs = Costs(), revert_to_idio=false)
+    b = prob_observe(1 / (S^2), D)
     # prob observe ONE compositional edges (not both)
-    r = prob_observe(1 / S, M)
+    r = prob_observe(1 / S, D)
     idiosyncratic = costs.black_travel + ¬b * costs.black_discovery
     compositional = costs.red_travel +
         r^2 * 0 +
@@ -230,26 +231,26 @@ function social_costs(S, M; costs = Costs(), revert_to_idio=false)
     end
     (;compositional, idiosyncratic)
 end
-social_costs((;S, M)) = social_costs(S, M)
+social_costs((;S, D)) = social_costs(S, D)
 
 
-social_cost = dataframe(social_costs, grid(M=1:100, S=1:100))
+social_cost = dataframe(social_costs, grid(D=1:100, S=1:100))
 @rput social_cost
 
 
 social_equality = map(1:100) do S
-    res = optimize(1, S) do M
-        a, b = social_costs(S, M)
+    res = optimize(1, S) do D
+        a, b = social_costs(S, D)
         abs(a - b)
     end
-    M = res.minimizer
+    D = res.minimizer
     @assert abs(res.minimum) < 1e-5
-    return (;S, M)
+    return (;S, D)
 end |> DataFrame
 
 @rput social_equality
 
-@with social_equality :M ./ :S
+@with social_equality :D ./ :S
 
 # %% --------
 
@@ -258,8 +259,8 @@ S1 = 6
 social_cost %>%
     filter(S==S1) %>%
     pivot_longer(c(compositional, idiosyncratic), names_to="name", values_to="value", names_prefix="") %>%
-    ggplot(aes(M, value, color=name)) +
-    geom_vline(xintercept=filter(social_equality, S==S1)$M, linewidth=.4) +
+    ggplot(aes(D, value, color=name)) +
+    geom_vline(xintercept=filter(social_equality, S==S1)$D, linewidth=.4) +
     geom_line() +
     cpal +
     no_legend +
@@ -273,9 +274,9 @@ R"""
 social_cost %>%
     # mutate(S = S^2) %>% filter(S < 101) %>%
     mutate(advantage = idiosyncratic - compositional) %>%
-    ggplot(aes(M, S, fill=advantage)) +
+    ggplot(aes(D, S, fill=advantage)) +
     advantage_heat +
-    geom_line(aes(fill=NaN), data=filter(social_equality, M <= 100), linewidth=.4, linetype="dashed")
+    geom_line(aes(fill=NaN), data=filter(social_equality, D <= 100), linewidth=.4, linetype="dashed")
 
 fig("social_cost_heat")
 """

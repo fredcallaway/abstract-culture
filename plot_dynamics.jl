@@ -21,13 +21,15 @@ prob_observe(x / S, D)
 
 # %% ==================== fixed points ====================
 
-curve = dataframe(grid(p0=0:.001:1, S=20, M=60)) do (;p0, S, M)
-    env = RedBlackEnv(;S, M, p_r=0)
+find_stable_points(;S=10, D=100)
+
+curve = dataframe(grid(p0=0:.001:1, S=20, D=60)) do (;p0, S, D)
+    env = RedBlackEnv(;S, D, p_r=0)
     (;p0, p1=transition(env, p0))
 end |> DataFrame
 @rput curve
 
-stable = find_stable_points(;S=20, M=20)
+stable = find_stable_points(;S=20, D=60)
 @rput stable
 
 R"""
@@ -41,7 +43,7 @@ D = curve %>%
 
 
 
-p1 = ggplot(D) +
+plot_prev_new = ggplot(D) +
     geom_abline(linetype="solid", color=GRAY) +
     annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
     annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .25, fill=RED) +
@@ -60,7 +62,7 @@ p1 = ggplot(D) +
     labs(x="previous compositionality", y="new compositionality") +
     cpal + no_legend
 
-# fig("fixed_points", w=2.9)
+fig("prev_new", w=2.9)
 """
 
 
@@ -68,52 +70,53 @@ R"""
 D = curve %>%
     mutate(
         delta=p1 - p0,
-        segment = pmax(1, cumsum(replace_na(sign(delta) - lag(sign(delta)) != 0, FALSE)))
+        segment = pmax(1, cumsum(replace_na(sign(delta) - lag(sign(delta)) != 0, FALSE))),
+        attractor = factor(segment, labels=c("idiosyncratic", "compositional", "compositional"))
     ) %>%
     group_by(segment) %>%
     mutate(direction = sign(last(delta)))
 
-p2 = ggplot(D) +
+plot_ = ggplot(D) +
     geom_hline(yintercept=0, linetype="solid", color=GRAY) +
     geom_line(mapping=aes(p0, delta), linewidth=.5) +
     # annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
     # annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .25, fill=RED) +
     lapply(split(D, D$segment), function(df)
-      geom_line(data = df, aes(p0, 0, color = factor(direction)),
+      geom_line(data = df, aes(p0, 0, color = attractor),
                 size=.8,
                 arrow = arrow(
                      length = unit(.1, "in"), type = 'open',
                      ends = if (first(df$direction) < 0) 'first' else 'last',
                 ))
     ) +
-    geom_point(x=stable$start, y=0) +
-    geom_point(x=stable$stop, y=0) +
+    geom_point(x=0, y=0, shape=21, size=2, fill=TEAL) +
+    geom_point(x=stable$start, y=0, shape=21, size=2, fill="white") +
+    geom_point(x=stable$stop, y=0, shape=21, size=2, fill=RED) +
     no_gridlines +
     # coord_fixed(expand=T) +
     # labs(x="previous compositionality rate", y="new compositionality rate") +
     labs(x="compositionality", y="change in compositionality") +
     cpal + no_legend
 
-# fig("rate_rate", w=2.9)
+fig("x_dx", w=2.9)
 """
 
-R"""
-p1 + p2
-fig(w=6)
-"""
+
 
 # %% ==================== bottleneck ====================
 
 
-SS = 20
+SS = 100
 d100 = dataframe(grid(S=SS)) do (;S)
-    map([1:10S; 10S:S:1000S]) do M
-        (;M, find_stable_points(;S, M, p_r=0.5, p_brr=0)...)
+    map([1:10S; 10S:S:1000S]) do D
+        (;D, find_stable_points(;S, D)...)
     end
 end
 @rput d100 SS
 
 R"""
+
+factor(c(1,2,3), )
 
 plot_zones = function(SS) {
     zone_data = tibble(
@@ -141,28 +144,73 @@ plot_zones = function(SS) {
 }
 
 
-d100 %>%
-    # filter(M > S) %>%
+plot_bottle = d100 %>%
+    # filter(D > S) %>%
     pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
-    ggplot(aes(M/S, value, group=name)) +
+    ggplot(aes(D/S, value)) +
     plot_zones(SS) +
-    geom_line(linewidth=.8) +
+    geom_line(linewidth=1.5, mapping=aes(group=name)) +
+    geom_line(linewidth=.7, mapping=aes(color=name)) +
     scale_x_log10() +
     labs(y="Compositionality", x="Bottleneck Size (D/S)") +
+    scale_colour_manual(values=c(
+        start="white", stop=RED,
+        `1`=TEAL, `2`=RED, `3`=TEAL
+    ), aesthetics=c("colour"), name="")
     # coord_cartesian(xlim=c(NULL), ylim=c(0, .01)) +
     theme()
 
-fig("start_stop")
+fig("bottleneck")
 """
 
+# %% --------
+
+
+fixed_grid = dataframe(grid(S=10:40, D=10:10:5000)) do (;S, D)
+    find_stable_points(;S, D)
+end
+@rput fixed_grid
+
+R"""
+fixed_grid %>%
+    ggplot(aes(D, S, fill=stop)) +
+    geom_tile() +
+    # scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=2, mid=0.5, rev=F) +
+    scale_fill_continuous_sequential(h1=350, h2=NA, c1=180, l1=20, l2=95, p1=1, p2=1.5,
+            name="Asymptotic Compositionality", labels=scales::percent_format()) +
+    no_gridlines
+
+fig()
+"""
+
+# %% --------
+
+D = [10:999; round.(logscale.(0:.01:1, 1000, 10000))]
+
+df = dataframe(grid(;S=[5, 10, 20, 40], D)) do (;S, D)
+    find_stable_points(;S, D)
+end
+@rput df
+
+R"""
+df %>%
+    filter(D/S > 1, D/S < 500) %>% 
+    pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
+    ggplot(aes(D / S, value, color=factor(S), group=interaction(name, S))) +
+    geom_line() +
+    scale_x_log10() +
+    theme()
+
+fig()
+"""
 
 
 # %% ==================== MpS stable ====================
 
 
 df = dataframe(grid(S=[5,10,20,40,80], p_r = [0., .5, 1.], p_brr = [0., .5, 1.])) do (;S, p_r, p_brr)
-    map([1:10S; 10S:S:500S]) do M
-        (;M, find_stable_points(;S, M, p_r, p_brr)...)
+    map([1:10S; 10S:S:500S]) do D
+        (;D, find_stable_points(;S, D, p_r, p_brr)...)
     end
 end
 df
@@ -171,9 +219,9 @@ df
 R"""
 plot_start_stop = function(data) {
     data %>%
-    filter(M/S > .3) %>%
+    filter(D/S > .3) %>%
     pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
-    ggplot(aes(M / S, value, color=factor(S), group=interaction(name, S))) +
+    ggplot(aes(D / S, value, color=factor(S), group=interaction(name, S))) +
     geom_line(linewidth=.8) +
     scale_x_log10() +
     teals_pal() +
@@ -194,22 +242,22 @@ fig("start_stop_grid", w=6, h=4)
 
 R"""
 D = df %>%
-    filter(M < 70) %>%
+    filter(D < 70) %>%
     pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
     drop_na()
 
 D2 = df %>%
-    filter(M < 70) %>%
+    filter(D < 70) %>%
     replace_na(list(stop = 0, start=0, zero=0))
 
-ggplot(D, aes(M)) +
+ggplot(D, aes(D)) +
     geom_ribbon(data=D2, mapping=aes(ymin=stop, ymax=1), fill=TEAL, alpha=0.3) +
     geom_ribbon(data=D2, mapping=aes(ymin=start, ymax=stop), fill=RED, alpha=0.3) +
     geom_ribbon(data=D2, mapping=aes(ymin=0, ymax=start), fill=TEAL, alpha=0.3) +
     # geom_line(mapping=aes(group=name, y=value), linewidth=.5, color=GRAY) +
     geom_line(
-        data=filter(D, mod(M, 5) == 0),
-        mapping=aes(group=M, y=value),
+        data=filter(D, mod(D, 5) == 0),
+        mapping=aes(group=D, y=value),
         arrow = arrow(ends='last', length = unit(.1, "in")),
         color=RED
     ) +
@@ -258,9 +306,9 @@ fig("bottleneck_breaks", w=8, h=2.2)
 # %% ==================== MS stable ====================
 
 
-df = dataframe(grid(S=3:50, M=1:50, p_r = 0:.2:1)) do (;S, M, p_r)
-# df = dataframe(grid(S=[10, 20], M=[40, 80], p_r = 0:.01:1)) do (;S, M, p_r)
-    find_stable_points(;S, M, p_r)
+df = dataframe(grid(S=3:50, D=1:50, p_r = 0:.2:1)) do (;S, D, p_r)
+# df = dataframe(grid(S=[10, 20], D=[40, 80], p_r = 0:.01:1)) do (;S, D, p_r)
+    find_stable_points(;S, D, p_r)
 end
 
 @rput df
@@ -270,7 +318,7 @@ end
 R"""
 df %>%
     replace_na(list(start=1)) %>%
-    ggplot(aes(M, S, fill=start)) +
+    ggplot(aes(D, S, fill=start)) +
     rasterise(geom_tile(), dpi=DPI) +
     coord_fixed(expand=F) +
     no_gridlines +
@@ -283,7 +331,7 @@ fig(w=8, h=4)
 R"""
 df %>%
     replace_na(list(stop=0)) %>%
-    ggplot(aes(M, S, fill=stop)) +
+    ggplot(aes(D, S, fill=stop)) +
     rasterise(geom_tile(), dpi=DPI) +
     coord_fixed(expand=F) +
     no_gridlines +
@@ -295,8 +343,8 @@ fig(w=8, h=4)
 
 # %% --------
 
-df = dataframe(grid(p0=0:.01:1, S=10, M=1:100)) do (;p0, S, M)
-    env = RedBlackEnv(;S, M, p_r=0.)
+df = dataframe(grid(p0=0:.01:1, S=10, D=1:100)) do (;p0, S, D)
+    env = RedBlackEnv(;S, D, p_r=0.)
     (;p0, p1=transition(env, p0))
 end |> DataFrame
 @rput df
@@ -308,8 +356,8 @@ df %>%
         # logdelta = if_else(delta == 0, 0, sign(delta) * log(abs(delta)))
         logdelta = sign(delta) * abs(delta) ^ (1/3)
     ) %>%
-    # ggplot(aes(M, p0, fill=2*(delta > 0) - 1)) +
-    ggplot(aes(p0, M, fill=logdelta)) +
+    # ggplot(aes(D, p0, fill=2*(delta > 0) - 1)) +
+    ggplot(aes(p0, D, fill=logdelta)) +
     geom_tile() +
     scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=1.5) + no_legend
 
@@ -328,7 +376,7 @@ fig()
 R"""
 human = tdf %>%
     filter(start != 5, goal != 5) %>%
-    group_by(M, population, generation) %>%
+    group_by(D, population, generation) %>%
     summarise(compositionality = mean(path_length == 2)) %>%
     mutate(agent = "human")
 
@@ -340,7 +388,7 @@ sim %>%
     geom_line(linewidth=.5, color=RED, alpha=.3) +
     # geom_line(linewidth=.5, color="#BA1109", alpha=0.5) +
     geom_line(data=human) +
-    facet_wrap(~M, labeller=label_glue("{M} Demos"), scales="free_y") +
+    facet_wrap(~D, labeller=label_glue("{D} Demos"), scales="free_y") +
     xbreaks() + ybreaks() +
     expand_limits(y=1.)
 

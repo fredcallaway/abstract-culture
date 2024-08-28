@@ -1,19 +1,13 @@
-@everywhere include("red_black.jl")
-@everywhere using NamedTupleTools
-include("r.jl")
-using Optim
-
-
 function run_sim_infinite(;n_gen=30,
                  init=NaN,
                  p_0 = 1e-6,
                  p_brr = 0.,
                  p_r = 0.,
                  S = 10,
-                 M = 25
+                 D = 25
                  )
 
-    g = grid(; p_0, p_brr, p_r, S, M, init)
+    g = grid(; p_0, p_brr, p_r, S, D, init)
     df = dataframe(g) do prm
 
         env = RedBlackEnv(;delete(prm, :init)...)
@@ -34,45 +28,10 @@ advantage_heat = list(
 )
 """
 
-# %% ==================== evolution ====================
+# %% ==================== first plto ====================
 
 
-
-
-# %% --------
-
-
-# run_sim_infinite(p_0=[1e-6], p_brr = [0.], p_r = [1])
-
-run_sim_infinite(S=10, M=300, p_0=.01)
-
-R"""
-df %>%
-    ggplot(aes(gen, compositionality)) +
-    geom_line(color=RED) + expand_limits(y=0)
-
-fig("basic_single")
-"""
-
-# %% --------
-
-
-run_sim_infinite(S=10, M=[5, 20, 200])
-
-R"""
-df %>%
-    ggplot(aes(gen, compositionality)) +
-    facet_wrap(~M) +
-    geom_line(color=RED) +
-    facet_wrap(~M, labeller=label_glue("{M} demos"))
-
-fig("basic_varyM", w=6)
-"""
-
-
-# %% --------
-
-run_sim_infinite(S=10, M=[40, 80, 160], init=[.04, .1])
+run_sim_infinite(S=10, D=[40, 80, 160], init=[.04, .1])
 
 R"""
 df %>%
@@ -83,34 +42,37 @@ df %>%
     ), aesthetics=c("fill", "colour"), name="") +
     no_legend +
     geom_point(data=filter(df, gen == 0)) +
-    facet_wrap(~M, labeller=label_glue("{M} demos"))
+    facet_wrap(~D, labeller=label_glue("{D} demos"))
 
-fig("basic_varyMinit", w=6)
+fig("evolution_Dx", w=6)
 """
 
 # %% --------
 
-run_sim_infinite(S = 20 .* [1, 2], M = 50 .* [1, 2, 4, 8, 16], init=[.01, .1], n_gen=20)
+run_sim_infinite(S = [10, 20, 40], D = 50 .* [1, 2, 4, 8, 16], init=[.01, .1, .99], n_gen=100)
 
 R"""
+df = df %>% mutate(gen = gen+1)
 df %>%
     ggplot(aes(gen, compositionality, color=factor(init))) +
     geom_line() + expand_limits(y=c(0, 1)) +
     scale_colour_manual(values=c(
-        PINK, RED
+        PINK, RED, "#AE0036"
     ), aesthetics=c("fill", "colour"), name="") +
     no_legend +
-    geom_point(data=filter(df, gen == 0)) +
-    facet_grid(S~M) +
-    ybreaks(3) + xbreaks(3) + no_gridlines
+    geom_point(data=filter(df, gen == 1)) +
+    facet_grid(S~D) +
+    ybreaks(3) + xbreaks(3) + no_gridlines +
+    scale_x_continuous(trans="log10")
+    theme()
 
-fig("basic_varyMSinit", w=6, h=2.8)
+fig("evolution_DSx", w=6, h=3.5)
 """
 
 # %% --------
 
 
-run_sim_infinite(S = 10 .* [1, 2, 4], M = 60 .* [1, 2, 4, 8], init=0.05)
+run_sim_infinite(S = 10 .* [1, 2, 4], D = 60 .* [1, 2, 4, 8], init=0.05)
 
 R"""
 df %>%
@@ -118,15 +80,15 @@ df %>%
     geom_line(color=RED) + expand_limits(y=c(0, 1)) +
     no_legend +
     # geom_point(data=filter(df, gen == 0), color=RED) +
-    facet_grid(S~M)
+    facet_grid(S~D)
 
 fig("basic_varyMS", w=6, h=4)
 """
 
 # %% ==================== separate panels ====================
 
-S = 10; M = 100; init = .05
-run_sim_infinite(;S = 5 .* [1, 2, 3, 4], M, init)
+S = 10; D = 100; init = .05
+run_sim_infinite(;S = 5 .* [1, 2, 3, 4], D, init)
 
 R"""
 plot_panel = function(df, var) {
@@ -143,10 +105,10 @@ fig()
 
 # %% --------
 
-run_sim_infinite(;S, M=50 .* [1,2,3,4], init)
+run_sim_infinite(;S, D=50 .* [1,2,3,4], init)
 
 R"""
-plot_panel(df, M) + scale_color_discrete_sequential(palette = "TealGrn", l1=40, l2=80, c2=40)
+plot_panel(df, D) + scale_color_discrete_sequential(palette = "TealGrn", l1=40, l2=80, c2=40)
 fig()
 """
 
@@ -155,8 +117,8 @@ fig()
 
 # %% ==================== limits ====================
 
-asymptotic = dataframe(grid(M=1:1:100, S=1:100)) do (;M, S)
-    env = RedBlackEnv(;M, S, p_0=1e-8, p_r=1, p_brr=0.)
+asymptotic = dataframe(grid(D=1:1:100, S=1:100)) do (;D, S)
+    env = RedBlackEnv(;D, S, p_0=1e-8, p_r=1, p_brr=0.)
     compositional, gen = get_limit(env; max_gen=1000)
     [(;gen, compositional)]
 end
@@ -164,7 +126,7 @@ end
 
 R"""
 asymptotic %>%
-    ggplot(aes(M, S, fill=compositional)) +
+    ggplot(aes(D, S, fill=compositional)) +
     advantage_heat +
     scale_fill_continuous_sequential(h1=350, h2=NA, c1=180, l1=20, l2=95, p1=1, p2=1.5,
         name="Asymptotic Compositionality", labels=scales::percent_format())
@@ -178,15 +140,15 @@ fig("asymptotic", w=4)
 # %% ==================== SM ====================
 
 
-run_sim_infinite(S=[4, 20], M=[10, 30]; n_gen=30)
+run_sim_infinite(S=[4, 20], D=[10, 30]; n_gen=30)
 
 R"""
 df %>%
     mutate(S = fct_rev(factor(S))) %>%
-    rename(D = M) %>%
+    rename(D = D) %>%
     ggplot(aes(gen, compositional)) +
     geom_line(color=RED) +
-    # facet_grid(S ~ M, labeller=label_value) +
+    # facet_grid(S ~ D, labeller=label_value) +
     facet_grid(S ~ D) +
     no_legend +
     # coord_cartesian(xlim=c(-1, 31), ylim=c(-.1, 1.1)) +
@@ -219,8 +181,8 @@ do_plot = function(...) {
         )
 }
 
-(do_plot(M==10, S==20) | do_plot(M==30, S==20)) /
-(do_plot(M==10, S==4) | do_plot(M==30, S==4))
+(do_plot(D==10, S==20) | do_plot(D==30, S==20)) /
+(do_plot(D==10, S==4) | do_plot(D==30, S==4))
 
 fig("SM2")
 """

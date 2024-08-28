@@ -4,12 +4,12 @@ include("utils.jl")
 # include("find_compositions.jl")
 
 ¬(p::Real) = 1 - p
-prob_observe(p, M) = ¬((¬p) ^ M)
+prob_observe(p, k) = ¬((¬p) ^ k)
 
 
 @kwdef struct RedBlackEnv
     S::Int = 5  # number of starts and goals
-    M::Int = 5  # number of models
+    D::Int = 5  # number of demonstrations
     K::Int = 1  # number of tasks per agent
     ε::Float64 = 0. # lapse rate
     N::Real = Inf # population size
@@ -112,13 +112,13 @@ function behave(env, tasks, observed)
 end
 
 function transition(env::RedBlackEnv, pop::Matrix{Behavior})
-    (;S, M, K, N, replace_tasks, replace_demos) = env
+    (;S, D, K, N, replace_tasks, replace_demos) = env
     @assert N == size(pop, 2)
 
     pop1 = similar(pop)
 
     for agent in 1:N
-        observed = M == -1 ? pop : sample(pop, M; replace=replace_demos)
+        observed = D == -1 ? pop : sample(pop, D; replace=replace_demos)
         tasks = sample(allntasks(env), K; replace=replace_tasks)
         pop1[:, agent] = behave(env, tasks, observed)
     end
@@ -139,7 +139,7 @@ function prob_learn_red(env, b, r)
 end
 
 function transition(env::RedBlackEnv, p_red::Float64)
-    (;S, M, K) = env
+    (;S, D, K) = env
     @assert K == 1
     # @assert all(T .≈ 1 / length(T))
 
@@ -147,10 +147,10 @@ function transition(env::RedBlackEnv, p_red::Float64)
     if isnan(p_red)
         env.p_0
     else
-        b = prob_observe(¬p_red / (S^2), M)
+        b = prob_observe(¬p_red / (S^2), D)
         # prob observe the right bottom/top red edge (not both)
-        # these are independent events because you observe M bottom and M top
-        r = prob_observe(p_red / S, M)
+        # these are independent events because you observe D bottom and D top
+        r = prob_observe(p_red / S, D)
 
         prob_learn_red(env, b, r)
     end
@@ -196,6 +196,10 @@ function find_stable_points(;params...)
             @assert transition(env, .99999) > .99999
             return (;start=0., stop=1.)
         end
+    end
+
+    if length(stable) == 2 && transition(env, .99999) > .99999
+        return (start=stable[2], stop=1.)
     end
 
     start = findfirst(stable) do x
