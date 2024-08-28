@@ -104,9 +104,9 @@ fig("x_dx", w=2.9)
 
 
 # %% ==================== bottleneck ====================
+include("red_black.jl")
 
-
-SS = 100
+SS = 20
 d100 = dataframe(grid(S=SS)) do (;S)
     map([1:10S; 10S:S:1000S]) do D
         (;D, find_stable_points(;S, D)...)
@@ -116,12 +116,13 @@ end
 
 R"""
 
-factor(c(1,2,3), )
-
 plot_zones = function(SS) {
     zone_data = tibble(
-        xmin=c(0, 2.5, 10, SS, 5*SS),
-     ) %>% mutate(xmax = lead(xmin, default=Inf), zone=factor(row_number()))
+        xmin=SS * c(0, 2.5, 10, SS, 5*SS),
+     ) %>% mutate(
+        xmax = lead(xmin, default=Inf),
+        zone=factor(row_number())
+    )
     text_data = tibble(
         x=c(1.6, 25, 5*SS),
         name=c("too narrow", "just right", "too wide"),
@@ -132,31 +133,29 @@ plot_zones = function(SS) {
             mapping=aes(xmin=xmin, xmax=xmax, fill=zone, x=NULL, y=NULL, color=NULL, group=NULL),
             ymin=-Inf, ymax=Inf, alpha=.3,
         ),
-        geom_text(data=text_data, mapping=aes(x=x, label=name, color=zone), y=1.12, hjust=0.5, nudge_x=.1),
+        # geom_text(data=text_data, mapping=aes(x=x, label=name, color=zone), y=1.12, hjust=0.5, nudge_x=.1),
         coord_cartesian(expand=T, xlim=c(1, 1000), ylim=c(0, 1), clip='off'),
         scale_fill_manual(values=c(TEAL, "#94DCE6", RED, "#94DCE6", TEAL)),
-        scale_color_manual(values=c(TEAL, RED, TEAL)),
         theme(plot.margin=margin(t=15, l=5, r=5, b=5)),
-        no_gridlines,
-        # scale_fill_manual(values=c(TEAL, GRAY, RED, GRAY, TEAL)),
-        no_legend
+        no_gridlines
     )
 }
 
 
 plot_bottle = d100 %>%
-    # filter(D > S) %>%
     pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
-    ggplot(aes(D/S, value)) +
+    ggplot(aes(D, value)) +
     plot_zones(SS) +
     geom_line(linewidth=1.5, mapping=aes(group=name)) +
     geom_line(linewidth=.7, mapping=aes(color=name)) +
     scale_x_log10() +
-    labs(y="Compositionality", x="Bottleneck Size (D/S)") +
+    labs(y="Compositionality", x="Demonstrations") +
     scale_colour_manual(values=c(
         start="white", stop=RED,
         `1`=TEAL, `2`=RED, `3`=TEAL
-    ), aesthetics=c("colour"), name="")
+    ), aesthetics=c("colour"), name="") +
+    no_legend +
+    coord_cartesian(expand=T, xlim=c(SS, 10 * SS**2), ylim=c(0, 1)) +
     # coord_cartesian(xlim=c(NULL), ylim=c(0, .01)) +
     theme()
 
@@ -164,23 +163,27 @@ fig("bottleneck")
 """
 
 # %% --------
-
-
-fixed_grid = dataframe(grid(S=10:40, D=10:10:5000)) do (;S, D)
+# D = unique(round.(logscale.(0:.01:1, 1, 10000)))
+D=10:10:5000
+# D = 2 .^ (0:15)
+fixed_grid = dataframe(grid(;S=10:40, D)) do (;S, D)
     find_stable_points(;S, D)
 end
 @rput fixed_grid
 
 R"""
 fixed_grid %>%
+    replace_na(list(stop = 0)) %>%
     ggplot(aes(D, S, fill=stop)) +
     geom_tile() +
+    # scale_x_continuous(trans="log2") +
     # scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=2, mid=0.5, rev=F) +
     scale_fill_continuous_sequential(h1=350, h2=NA, c1=180, l1=20, l2=95, p1=1, p2=1.5,
-            name="Asymptotic Compositionality", labels=scales::percent_format()) +
-    no_gridlines
+            name="Asymptotic Compositionality", labels=scales::percent_format(), limits=c(0, 1)) +
+    no_gridlines +
+    theme()
 
-fig()
+fig(w=4)
 """
 
 # %% --------
