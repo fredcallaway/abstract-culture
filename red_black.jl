@@ -187,37 +187,51 @@ function find_stable_points(;params...)
     stable = find_zeros(0, 1) do x
         transition(env, x) - x
     end
-    @assert stable[1] == 0.
 
-    if length(stable) == 1
-        if transition(env, .5) < .5
-            return (;start=NaN, stop=NaN)
-        else
-            @assert transition(env, .99999) > .99999
-            return (;start=0., stop=1.)
-        end
-    end
+    # if length(stable) == 1
+    #     if transition(env, .5) < .5
+    #         return (;start=NaN, stop=NaN)
+    #     else
 
-    if length(stable) == 2 && transition(env, .99999) > .99999
-        return (start=stable[2], stop=1.)
-    end
+    #         @infiltrate transition(env, .99999) > .99999
 
-    start = findfirst(stable) do x
+    #         return (;start=0., stop=1.)
+    #     end
+    # end
+
+    # if length(stable) == 2 && transition(env, .99999) > .99999
+    #     return (start=stable[2], stop=1.)
+    # end
+
+    i = findfirst(stable) do x
         x ≈ 1 && return false
         x += 1e-8
         transition(env, x) > x
     end
 
-    stop = findlast(stable) do x
+    start = if isnothing(i)
+        if transition(env, 0.) > 0
+            0.
+        else
+            NaN
+        end
+    else
+        stable[i]
+    end
+
+    i = findlast(stable) do x
         x ≈ 0 && return false
-        x -= 1e-8
-        transition(env, x) > x
+        transition(env, x - 1e-8) > x - 1e-8 && transition(env, x + 1e-8)  < x + 1e-8
     end
 
-    map((;start, stop)) do x
-        isnothing(x) ? NaN : stable[x]
+    stop = if isnothing(i)
+        NaN
+    else
+        stable[i]
     end
 
+    (;start, stop)
+    
     # if length(stable) == 1
     #     stable
     #     if transition(env, .5) < .5
