@@ -30,6 +30,12 @@ RED = "#E62A65"
 PINK = "#ECA2CB"
 TEAL = "#07A9C0"
 
+advantage_heat = list(
+    rasterise(geom_tile(), dpi=500),
+    no_gridlines
+    # coord_fixed(expand=F)
+)
+
 cpal = scale_colour_manual(values=c(
     idiosyncratic=TEAL,
     compositional=RED,

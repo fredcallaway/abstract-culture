@@ -20,15 +20,53 @@ function run_sim_infinite(;n_gen=30,
     df
 end
 
+# %% ==================== first plot ====================
+
+
+
+env = RedBlackEnv(S=5, D=1000, p_r=.5, p_brr=.5, p_0=1e-6)
+find_stable_points(S=5, D=10, p_r=.5, p_brr=.5, p_0=0.)
+
+# %% --------
+
+run_sim_infinite(S = [5, 10], D = 2 .* 5 .^ (0:4), p_0=1e-4, p_r=.5, p_brr=.5)
+# run_sim_infinite(S = [20, 30], D = 100 .* [1, 4, 16], p_0=.01)
+
+# run_sim_infinite(S = [20, 40], D = 200 .* [1, 2, 3, 4, 8, 16], init=.01)
+# run_sim_infinite(S = [20, 30], D = 100 .* [3, 4, 5, 6, 7], init=.01)
+
 R"""
-advantage_heat = list(
-    rasterise(geom_tile(), dpi=500),
-    no_gridlines,
-    coord_fixed(expand=F)
-)
+df %>%
+    ggplot(aes(gen, compositionality)) +
+    geom_line(color=RED) + expand_limits(y=c(0, 1)) +
+    no_legend +
+    # geom_point(data=filter(df, gen == 0), color=RED) +
+    facet_grid(S~D) +
+    gridlines +
+    theme()
+
+fig("evolution_DS", w=7, h=3)
 """
 
-# %% ==================== first plto ====================
+# %% --------
+
+run_sim_infinite(S = 5, D = 1:100, p_0=0:.01:1)
+
+# %% --------
+
+R"""
+# df %>% filter(gen==30) %>% ggplot(aes(D, compositionality)) + geom_line()
+df %>% filter(gen==30) %>%
+    ggplot(aes(D, p_0, fill=compositionality)) +
+    advantage_heat
+fig()
+"""
+
+
+
+
+# %% --------
+
 
 
 run_sim_infinite(S=10, D=[40, 80, 160], init=[.04, .1])
@@ -71,19 +109,6 @@ fig("evolution_DSx", w=6, h=3.5)
 
 # %% --------
 
-
-run_sim_infinite(S = 10 .* [1, 2, 4], D = 60 .* [1, 2, 4, 8], init=0.05)
-
-R"""
-df %>%
-    ggplot(aes(gen, compositionality)) +
-    geom_line(color=RED) + expand_limits(y=c(0, 1)) +
-    no_legend +
-    # geom_point(data=filter(df, gen == 0), color=RED) +
-    facet_grid(S~D)
-
-fig("basic_varyMS", w=6, h=4)
-"""
 
 # %% ==================== separate panels ====================
 

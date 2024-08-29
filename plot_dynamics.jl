@@ -164,9 +164,9 @@ fig("bottleneck")
 
 # %% --------
 # D = unique(round.(logscale.(0:.01:1, 1, 10000)))
-D=10:10:5000
+D=1:100
 # D = 2 .^ (0:15)
-fixed_grid = dataframe(grid(;S=10:40, D)) do (;S, D)
+fixed_grid = dataframe(grid(;S=1:10, D)) do (;S, D)
     find_stable_points(;S, D)
 end
 @rput fixed_grid
@@ -174,7 +174,7 @@ end
 R"""
 fixed_grid %>%
     replace_na(list(stop = 0)) %>%
-    ggplot(aes(D, S, fill=stop)) +
+    ggplot(aes(D, S, fill=(start < .01) * stop)) +
     geom_tile() +
     # scale_x_continuous(trans="log2") +
     # scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=2, mid=0.5, rev=F) +
