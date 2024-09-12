@@ -1,7 +1,7 @@
 using Roots
 using Memoize
 include("utils.jl")
-# include("find_compositions.jl")
+include("find_compositions.jl")
 
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
@@ -42,11 +42,27 @@ function red_rate(pop::AbstractArray{<:Behavior})
     mean(get.(pop, :red))
 end
 
-function initial_population(env::RedBlackEnv)
+function initial_population(env::RedBlackEnv, init::Nothing=nothing)
     if isinf(env.N)
         NaN
     else
         [Behavior(0, 0, false) for _ in 1:env.K, _ in 1:env.N]
+    end
+end
+
+function initial_population(env::RedBlackEnv, init::Float64)
+    (;S, N, K) = env
+    if isinf(N)
+        init
+    else
+        compositional = falses(N * K)
+        for i in sample(eachindex(compositional), Int(init * N * K); replace=false)
+            compositional[i] = true
+        end
+        X = map(compositional) do red
+            Behavior(rand(1:S), rand(S+1:2S), red)
+        end
+        reshape(X, (K, N))
     end
 end
 
@@ -91,7 +107,7 @@ function behave(env, tasks, observed)
     for b in observed
         learn!(knowledege, b)
     end
-    if env.foresight
+    if env.foresight && env.K > 2
         # note: this modifies knowledege
         find_compositions!(env, tasks)
     end
@@ -119,7 +135,7 @@ function transition(env::RedBlackEnv, pop::Matrix{Behavior})
 
     for agent in 1:N
         observed = D == -1 ? pop : sample(pop, D; replace=replace_demos)
-        tasks = sample(allntasks(env), K; replace=replace_tasks)
+        tasks = sample(all_tasks(env), K; replace=replace_tasks)
         pop1[:, agent] = behave(env, tasks, observed)
     end
     pop1
@@ -147,43 +163,44 @@ function transition(env::RedBlackEnv, p_red::Float64)
     if isnan(p_red)
         env.p_0
     else
-        b = prob_observe(¬p_red / (S^2), D)
-        # prob observe the right bottom/top red edge (not both)
-        # these are independent events because you observe D bottom and D top
-        r = prob_observe(p_red / S, D)
-
-        prob_learn_red(env, b, r)
+        @assert -1e-4 < p_red < 1 + 1e-4
+        p_red = clip(p_red, 0, 1)
+        expectation(Binomial(D, p_red)) do n_comp_demo
+            b = prob_observe(1 / (S^2), D - n_comp_demo)
+            r = prob_observe(1 / S, n_comp_demo)
+            prob_learn_red(env, b, r)
+        end
     end
 end
 
-function simulate(env::RedBlackEnv, n_gen; init=initial_population(env))
-    x = zeros(n_gen+1)
-    x[1] = init
+function simulate(env::RedBlackEnv, n_gen; init=nothing)
+    pop = initial_population(env, init)
+    x = fill(pop, n_gen+1)
     for i in 1:n_gen
         x[i+1] = transition(env, x[i])
     end
     x
 end
 
-function get_limit(env::RedBlackEnv; init=initial_population(env), max_gen=100000)
-    pop = init
-    @assert env.N == Inf
-    for gen in 0:max_gen
-        pop′ = transition(env, pop)
-        if pop′ ≈ pop
-            return (pop, gen)
-        elseif gen == max_gen && abs(pop′ - pop) < 1e-3
-            return (pop, gen)
-        end
-        pop = pop′
-    end
-    @warn "hit max_gen"
-    missing, missing
-end
+# function get_limit(env::RedBlackEnv; init=initial_population(env), max_gen=100000)
+#     @assert false
+#     pop = init
+#     @assert env.N == Inf
+#     for gen in 0:max_gen
+#         pop′ = transition(env, pop)
+#         if pop′ ≈ pop
+#             return (pop, gen)
+#         elseif gen == max_gen && abs(pop′ - pop) < 1e-3
+#             return (pop, gen)
+#         end
+#         pop = pop′
+#     end
+#     @warn "hit max_gen"
+#     missing, missing
+# end
 
 
-function find_stable_points(;params...)
-    env = RedBlackEnv(;params...)
+function find_stable_points(env::RedBlackEnv)
     stable = find_zeros(0, 1) do x
         transition(env, x) - x
     end
@@ -261,3 +278,4 @@ function find_stable_points(;params...)
     #     @assert false
     # end
 end
+find_stable_points(;params...) = find_stable_points(RedBlackEnv(;params...))

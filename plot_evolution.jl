@@ -22,14 +22,7 @@ end
 
 # %% ==================== first plot ====================
 
-
-
-env = RedBlackEnv(S=5, D=1000, p_r=.5, p_brr=.5, p_0=1e-6)
-find_stable_points(S=5, D=10, p_r=.5, p_brr=.5, p_0=0.)
-
-# %% --------
-
-run_sim_infinite(S = [5, 10], D = 2 .* 5 .^ (0:4), p_0=1e-4, p_r=.5, p_brr=.5)
+run_sim_infinite(S = [5, 10], D = 1 .* 3 .^ (1:5), p_r=.5, p_brr=0.5, init=.01)
 # run_sim_infinite(S = [20, 30], D = 100 .* [1, 4, 16], p_0=.01)
 
 # run_sim_infinite(S = [20, 40], D = 200 .* [1, 2, 3, 4, 8, 16], init=.01)
@@ -45,28 +38,46 @@ df %>%
     gridlines +
     theme()
 
-fig("evolution_DS", w=7, h=3)
+fig("evolution_DS-random", w=7, h=3)
 """
 
 # %% --------
 
-run_sim_infinite(S = 5, D = 1:100, p_0=0:.01:1)
 
-# %% --------
+run_sim_infinite(S = [5, 10], D = 1 .* 3 .^ (1:5), p_r=1., p_brr=0., init=.01)
 
 R"""
-# df %>% filter(gen==30) %>% ggplot(aes(D, compositionality)) + geom_line()
-df %>% filter(gen==30) %>%
-    ggplot(aes(D, p_0, fill=compositionality)) +
-    advantage_heat
-fig()
+df %>%
+    ggplot(aes(gen, compositionality)) +
+    geom_line(color=RED) + expand_limits(y=c(0, 1)) +
+    no_legend +
+    # geom_point(data=filter(df, gen == 0), color=RED) +
+    facet_grid(S~D) +
+    gridlines +
+    theme()
+
+fig("evolution_DS-partial", w=7, h=3)
 """
-
-
-
 
 # %% --------
 
+
+run_sim_infinite(S = [20, 40], D = 200 .* [1, 2, 4, 8, 16], init=.01)
+
+R"""
+df %>%
+    ggplot(aes(gen, compositionality)) +
+    geom_line(color=RED) + expand_limits(y=c(0, 1)) +
+    no_legend +
+    # geom_point(data=filter(df, gen == 0), color=RED) +
+    facet_grid(S~D) +
+    gridlines +
+    theme()
+
+fig("evolution_DS-strict", w=7, h=3)
+"""
+
+# %% --------
 
 
 run_sim_infinite(S=10, D=[40, 80, 160], init=[.04, .1])

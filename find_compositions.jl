@@ -1,5 +1,5 @@
 using Graphs
-using MetaGraphs
+# using MetaGraphs
 
 function has_two_neighbors(graph, keep, i)
     n = 0
@@ -11,7 +11,7 @@ function has_two_neighbors(graph, keep, i)
 end
 
 function find_compositions!(env, tasks)
-    K = env.K  # this is the agent's knowledge (stored in env to avoid allocations)
+    knowledge = env.knowledege  # this is the agent's knowledge (stored in env to avoid allocations)
 
     # the algorithm assumes all of this for now
     # @assert env.p_r == 0
@@ -19,9 +19,9 @@ function find_compositions!(env, tasks)
     # @assert env.p_brr == 0
 
     # build task graph
-    graph = Graph(2env.n)
+    graph = Graph(2env.S)
     for (s, g) in tasks
-        if !black_known(K, s, g)
+        if !black_known(knowledge, s, g)
             # we need to learn this task
             add_edge!(graph, s, g)
         end
@@ -32,7 +32,7 @@ function find_compositions!(env, tasks)
     # don't learn red nodes that participate in less than two solutions
     @label top
     for i in vertices(graph)
-        if keep[i] && !red_known(K, i) && !has_two_neighbors(graph, keep, i)
+        if keep[i] && !red_known(knowledge, i) && !has_two_neighbors(graph, keep, i)
             keep[i] = false
             @goto top
         end
@@ -45,7 +45,7 @@ function find_compositions!(env, tasks)
         #     red_known(graph, i) || n_unknown_black(graph, i) > 2
         # end
         savings = sum(comp) do i
-            degree(graph, i) / 2 - !red_known(K, vmap[i])
+            degree(graph, i) / 2 - !red_known(knowledge, vmap[i])
         end
 
         keep_comp = savings == 0 ? rand(Bernoulli(env.p_r)) : savings > 0
@@ -58,7 +58,7 @@ function find_compositions!(env, tasks)
 
     for i in eachindex(keep)
         if keep[i]
-            learn_red!(K, i)
+            learn_red!(knowledge, i)
         end
     end
 end

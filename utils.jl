@@ -29,6 +29,12 @@ function expectation(f::Function, d::Distribution; lo=quantile(d, TOL), hi=quant
     end
 end
 
+function expectation(f::Function, d::DiscreteDistribution; lo=minimum(d), hi=maximum(d))
+    sum(support(d)) do x
+        pdf(d, x) * f(x)
+    end
+end
+
 "Expected maximum of N samples from a Normal distribution"
 function expected_maximum(k::Real, d::Normal)
     mcdf(x) = cdf(d, x)^k

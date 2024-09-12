@@ -30,12 +30,6 @@ RED = "#E62A65"
 PINK = "#ECA2CB"
 TEAL = "#07A9C0"
 
-advantage_heat = list(
-    rasterise(geom_tile(), dpi=500),
-    no_gridlines
-    # coord_fixed(expand=F)
-)
-
 cpal = scale_colour_manual(values=c(
     idiosyncratic=TEAL,
     compositional=RED,
@@ -410,6 +404,10 @@ mean_line = function(min_n=2, ...) {
     stat_summary(fun=robust(mean, min_n), geom="line", ...)
 }
 
+agg_line = function(f, min_n=2, ...) {
+    stat_summary(fun=robust(f, min_n), geom="line", ...)
+}
+
 point_bin = function(bins, min_n=2, ...) {
     stat_summary_bin(fun.data=robust(mean_cl_boot, min_n), bins=bins, ...)
 }
@@ -421,8 +419,6 @@ gam_fit_ind = function(k=-1, ...) geom_line(
     stat="smooth", mapping = aes(group=pid), alpha = 0.5, linewidth=.1,
     method = "gam", formula = y ~ s(x, bs = "cs", k=k), se=F
 )
-
-
 
 point_line_bin = function(bins, min_n=2, ...) {
     list(
@@ -496,6 +492,13 @@ no_axes = theme(
     panel.grid.major.y=element_blank(),
     panel.grid.minor.y=element_blank()
 )
+
+heatmap = function(..., dpi=500) list(
+    rasterise(geom_tile(...), dpi=dpi),
+    no_gridlines,
+    coord_cartesian(expand=F)
+)
+
 
 stat_mean_and_quantiles = function(rng=.9, ...) {
     q = (1 - rng) / 2

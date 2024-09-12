@@ -29,6 +29,7 @@ function individual_costs(;S, K, γ=1.)
     )
 end
 
+individual_costs(S=30, K=50)
 
 individual_costs(x::NamedTuple) = individual_costs(;x...)
 
@@ -63,6 +64,7 @@ fig("indi_cost", h=2, w=2.5)
 """
 
 # %% ==================== new cost ====================
+
 function expected_unique_nodes(;S, K)
     env = RedBlackEnv(;S, K)
     tasks = all_tasks(env)

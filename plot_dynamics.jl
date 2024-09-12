@@ -10,27 +10,65 @@ FIGS_PATH = "~/papers/cultural-abstractions/figs/"
 MAKE_PDF = TRUE
 """
 
-# %% ==================== one-step ====================
-
-$1 - (1 - 1/S)^D$
-$1 - \left(1-\frac{x_t}{S}\right)^D$
-
-S = 10; D = 20; x = .2
-prob_observe(x / S, D)
-
 
 # %% ==================== fixed points ====================
 
-find_stable_points(;S=10, D=100)
+# name = "strict"; S = 20; D = 60; p_r=0.; p_brr=0.
+# name = "random"; S = 20; D = 30; p_r=.5; p_brr=.5
+name = "partial"; S = 20; D = 20; p_r=1.; p_brr=0.
 
-curve = dataframe(grid(p0=0:.001:1, S=20, D=60)) do (;p0, S, D)
-    env = RedBlackEnv(;S, D, p_r=0)
+@rput name
+
+# p_r=0.; p_brr=0.
+curve = dataframe(grid(;p0=0:.001:1, S, D)) do (;p0, S, D)
+    env = RedBlackEnv(;S, D, p_r, p_brr)
     (;p0, p1=transition(env, p0))
 end |> DataFrame
 @rput curve
 
-stable = find_stable_points(;S=20, D=60)
+stable = find_stable_points(;S, D, p_r, p_brr)
 @rput stable
+
+
+R"""
+D = curve %>%
+mutate(
+        delta=p1 - p0,
+        segment = pmax(1, cumsum(replace_na(sign(delta) - lag(sign(delta)) != 0, FALSE))),
+        attractor = factor(segment, labels=c("compositional", "compositional"))
+    ) %>%
+    group_by(segment) %>%
+    mutate(direction = sign(last(delta)))
+
+
+plot_ = ggplot(D) +
+    geom_hline(yintercept=0, linetype="solid", color=GRAY) +
+    geom_line(mapping=aes(p0, delta), linewidth=.5) +
+    # annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
+    # annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .25, fill=RED) +
+    lapply(split(D, D$segment), function(df)
+      geom_line(data = df, aes(p0, 0, color = attractor),
+                size=.8,
+                arrow = arrow(
+                     length = unit(.1, "in"), type = 'open',
+                     ends = if (first(df$direction) < 0) 'first' else 'last',
+                ))
+    ) +
+    geom_point(x=0, y=0, shape=21, size=2, fill=TEAL) +
+    geom_point(x=stable$start, y=0, shape=21, size=2, fill="white") +
+    geom_point(x=stable$stop, y=0, shape=21, size=2, fill=RED) +
+    no_gridlines +
+    # coord_fixed(expand=T) +
+    # labs(x="previous compositionality rate", y="new compositionality rate") +
+    labs(x="compositionality", y="change in compositionality") +
+    cpal + no_legend
+
+fig(glue("x_dx-{name}"), w=2.9)
+"""
+
+# %% --------
+
+
 
 R"""
 D = curve %>%
@@ -66,56 +104,24 @@ fig("prev_new", w=2.9)
 """
 
 
-R"""
-D = curve %>%
-    mutate(
-        delta=p1 - p0,
-        segment = pmax(1, cumsum(replace_na(sign(delta) - lag(sign(delta)) != 0, FALSE))),
-        attractor = factor(segment, labels=c("idiosyncratic", "compositional", "compositional"))
-    ) %>%
-    group_by(segment) %>%
-    mutate(direction = sign(last(delta)))
-
-plot_ = ggplot(D) +
-    geom_hline(yintercept=0, linetype="solid", color=GRAY) +
-    geom_line(mapping=aes(p0, delta), linewidth=.5) +
-    # annotate("rect", xmin = 0, xmax = stable$start, ymin = -Inf, ymax = Inf, alpha = .3, fill=TEAL) +
-    # annotate("rect", xmin = stable$start, xmax = 1, ymin = -Inf, ymax = Inf, alpha = .25, fill=RED) +
-    lapply(split(D, D$segment), function(df)
-      geom_line(data = df, aes(p0, 0, color = attractor),
-                size=.8,
-                arrow = arrow(
-                     length = unit(.1, "in"), type = 'open',
-                     ends = if (first(df$direction) < 0) 'first' else 'last',
-                ))
-    ) +
-    geom_point(x=0, y=0, shape=21, size=2, fill=TEAL) +
-    geom_point(x=stable$start, y=0, shape=21, size=2, fill="white") +
-    geom_point(x=stable$stop, y=0, shape=21, size=2, fill=RED) +
-    no_gridlines +
-    # coord_fixed(expand=T) +
-    # labs(x="previous compositionality rate", y="new compositionality rate") +
-    labs(x="compositionality", y="change in compositionality") +
-    cpal + no_legend
-
-fig("x_dx", w=2.9)
-"""
-
-
 
 # %% ==================== bottleneck ====================
 include("red_black.jl")
 
-SS = 20
+# name = "strict"; SS = 20; p_r=0.; p_brr=0.
+# name = "random"; SS = 10; p_r=.5; p_brr=.5
+name = "partial"; SS = 10; p_r=1.; p_brr=0.
+@rput name
+SS = 10
 d100 = dataframe(grid(S=SS)) do (;S)
-    map([1:10S; 10S:S:1000S]) do D
-        (;D, find_stable_points(;S, D)...)
+    @showprogress map([1:10S; 10S:5S:500S]) do D
+        (;D, find_stable_points(;S, D, p_r, p_brr)...)
     end
 end
 @rput d100 SS
 
-R"""
 
+R"""
 plot_zones = function(SS) {
     zone_data = tibble(
         xmin=SS * c(0, 2.5, 10, SS, 5*SS),
@@ -145,7 +151,7 @@ plot_zones = function(SS) {
 plot_bottle = d100 %>%
     pivot_longer(c(start, stop), names_to="name", values_to="value") %>%
     ggplot(aes(D, value)) +
-    plot_zones(SS) +
+    # plot_zones(SS) +
     geom_line(linewidth=1.5, mapping=aes(group=name)) +
     geom_line(linewidth=.7, mapping=aes(color=name)) +
     scale_x_log10() +
@@ -155,11 +161,11 @@ plot_bottle = d100 %>%
         `1`=TEAL, `2`=RED, `3`=TEAL
     ), aesthetics=c("colour"), name="") +
     no_legend +
-    coord_cartesian(expand=T, xlim=c(SS, 10 * SS**2), ylim=c(0, 1)) +
+    coord_cartesian(expand=T, xlim=c(1, 10 * SS**2), ylim=c(0, 1)) +
     # coord_cartesian(xlim=c(NULL), ylim=c(0, .01)) +
     theme()
 
-fig("bottleneck")
+fig(glue("bottleneck-{name}"))
 """
 
 # %% --------

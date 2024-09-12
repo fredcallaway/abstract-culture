@@ -1,5 +1,5 @@
 include("remote.jl")
-# connect_repl("d64")
+connect_repl("hb120")
 # RemoteREPL._repl_client_connection = nothing
 @remote gethostname()
 

@@ -6,7 +6,7 @@ include("figure.jl")
 using Graphs, MetaGraphs
 
 function task_graph(env, tasks, observed, cnodes)
-    graph = MetaGraph(2env.n)
+    graph = MetaGraph(2env.S)
     for i in vertices(graph)
         set_prop!(graph, i, :label, i)
     end
@@ -34,7 +34,7 @@ end
 
 function plot_task_graph(graph)
     layout = (g) -> map(vertices(g)) do i
-        Point(mod1(i, env.n)/2, div(i-1, env.n))
+        Point(mod1(i, env.S)/2, div(i-1, env.S))
     end
     node_color = map(vertices(graph)) do i
         if has_prop(graph, i, :observed)
@@ -63,40 +63,60 @@ end
 
 # %% --------
 
-env = Environment(k=1, m=10, n=4, ε=0., p_r=1.)
-tasks = [
-    (1, 5),
-    (1, 6),
-    # (1, 8),
-    (2, 5),
-    (2, 6),
-    (2, 7)
-    # (3, 8),
-    # (2, 5),
-    # (3, 6),
-]
-
-observed = [
-    # Behavior(1, 5, false),
-    # Behavior(1, 2, false),
-    # Behavior(3, 4, true),
-]
-
-graph = task_graph(env, tasks, observed, [])
 
 
-# %% --------
-
-K = env.K
-fill!(K, false)
-for b in observed
-    learn!(K, b)
+function parse_tasks(X)
+    @chain begin
+        collect(CartesianIndices(X))
+        filter(i -> X[i] > 0, _)
+        map(i -> i.I, _)
+        map(((a, b),) -> (a, b + size(X, 1)), _)
+    end
 end
 
-find_compositions!(env, tasks)
+function parse_observed(X)
+    res = Behavior[]
+    for idx in CartesianIndices(X)
+        (a, b) = idx.I
+        if X[idx] > 0
+            push!(res, Behavior(a, b+size(X, 1), X[idx] == 2))
+        end
+    end
+    res
+end
+
+assigned_tasks = parse_tasks([
+    1 1 1
+    1 1 1
+    1 1 1
+])
 
 
-graph = task_graph(env, tasks, observed, [red_known(K, i) for i in 1:2env.n])
+observed = parse_observed([
+    0 0 0
+    1 1 1
+    0 0 0
+])
+
+env = RedBlackEnv(K=1, D=10, S=3)
+
+graph = task_graph(env, assigned_tasks, observed, [])
+
+# figure() do
+#     plot_task_graph(graph)
+# end
+
+
+knowledge = env.knowledege
+fill!(knowledge, false)
+for b in observed
+    learn!(knowledge, b)
+end
+
+find_compositions!(env, assigned_tasks)
+
+
+graph = task_graph(env, assigned_tasks, observed, [red_known(knowledge, i) for i in 1:2env.S])
 figure() do
     plot_task_graph(graph)
 end
