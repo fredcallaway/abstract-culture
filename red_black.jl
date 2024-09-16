@@ -1,7 +1,6 @@
 using Roots
 using Memoize
 include("utils.jl")
-include("find_compositions.jl")
 
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
@@ -19,7 +18,7 @@ end
     ε::Float64 = 0. # lapse rate
     N::Real = Inf # population size
 
-    foresight::Bool = false  # choose composition in advance?
+    myopic::Bool = false  # ignore future cost in K>1 case?
     replace_tasks::Bool = true  # sample tasks with replacement?
     # replace_demos::Bool = true  # sample demonstrations with replacement?
 
@@ -31,21 +30,11 @@ end
     # redundant with above, avoid recomputing
     _all_tasks::Vector{Tuple{Int, Int}} = collect(Iterators.product(1:S, 1:S))[:]
     _sampled_tasks::Vector{Tuple{Int, Int}} = fill((0, 0), K)
-    _red_probabilities::Matrix{Float64} = [
-    # 0 black  1 black
-       p_0      0.         # 0 red
-       p_r      0.         # 1 red
-       1.       p_brr      # 2 red
-    ]
     _knowledge::Knowledge = Knowledge(falses(S, S), falses(S), falses(S))
 end
 
 all_tasks(env::RedBlackEnv) = env._all_tasks
 sample_tasks(env::RedBlackEnv) = sample!(env._all_tasks, env._sampled_tasks)
-
-function prob_red(env::RedBlackEnv, red_known::Integer, black_known::Integer)
-    env._red_probabilities[red_known+1, black_known+1]
-end
 
 function initial_population(env::RedBlackEnv, init::Nothing=nothing)
     if isinf(env.N)
@@ -70,6 +59,7 @@ function initial_population(env::RedBlackEnv, init::Float64)
     end
 end
 
+# %% ==================== learning ====================
 
 # get it while it's hot!
 function fresh_knowledge(env::RedBlackEnv)
@@ -79,8 +69,6 @@ function fresh_knowledge(env::RedBlackEnv)
     k.red_b .= false
     k
 end
-
-prob_red(env::RedBlackEnv, k::Knowledge, a, b) = prob_red(env, k.red_a[a] + k.red_b[b], k.black[a,b])
 
 function learn!(k::Knowledge, a::Int, b::Int, use_red::Bool)
     if use_red
@@ -103,6 +91,63 @@ function social_learning!(k::Knowledge, pop, D)
     end
 end
 
+# %% ==================== acting ====================
+
+function prob_red(env::RedBlackEnv, knowledge::Knowledge, a, b, trials_remaining)
+    red_known = knowledge.red_a[a] + knowledge.red_b[b]
+    black_known = knowledge.black[a,b]
+
+    if env.myopic
+        trials_remaining = 0
+    end
+
+    if black_known
+        if red_known == 2  # no cost either way
+            env.p_brr
+        else  # take the free solution
+            0.
+        end
+    else
+        if red_known == 2  # take the free solution
+            1.
+        elseif red_known == 1  # must discover one edge either way
+            if trials_remaining > 0  # could benefit from later reuse
+                1.
+            else
+                env.p_r
+            end
+        else  # no relevant information
+            # learn compositional solution if future savings outweighs immediate cost
+            if expected_future_savings(env.S, trials_remaining, knowledge) > 1.
+                1.
+            else
+                env.p_0
+            end
+        end
+    end
+end
+
+function expected_future_savings(S::Int, K::Int, knowledge::Knowledge)
+    K == 0 && return 0.
+    ec = expected_cost(S, K, knowledge)
+    ec.idiosyncratic - ec.compositional
+end
+
+expected_unique(n_option, n_active, n_sample) = n_active * (1 - (1 - 1/n_option)^n_sample)
+
+function expected_cost(S::Int, K::Int, knowledge::Knowledge)
+    edges_left = sum(all_tasks(env)) do (a, b)
+        !(knowledge.black[a, b] || knowledge.red_a[a] && knowledge.red_b[b])
+    end
+    (;
+        compositional = expected_unique(S, S - sum(knowledge.red_a), K) +
+                         expected_unique(S, S - sum(knowledge.red_b), K),
+        idiosyncratic = expected_unique(S^2, edges_left, K)
+    )
+end
+
+# %% ==================== evolution ====================
+
 function transition(env::RedBlackEnv, pop::Array{Float64, 3})
     (;S, D, K, N, replace_tasks) = env
 
@@ -114,19 +159,30 @@ function transition(env::RedBlackEnv, pop::Array{Float64, 3})
 
         tasks = sample_tasks(env)
 
-        if env.foresight && K > 1
-            #this modifies knowledge .. hacky
-            find_compositions!(env, tasks)
-        end
-
-        for (a, b) in tasks
-            use_red = rand() < prob_red(env, knowledge, a, b)
+        for (i, (a, b)) in enumerate(tasks)
+            use_red = rand() < prob_red(env, knowledge, a, b, K-i)
             learn!(knowledge, a, b, use_red)
             pop1[a, b, use_red+1] += 1
         end
     end
     normalize!(pop1)
 end
+
+function simulate(env::RedBlackEnv, n_gen; init=nothing)
+    pop = initial_population(env, init)
+    x = fill(pop, n_gen+1)
+    for i in 1:n_gen
+        x[i+1] = transition(env, x[i])
+    end
+    x
+end
+
+function red_rate(pop::Array{Float64, 3})
+    sum(pop[:, :, 2])
+end
+
+
+# %% ==================== analytic for infinite-population one-task case ====================
 
 # behavior given observation probabilities
 function prob_learn_red(env, b, r)
@@ -166,51 +222,10 @@ function transition(env::RedBlackEnv, p_red::Float64)
     end
 end
 
-function simulate(env::RedBlackEnv, n_gen; init=nothing)
-    pop = initial_population(env, init)
-    x = fill(pop, n_gen+1)
-    for i in 1:n_gen
-        x[i+1] = transition(env, x[i])
-    end
-    x
-end
-
-# function get_limit(env::RedBlackEnv; init=initial_population(env), max_gen=100000)
-#     @assert false
-#     pop = init
-#     @assert env.N == Inf
-#     for gen in 0:max_gen
-#         pop′ = transition(env, pop)
-#         if pop′ ≈ pop
-#             return (pop, gen)
-#         elseif gen == max_gen && abs(pop′ - pop) < 1e-3
-#             return (pop, gen)
-#         end
-#         pop = pop′
-#     end
-#     @warn "hit max_gen"
-#     missing, missing
-# end
-
 function find_stable_points(env::RedBlackEnv)
     stable = find_zeros(0, 1) do x
         transition(env, x) - x
     end
-
-    # if length(stable) == 1
-    #     if transition(env, .5) < .5
-    #         return (;start=NaN, stop=NaN)
-    #     else
-
-    #         @infiltrate transition(env, .99999) > .99999
-
-    #         return (;start=0., stop=1.)
-    #     end
-    # end
-
-    # if length(stable) == 2 && transition(env, .99999) > .99999
-    #     return (start=stable[2], stop=1.)
-    # end
 
     i = findfirst(stable) do x
         x ≈ 1 && return false
@@ -240,34 +255,6 @@ function find_stable_points(env::RedBlackEnv)
     end
 
     (;start, stop)
-    
-    # if length(stable) == 1
-    #     stable
-    #     if transition(env, .5) < .5
-    #         return (;zero=NaN, start=NaN, stop=NaN)
-    #     else
-    #         @assert transition(env, .9999) > .9999
-    #         return (;zero=0., start=0.)
-    #     end
-    # elseif length(stable) == 2
-    #     if transition(env, 1e-6) > 1e-6
-    #         return (;zero=0, start=0, stop=stable[2])
-    #     else
-    #         return (;zero=0, start=NaN, stop=NaN)
-    #     end
-    # elseif length(stable) == 3
-    #     @label stable3
-    #     @infiltry @assert transition(env, stable[2] - 1e-6) < stable[2] - 1e-6
-    #     @infiltry @assert transition(env, stable[2] + 1e-6) > stable[2] + 1e-6
-    #     @infiltry @assert transition(env, stable[3] + 1e-6) < stable[3] + 1e-6
-    #     return (;zero=0, start=stable[2], stop=stable[3])
-    # elseif length(stable) == 4
-    #     # ignore the case at exactly 1. for now
-    #     @infiltry @assert stable[end] ≈ 1.
-    #     @assert transition(env, .9999) < .9999
-    #     @goto stable3
-    # else
-    #     @assert false
-    # end
 end
+
 find_stable_points(;params...) = find_stable_points(RedBlackEnv(;params...))
