@@ -54,6 +54,37 @@ end
 end
 
 
+# env = RedBlackEnv(S=5, K=10)
+# (;S, K) = env
+
+# k = fresh_knowledge(env)
+# k.black[2, 1] = k.black[1,2] = true
+# k.red_a[2] = k.red_b[2] = k.red_b[3] = true
+
+# empirical = monte_carlo(100_000) do
+#     k1 = deepcopy(k)
+#     n_node = n_edge = 0
+#     for (a, b) in sample_tasks(env)
+#         if !k1.red_a[a]
+#             n_node += 1
+#             k1.red_a[a] = true
+#         end
+#         if !k1.red_b[b]
+#             n_node += 1
+#             k1.red_b[b] = true
+#         end
+#         if !(k1.black[a,b] || k.red_a[a] && k.red_b[b])
+#             n_edge += 1
+#             k1.black[a,b] = true
+#         end
+#     end
+#     [n_node, n_edge]
+# end
+
+# predicted = expected_cost(env, k)
+# empirical = typeof(predicted)(empirical)
+
+# DataFrame([predicted, empirical])
 
 # using Combinatorics
 # function find_compositions_exhaustive(tasks)
