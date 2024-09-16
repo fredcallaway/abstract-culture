@@ -165,10 +165,16 @@ function transition(env::RedBlackEnv, p_red::Float64)
     else
         @assert -1e-4 < p_red < 1 + 1e-4
         p_red = clip(p_red, 0, 1)
-        expectation(Binomial(D, p_red)) do n_comp_demo
-            b = prob_observe(1 / (S^2), D - n_comp_demo)
-            r = prob_observe(1 / S, n_comp_demo)
-            prob_learn_red(env, b, r)
+        if env.p_r == 1. && env.p_0 == 0 && env.p_brr == 0
+            p_c = p_red * (2S - 1) / S^2
+            p_b = (1 - p_red) / S^2
+            (1 - p_b)^D * (1 - (1 - (p_c / (1 - p_b)))^D)
+        else
+            expectation(Binomial(D, p_red)) do n_comp_demo
+                b = prob_observe(1 / (S^2), D - n_comp_demo)
+                r = prob_observe(1 / S, n_comp_demo)
+                prob_learn_red(env, b, r)
+            end
         end
     end
 end
