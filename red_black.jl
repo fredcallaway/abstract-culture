@@ -6,6 +6,11 @@ include("find_compositions.jl")
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
 
+struct Knowledge
+    black::BitMatrix
+    red_a::BitVector
+    red_b::BitVector
+end
 
 @kwdef struct RedBlackEnv
     S::Int = 5  # number of starts and goals
@@ -16,37 +21,37 @@ prob_observe(p, k) = ¬((¬p) ^ k)
 
     foresight::Bool = false  # choose composition in advance?
     replace_tasks::Bool = true  # sample tasks with replacement?
-    replace_demos::Bool = true  # sample demonstrations with replacement?
+    # replace_demos::Bool = true  # sample demonstrations with replacement?
 
     # red frequencies for ambiguous cases
     p_0::Float64 = 0.  # no info
     p_r::Float64 = 0.  # part red
     p_brr::Float64 = 0.  # full both
 
-    # used to avoid memory allocation
-    knowledege::BitMatrix = falses(S, S+2)
+    # redundant with above, avoid recomputing
+    _all_tasks::Vector{Tuple{Int, Int}} = collect(Iterators.product(1:S, 1:S))[:]
+    _sampled_tasks::Vector{Tuple{Int, Int}} = fill((0, 0), K)
+    _red_probabilities::Matrix{Float64} = [
+    # 0 black  1 black
+       p_0      0.         # 0 red
+       p_r      0.         # 1 red
+       1.       p_brr      # 2 red
+    ]
+    _knowledge::Knowledge = Knowledge(falses(S, S), falses(S), falses(S))
 end
 
-@memoize function all_tasks(S::Int)
-    collect(Iterators.product(1:S, S+1:2S))[:]
-end
-all_tasks(env::RedBlackEnv) = all_tasks(env.S)
+all_tasks(env::RedBlackEnv) = env._all_tasks
+sample_tasks(env::RedBlackEnv) = sample!(env._all_tasks, env._sampled_tasks)
 
-struct Behavior
-    s::Int
-    g::Int
-    red::Bool
-end
-
-function red_rate(pop::AbstractArray{<:Behavior})
-    mean(get.(pop, :red))
+function prob_red(env::RedBlackEnv, red_known::Integer, black_known::Integer)
+    env._red_probabilities[red_known+1, black_known+1]
 end
 
 function initial_population(env::RedBlackEnv, init::Nothing=nothing)
     if isinf(env.N)
         NaN
     else
-        [Behavior(0, 0, false) for _ in 1:env.K, _ in 1:env.N]
+        zeros(env.S, env.S, 2)
     end
 end
 
@@ -55,90 +60,72 @@ function initial_population(env::RedBlackEnv, init::Float64)
     if isinf(N)
         init
     else
-        compositional = falses(N * K)
-        for i in sample(eachindex(compositional), Int(init * N * K); replace=false)
-            compositional[i] = true
+        x = zeros(S, S, 2)
+        n_comp = Int(init * N * K)
+        for i in 1:(N * K)
+            comp_idx = 1 + (i ≤ n_comp)
+            x[rand(1:S), rand(1:S), comp_idx] += 1
         end
-        X = map(compositional) do red
-            Behavior(rand(1:S), rand(S+1:2S), red)
-        end
-        reshape(X, (K, N))
+        normalize!(x)
     end
 end
 
-function learn!(knowledege, b::Behavior)
-    (;s, g, red) = b
-    (s == 0 || g == 0) && return  # dummy observation
-    S = size(knowledege, 1)
-    g = mod1(g, S)
-    if red
-        knowledege[s, S+1] = true
-        knowledege[g, S+2] = true
+
+# get it while it's hot!
+function fresh_knowledge(env::RedBlackEnv)
+    k = env._knowledge
+    k.black .= false
+    k.red_a .= false
+    k.red_b .= false
+    k
+end
+
+prob_red(env::RedBlackEnv, k::Knowledge, a, b) = prob_red(env, k.red_a[a] + k.red_b[b], k.black[a,b])
+
+function learn!(k::Knowledge, a::Int, b::Int, use_red::Bool)
+    if use_red
+        k.red_a[a] = k.red_b[b] = true
     else
-        knowledege[s, g] = true
+        k.black[a, b] = true
     end
 end
 
-function learn_red!(knowledege, s)
-    S = size(knowledege, 1)
-    if s > S
-        knowledege[mod1(s, S), S+2] = true
-    else
-        knowledege[s, S+1] = true
-    end
-end
-
-function red_known(knowledege, s)
-    S = size(knowledege, 1)
-    knowledege[mod1(s, S), S+1+div(s-1, S)]
-end
-
-red_known(knowledege, s, g) = red_known(knowledege, s) + red_known(knowledege, g)
-
-function black_known(knowledege, s, g)
-    S = size(knowledege, 1)
-    g = mod1(g, S)
-    knowledege[s, g]
-end
-
-function behave(env, tasks, observed)
-    knowledege = env.knowledege
-    fill!(knowledege, false)
-    for b in observed
-        learn!(knowledege, b)
-    end
-    if env.foresight && env.K > 2
-        # note: this modifies knowledege
-        find_compositions!(env, tasks)
-    end
-    map(tasks) do (s, g)
-        b = black_known(knowledege, s, g)
-        r = red_known(knowledege, s, g)
-        use_red = if b
-            r == 2 ? rand() < env.p_brr : false
+function social_learning!(k::Knowledge, pop, D)
+    w = Weights(view(pop, :), 1.)
+    @assert D ≥ 0
+    for i in 1:D
+        (a, b, c) = sample(CartesianIndices(pop), w).I
+        if c == 2
+            k.red_a[a] = k.red_b[b] = true
         else
-            r == 2 ? true :
-            r == 1 ? rand() < env.p_r :
-            rand() < env.p_0
+            k.black[a, b] = true
         end
-        b = Behavior(s, g, use_red)
-        learn!(knowledege, b)
-        b
     end
 end
 
-function transition(env::RedBlackEnv, pop::Matrix{Behavior})
-    (;S, D, K, N, replace_tasks, replace_demos) = env
-    @assert N == size(pop, 2)
+function transition(env::RedBlackEnv, pop::Array{Float64, 3})
+    (;S, D, K, N, replace_tasks) = env
 
-    pop1 = similar(pop)
+    pop1 = zeros(size(pop))
 
     for agent in 1:N
-        observed = D == -1 ? pop : sample(pop, D; replace=replace_demos)
-        tasks = sample(all_tasks(env), K; replace=replace_tasks)
-        pop1[:, agent] = behave(env, tasks, observed)
+        knowledge = fresh_knowledge(env)
+        social_learning!(knowledge, pop, D)
+
+        tasks = sample_tasks(env)
+
+        if env.foresight && K > 1
+            #this modifies knowledge .. hacky
+            find_compositions!(env, tasks)
+        end
+
+        for (a, b) in tasks
+            use_red = rand() < prob_red(env, knowledge, a, b)
+            learn!(knowledge, a, b, use_red)
+            pop1[a, b, use_red+1] += 1
+        end
     end
-    pop1
+    normalize!(pop1)
 end
 
 # behavior given observation probabilities
@@ -204,7 +191,6 @@ end
 #     @warn "hit max_gen"
 #     missing, missing
 # end
-
 
 function find_stable_points(env::RedBlackEnv)
     stable = find_zeros(0, 1) do x
