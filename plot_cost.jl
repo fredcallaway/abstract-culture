@@ -1,69 +1,63 @@
-@everywhere include("red_black.jl")
-@everywhere using NamedTupleTools
-include("r.jl")
-using Optim
-# %% --------
-R"""
-FIGS_PATH = "~/papers/cultural-abstractions/figs/"
-MAKE_PDF = TRUE
-"""
 
-# %% ==================== individual cost ====================
+# %% ==================== with replacement ====================
 
-expected_unique(N, K) = N * (1 - (1 - 1/N)^K)
-
-function expected_unique_nodes(;S, K)
-    env = RedBlackEnv(;S, K)
-    tasks = all_tasks(env)
-    # could be done with a hypergeometric?
-    monte_carlo(100) do
-        sub = sample(tasks, K; replace=false)
-        length(unique(first, sub)) + length(unique(last, sub))
-    end
+function expected_cost(env::RedBlackEnv)
+    (;S, K) = env
+   (;
+       compositional = 2 * expected_unique(S, S, K),
+       idiosyncratic = expected_unique(S^2, S^2, K)
+   )
 end
 
-function individual_costs(;S, K, γ=1.)
-    (;
-        compositional = expected_unique_nodes(;S, K),
-        idiosyncratic = K,
-    )
+indi_cost = dataframe(grid(S=10, K=1:50)) do (;S, K)
+    expected_cost(RedBlackEnv(;S, K))
 end
-
-individual_costs(S=30, K=50)
-
-individual_costs(x::NamedTuple) = individual_costs(;x...)
-
-indi_cost = dataframe(individual_costs, grid(S=10, K=1:100))
 @rput indi_cost
 
-# indi_equality = map(3:100) do S
-#     res = optimize(1, S^2) do K
-#         a, b = individual_costs(;S, K)
-#         abs(a - b)
-#     end
-#     K = res.minimizer
-#     @assert abs(res.minimum) < 1e-5
-#     return (;S, K)
-# end |> DataFrame
-# @rput indi_equality
-
-# @with indi_equality :K ./ :S
 
 R"""
+# library(ggbreak)
+
 indi_cost %>%
+    # filter(!between(K, 50, 100)) %>%
     pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="cost") %>%
+    group_by(name) %>% mutate(cost = cost - lag(cost, default=0)) %>%
     ggplot(aes(K, cost, color=name)) +
     # geom_vline(xintercept=filter(indi_equality, S==20)$K, linewidth=.4) +
     geom_line() +
-    ybreaks(6) +
+    # scale_x_break(c(50, 100)) +
+    # ybreaks(6) +
     cpal +
-    labs(x="# Tasks to Solve", y="Discovery Cost") +
+    labs(x="# Tasks", y="Total Cost") +
     no_legend
 
 fig("indi_cost", h=2, w=2.5)
 """
 
-# %% ==================== new cost ====================
+# %% --------
+
+indi_cost = dataframe(grid(S=1:50, K=1:200)) do (;S, K)
+    expected_cost(RedBlackEnv(;S, K))
+end
+@rput indi_cost
+
+R"""
+indi_cost %>%
+    mutate(
+        compositional = compositional,
+        advantage = (idiosyncratic - compositional) / K,
+        # advantage = 2 * (advantage > 0) - 1
+    ) %>%
+    ggplot(aes(K, S, fill=advantage)) +
+    heatmap() +
+    scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=1.5, rev=F, name="compositional advantage")
+    # geom_line(aes(fill=NaN), data=filter(indi_equality, K <= 100), linewidth=.4, linetype="dashed")
+
+
+fig("indi_cost_heat", w=4)
+"""
+
+# %% ==================== cost without replacement ====================
 
 function expected_unique_nodes(;S, K)
     env = RedBlackEnv(;S, K)
