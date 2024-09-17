@@ -23,7 +23,7 @@ Knowledge(S::Int) = Knowledge(falses(S, S), falses(S), falses(S), 0)
 
     myopic::Bool = false  # ignore future cost in K>1 case?
     replace_tasks::Bool = true  # sample tasks with replacement?
-    # replace_demos::Bool = true  # sample demonstrations with replacement?
+    replace_demos::Bool = true  # sample demonstrations with replacement?
 
     # red frequencies for ambiguous cases
     p_0::Float64 = 0.  # no info
@@ -39,11 +39,23 @@ end
 all_tasks(env::RedBlackEnv) = env._all_tasks
 sample_tasks(env::RedBlackEnv) = sample!(env._all_tasks, env._sampled_tasks)
 
+struct Behavior
+    a::Int
+    b::Int
+    red::Bool
+end
+
+Population = Matrix{<:Behavior}
+
+function red_rate(pop::Population)
+    mean(get.(pop, :red))
+end
+
 function initial_population(env::RedBlackEnv, init::Nothing=nothing)
     if isinf(env.N)
         NaN
     else
-        zeros(env.S, env.S, 2)
+        [Behavior(0, 0, false) for _ in 1:env.K, _ in 1:env.N]
     end
 end
 
@@ -52,16 +64,16 @@ function initial_population(env::RedBlackEnv, init::Float64)
     if isinf(N)
         init
     else
-        x = zeros(S, S, 2)
-        n_comp = Int(init * N * K)
-        for i in 1:(N * K)
-            comp_idx = 1 + (i ≤ n_comp)
-            x[rand(1:S), rand(1:S), comp_idx] += 1
+        compositional = falses(N * K)
+        for i in sample(eachindex(compositional), Int(init * N * K); replace=false)
+            compositional[i] = true
         end
-        normalize!(x)
+        X = map(compositional) do red
+            Behavior(rand(1:S), rand(1:S), red)
+        end
+        reshape(X, (K, N))
     end
 end
-
 # %% ==================== learning ====================
 
 # get it while it's hot!
@@ -74,12 +86,14 @@ function fresh_knowledge(env::RedBlackEnv)
     k
 end
 
-function learn!(env::RedBlackEnv, knowledge::Knowledge, a::Int, b::Int, use_red::Bool)
+function learn!(env::RedBlackEnv, knowledge::Knowledge, demo::Behavior)
     (;red_a, red_b, black, _n_solved) = knowledge
+    (;a, b, red) = demo
+    (a == 0 || b == 0) && return  # dummy observation
     S = length(red_a)
     foresight = env.K > 1 && !env.myopic
     # all the if foresight lines are just updating _n_solved, for computing expected_cost
-    if use_red
+    if red
         if foresight && !red_a[a]
             # println("new a $a")
             for b2 in 1:S
@@ -108,17 +122,21 @@ function learn!(env::RedBlackEnv, knowledge::Knowledge, a::Int, b::Int, use_red:
     knowledge._n_solved = _n_solved
 end
 
-function social_learning!(env::RedBlackEnv, knowledge::Knowledge, pop, D)
-    w = Weights(view(pop, :), 1.)
+function social_learning!(env::RedBlackEnv, knowledge::Knowledge, pop)
+    (;D, replace_demos) = env
     @assert D ≥ 0
-    demos = sample(CartesianIndices(pop), w, D)
-    for idx in demos
-        (a,b,c) = idx.I
-        learn!(env, knowledge, a, b, c == 2)
+    demos = D == -1 ? pop : sample(pop, D; replace=replace_demos)
+    for d in demos
+        learn!(env, knowledge, d)
     end
 end
 
 # %% ==================== acting ====================
+
+function behave(env::RedBlackEnv, knowledge::Knowledge, a, b, trials_remaining)
+    use_red = rand(Bernoulli(prob_red(env, knowledge, a, b, trials_remaining)))
+    Behavior(a, b, use_red)
+end
 
 function prob_red(env::RedBlackEnv, knowledge::Knowledge, a, b, trials_remaining)
     red_known = knowledge.red_a[a] + knowledge.red_b[b]
@@ -180,25 +198,25 @@ end
 
 # %% ==================== evolution ====================
 
-function transition(env::RedBlackEnv, pop::Array{Float64, 3})
+function transition(env::RedBlackEnv, pop::Population)
     (;S, D, K, N, replace_tasks) = env
-    @assert size(pop) == (S, S, 2)
+    @assert size(pop) == (K, N)
 
-    pop1 = zeros(size(pop))
+    pop1 = similar(pop)
 
     for agent in 1:N
         knowledge = fresh_knowledge(env)
-        social_learning!(env, knowledge, pop, D)
+        social_learning!(env, knowledge, pop)
 
         tasks = sample_tasks(env)
 
-        for (i, (a, b)) in enumerate(tasks)
-            use_red = rand() < prob_red(env, knowledge, a, b, K-i)
-            learn!(env, knowledge, a, b, use_red)
-            pop1[a, b, use_red+1] += 1
+        for (k, (a, b)) in enumerate(tasks)
+            beh = behave(env, knowledge, a, b, K-k)
+            learn!(env, knowledge, beh)
+            pop1[k, agent] = beh
         end
     end
-    normalize!(pop1)
+    pop1
 end
 
 function simulate(env::RedBlackEnv, n_gen; init=nothing)
@@ -209,11 +227,6 @@ function simulate(env::RedBlackEnv, n_gen; init=nothing)
     end
     x
 end
-
-function red_rate(pop::Array{Float64, 3})
-    sum(pop[:, :, 2])
-end
-
 
 # %% ==================== analytic for infinite-population one-task case ====================
 
