@@ -1,11 +1,11 @@
 include("remote.jl")
-connect_repl("hb120")
+# connect_repl("hb120")
 
 # %% --------
 
 # RemoteREPL._repl_client_connection = nothing
-@remote gethostname()
-@remote nprocs()
+# @remote gethostname()
+# @remote nprocs()
 @both @everywhere include("red_black.jl")
 
 @both function run_sim_finite(;n_gen=30, init=NaN,
@@ -16,11 +16,11 @@ connect_repl("hb120")
                  D = 25,
                  K = 1,
                  N = 10,
-                 foresight = true,
+                 myopic = false,
                  repeats = 5,
                  )
 
-    g = grid(; p_0, p_brr, p_r, S, D, K, N, foresight, init, pop=1:repeats)
+    g = grid(; p_0, p_brr, p_r, S, D, K, N, myopic, init, pop=1:repeats)
     df = dataframe(g; parallel=true) do prm
         env = RedBlackEnv(;delete(prm, :pop, :init)...)
         sim = simulate(env, n_gen; prm.init)
@@ -78,13 +78,13 @@ fig()
 
 # %% --------
 
-vary_k_big = @asyncremote run_sim_finite(;N=1000, K=[1, 10, 50], S, D, p_0=.05, init=.05, foresight=true,
+vary_k_big = @asyncremote run_sim_finite(;N=1000, K=[1, 10, 50], S, D, p_0=.05, init=.05,
     repeats=30, n_gen=50)
 
 vary_k_big = fetch(vary_k_big)
 @rput vary_k_big
 
-vary_k01 = @remote run_sim_finite(;N=1000, K=[1, 10, 50], S, D, p_0=.01, init=.01, foresight=true, repeats=30, n_gen=100)
+vary_k01 = @remote run_sim_finite(;N=1000, K=[1, 10, 50], S, D, p_0=.01, init=.01, repeats=30, n_gen=100)
 @rput vary_k01
 
 
@@ -109,8 +109,7 @@ fig(w=8)
 
 # %% --------
 
-
-# vary_k_partial = @remote run_sim_finite(;N=1000, K=[1, 10, 50], S, D = D ./ 5, p_r=1., p_0=.001, init=.001, foresight=true, repeats=30, n_gen=100)
+vary_k_partial = run_sim_finite(;N=100, K=[1, 10, 50], S, D = D ./ 5, p_r=1., p_0=.001, init=.01, repeats=3, n_gen=20)
 @rput vary_k_partial
 R"""
 vary_k_partial %>%
@@ -144,7 +143,7 @@ fig(w=20, h=20)
 
 # does it converge from above?
 
-from9 = @asyncremote run_sim_finite(N=500, K=10, S=10, D=[7, 8, 9, 10], p_0=0., p_r=0., init=1., foresight=[true], repeats=50, n_gen=50)
+from9 = @asyncremote run_sim_finite(N=500, K=10, S=10, D=[7, 8, 9, 10], p_0=0., p_r=0., init=1., myopic=[true], repeats=50, n_gen=50)
 from9 = fetch(from9)
 @rput from9
 
@@ -163,7 +162,7 @@ fig(w=8)
 """
 # %% --------
 
-df = @remote run_sim_finite(N=[100, 500], K=10, S=10, D=[7, 8, 9, 10], p_0=0., p_r=0., init=1., foresight=[true], repeats=50, n_gen=100)
+df = @remote run_sim_finite(N=[100, 500], K=10, S=10, D=[7, 8, 9, 10], p_0=0., p_r=0., init=1., myopic=[true], repeats=50, n_gen=100)
 @rput df
 R"""
 # df = bind_rows(from1, from9)
