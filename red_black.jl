@@ -5,11 +5,14 @@ include("utils.jl")
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
 
-struct Knowledge
+mutable struct Knowledge
     black::BitMatrix
     red_a::BitVector
     red_b::BitVector
+    _n_solved::Int
 end
+
+Knowledge(S::Int) = Knowledge(falses(S, S), falses(S), falses(S), 0)
 
 @kwdef struct RedBlackEnv
     S::Int = 5  # number of starts and goals
@@ -30,7 +33,7 @@ end
     # redundant with above, avoid recomputing
     _all_tasks::Vector{Tuple{Int, Int}} = collect(Iterators.product(1:S, 1:S))[:]
     _sampled_tasks::Vector{Tuple{Int, Int}} = fill((0, 0), K)
-    _knowledge::Knowledge = Knowledge(falses(S, S), falses(S), falses(S))
+    _knowledge::Knowledge = Knowledge(S)
 end
 
 all_tasks(env::RedBlackEnv) = env._all_tasks
@@ -67,27 +70,51 @@ function fresh_knowledge(env::RedBlackEnv)
     k.black .= false
     k.red_a .= false
     k.red_b .= false
+    k._n_solved = 0
     k
 end
 
-function learn!(k::Knowledge, a::Int, b::Int, use_red::Bool)
+function learn!(env::RedBlackEnv, knowledge::Knowledge, a::Int, b::Int, use_red::Bool)
+    (;red_a, red_b, black, _n_solved) = knowledge
+    S = length(red_a)
+    foresight = env.K > 1 && !env.myopic
+    # all the if foresight lines are just updating _n_solved, for computing expected_cost
     if use_red
-        k.red_a[a] = k.red_b[b] = true
+        if foresight && !red_a[a]
+            # println("new a $a")
+            for b2 in 1:S
+                if red_b[b2] && !black[a, b2]
+                    _n_solved += 1
+                end
+            end
+        end
+        red_a[a] = true
+        if foresight && !red_b[b]
+            # println("new b $b")
+            for a2 in 1:S
+                if red_a[a2] && !black[a2, b]
+                    _n_solved += 1
+                end
+            end
+        end
+        red_b[b] = true
     else
-        k.black[a, b] = true
+        if foresight && !black[a, b] && !(red_a[a] && red_b[b])
+            # println("new black $a - $b")
+            _n_solved += 1
+        end
+        black[a, b] = true
     end
+    knowledge._n_solved = _n_solved
 end
 
-function social_learning!(k::Knowledge, pop, D)
+function social_learning!(env::RedBlackEnv, knowledge::Knowledge, pop, D)
     w = Weights(view(pop, :), 1.)
     @assert D ≥ 0
-    for i in 1:D
-        (a, b, c) = sample(CartesianIndices(pop), w).I
-        if c == 2
-            k.red_a[a] = k.red_b[b] = true
-        else
-            k.black[a, b] = true
-        end
+    demos = sample(CartesianIndices(pop), w, D)
+    for idx in demos
+        (a,b,c) = idx.I
+        learn!(env, knowledge, a, b, c == 2)
     end
 end
 
@@ -118,7 +145,7 @@ function prob_red(env::RedBlackEnv, knowledge::Knowledge, a, b, trials_remaining
             end
         else  # no relevant information
             # learn compositional solution if future savings outweighs immediate cost
-            if expected_future_savings(env.S, trials_remaining, knowledge) > 1.
+            if expected_future_savings(env, trials_remaining, knowledge) > 1.
                 1.
             else
                 env.p_0
@@ -127,18 +154,23 @@ function prob_red(env::RedBlackEnv, knowledge::Knowledge, a, b, trials_remaining
     end
 end
 
-function expected_future_savings(S::Int, K::Int, knowledge::Knowledge)
+function expected_future_savings(env::RedBlackEnv, K::Int, knowledge::Knowledge)
     K == 0 && return 0.
-    ec = expected_cost(S, K, knowledge)
+    ec = expected_cost(env, K, knowledge)
     ec.idiosyncratic - ec.compositional
 end
 
 expected_unique(n_option, n_active, n_sample) = n_active * (1 - (1 - 1/n_option)^n_sample)
 
-function expected_cost(S::Int, K::Int, knowledge::Knowledge)
-    edges_left = sum(all_tasks(env)) do (a, b)
-        !(knowledge.black[a, b] || knowledge.red_a[a] && knowledge.red_b[b])
-    end
+function expected_cost(env::RedBlackEnv, K::Int, knowledge::Knowledge)
+    S = env.S
+    edges_left = S^2 - knowledge._n_solved
+    # @infiltrate edges_left != sum(all_tasks(env)) do (a, b)
+    #     !(knowledge.black[a, b] || knowledge.red_a[a] && knowledge.red_b[b])
+    # end
+    knowledge.black
+    knowledge.red_a
+    knowledge.red_b
     (;
         compositional = expected_unique(S, S - sum(knowledge.red_a), K) +
                          expected_unique(S, S - sum(knowledge.red_b), K),
@@ -150,18 +182,19 @@ end
 
 function transition(env::RedBlackEnv, pop::Array{Float64, 3})
     (;S, D, K, N, replace_tasks) = env
+    @assert size(pop) == (S, S, 2)
 
     pop1 = zeros(size(pop))
 
     for agent in 1:N
         knowledge = fresh_knowledge(env)
-        social_learning!(knowledge, pop, D)
+        social_learning!(env, knowledge, pop, D)
 
         tasks = sample_tasks(env)
 
         for (i, (a, b)) in enumerate(tasks)
             use_red = rand() < prob_red(env, knowledge, a, b, K-i)
-            learn!(knowledge, a, b, use_red)
+            learn!(env, knowledge, a, b, use_red)
             pop1[a, b, use_red+1] += 1
         end
     end
