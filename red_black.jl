@@ -74,6 +74,8 @@ function initial_population(env::RedBlackEnv, init::Float64)
         reshape(X, (K, N))
     end
 end
+
+initial_population(env::RedBlackEnv, init::Population) = init
 # %% ==================== learning ====================
 
 # get it while it's hot!
@@ -124,7 +126,6 @@ end
 
 function social_learning!(env::RedBlackEnv, knowledge::Knowledge, pop)
     (;D, replace_demos) = env
-    @assert D ≥ 0
     demos = D == -1 ? pop : sample(pop, D; replace=replace_demos)
     for d in demos
         learn!(env, knowledge, d)
@@ -226,6 +227,28 @@ function simulate(env::RedBlackEnv, n_gen; init=nothing)
         x[i+1] = transition(env, x[i])
     end
     x
+end
+
+using DataStructures: CircularBuffer
+function simulate_asymptote(env::RedBlackEnv; init=nothing, max_gen=1000, tol=1e-4, tol2=1e-5, win_size=30)
+    pop = initial_population(env, init)
+    history = CircularBuffer{Float64}(win_size)
+    for gen in 0:max_gen
+        pop′ = transition(env, pop)
+        push!(history, red_rate(pop))
+
+
+        d1 = diff(history); d2 = diff(d1)
+        compositionality = mean(history); g1 = mean(d1); g2 = mean(d2)
+
+        if length(history) == win_size && g1 < tol && g2 < tol2
+            return (;gen, compositionality, g1, g2, converged=true)
+        end
+        pop = pop′
+    end
+    @warn "hit max_gen"
+    return (;gen, compositionality, g1, g2, converged=false)
+
 end
 
 # %% ==================== analytic for infinite-population one-task case ====================

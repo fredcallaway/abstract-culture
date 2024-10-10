@@ -1,5 +1,5 @@
 include("remote.jl")
-# connect_repl("hb120")
+connect_repl("hb120")
 
 # %% --------
 
@@ -22,11 +22,31 @@ include("remote.jl")
 
     g = grid(; p_0, p_brr, p_r, S, D, K, N, myopic, init, pop=1:repeats)
     df = dataframe(g; parallel=true) do prm
-        env = RedBlackEnv(;delete(prm, :pop, :init)...)
+        env = RedBlackEnv(;delete(prm, :pop, :init)..., replace_demos=false)
         sim = simulate(env, n_gen; prm.init)
         map(enumerate(sim)) do (gen, pop)
             (;gen, compositionality = red_rate(pop))
         end
+    end
+    df
+end
+
+@both function run_sim_asymptote(;init=NaN,
+                 p_0 = 0.,
+                 p_brr = 0.,
+                 p_r = 0.,
+                 S = 10,
+                 D = 25,
+                 K = 1,
+                 N = 10,
+                 myopic = false,
+                 repeats = 5,
+                 )
+
+    g = grid(; p_0, p_brr, p_r, S, D, K, N, myopic, init, pop=1:repeats)
+    df = dataframe(g; parallel=true) do prm
+        env = RedBlackEnv(;delete(prm, :pop, :init)..., replace_demos=false)
+        simulate_asymptote(env; prm.init)
     end
     df
 end
@@ -58,11 +78,10 @@ plot_evolution = function(df, ...) {
 end
 
 @both begin
-    S = 5:5:50
-    D = [0; 5 * 2 .^ (0:8)]
+    S = 4:4:50
+    D = [0; 2 .^ (0:12)]
 end
 
-D
 # %% --------
 
 stable = @remote get_limits(;S, D, p_0=.05)
@@ -70,121 +89,69 @@ stable = @remote get_limits(;S, D, p_0=.05)
 R"""
 stable %>% 
     ggplot(aes(D, factor(S), fill=stop)) +
-    heatmap +
+    heatmap() +
     scale_x_continuous(trans='log10')
 
 fig()
 """
 
-# %% --------
+# %% ==================== plot asymptote ====================
 
-vary_k_big = @asyncremote run_sim_finite(;N=1000, K=[1, 10, 50], S, D, p_0=.05, init=.05,
-    repeats=30, n_gen=50)
+task = @remote run_sim_asymptote(;N=100000, K=[1, 20, 100], S, D = D, p_r=1., init=0., p_0=.01, repeats=10)
 
-vary_k_big = fetch(vary_k_big)
-@rput vary_k_big
-
-vary_k01 = @remote run_sim_finite(;N=1000, K=[1, 10, 50], S, D, p_0=.01, init=.01, repeats=30, n_gen=100)
-@rput vary_k01
-
-
-R"""
-# vary_k_big %>%
-vary_k01 %>%
-    # mutate(D = if_else(D == 0, D)) %>%
-    mutate(D = factor(D)) %>%
-    filter(gen == max(gen)) %>%
-    group_by(S,D,K) %>%
-    summarise(compositionality = max(compositionality)) %>%
-    ggplot(aes(D, S, fill=compositionality)) +
-    heatmap() +
-    # scale_x_discrete(breaks=$(D[1:3:end])) +
-    scale_x_discrete(breaks=c(0, 5, 20, 80, 320, 1280)) +
-    geom_vline(xintercept=1.5, color="white", linetype="solid") +
-    # scale_x_continuous(trans='log10') +
-    facet_grid(~K)
-fig(w=8)
-
-"""
 
 # %% --------
 
-vary_k_partial = run_sim_finite(;N=100, K=[1, 10, 50], S, D = D ./ 5, p_r=1., p_0=.001, init=.01, repeats=3, n_gen=20)
-@rput vary_k_partial
+# task = @asyncremote run_sim_finite(;N=100000, K=[1, 20, 100], S, D = D, p_r=1., init=0., p_0=.01, repeats=10, n_gen=300)
+
+@async begin
+    global vary_k_partial = fetch(task)
+    vary_k_partial = fetch(vary_k_partial)
+
+    @rput vary_k_partial
 R"""
 vary_k_partial %>%
-    # mutate(D = if_else(D == 0, D)) %>%
     mutate(D = factor(D)) %>%
-    filter(gen == max(gen)) %>%
     group_by(S,D,K) %>%
     summarise(compositionality = max(compositionality)) %>%
     ggplot(aes(D, S, fill=compositionality)) +
     heatmap() +
-    # scale_x_discrete(breaks=$(D[1:3:end])) +
-    scale_x_discrete(breaks=c(0, 5, 20, 80, 320, 1280)/5) +
+    scale_x_discrete(breaks=c(0,1,2,4,8,16,64, 512, 4*1024)) +
     geom_vline(xintercept=1.5, color="white", linetype="solid") +
+    scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=85, p1=1, p2=2, mid=0.5, rev=F) +
+    # scale_fill_continuous_sequential(h1=350, h2=NA, c1=180, l1=20, l2=80, p1=1, p2=1.5,
+    #         name="Asymptotic Compositionality", labels=scales::percent_format(), limits=c(0, 1)) +
     # scale_x_continuous(trans='log10') +
     facet_grid(~K)
 fig(w=8)
 """
-
-# %% --------
-
-R"""
-vary_k_big %>% plot_evolution(color=factor(K)) + facet_grid(S~D)
-fig(w=20, h=20)
-"""
-
-
-
-
+end
 
 # %% ==================== convergence ====================
 
-# does it converge from above?
-
-from9 = @asyncremote run_sim_finite(N=500, K=10, S=10, D=[7, 8, 9, 10], p_0=0., p_r=0., init=1., myopic=[true], repeats=50, n_gen=50)
-from9 = fetch(from9)
-@rput from9
-
-
 R"""
-from9 %>%
-    ggplot(aes(gen, compositionality, color=factor(D))) +
-    geom_line(mapping=aes(group = interaction(D, pop)), data=filter(from9, pop < 11), linewidth=.2, alpha=1) +
+data = vary_k_partial %>%
+    filter(S %in% c(10, 20, 40), D %in% c(8, 32, 128))
+
+data %>%
+    ggplot(aes(gen, compositionality, color=factor(K))) +
+    geom_line(mapping=aes(group = interaction(S, K, D, pop)), data=filter(data, pop < 11), linewidth=.2, alpha=1) +
     mean_line(linewidth=.7) +
-    facet_grid(~K)
+    facet_grid(S~D)
     theme()
     # labs(x="Generation", y="Compositionality Rate", color="Tasks (K)") +
     # discrete_sequential("Purple-Orange", rev=T) + rev_legend +
     # ylim(0, 1)
-fig(w=8)
-"""
-# %% --------
-
-df = @remote run_sim_finite(N=[100, 500], K=10, S=10, D=[7, 8, 9, 10], p_0=0., p_r=0., init=1., myopic=[true], repeats=50, n_gen=100)
-@rput df
-R"""
-# df = bind_rows(from1, from9)
-# df = from1
-
-
-df %>% plot_evolution(color=factor(D)) + facet_grid(~N)
-fig(w=8, h=3)
+fig(w=6, h=3)
 """
 
-# %% --------
-
-
 R"""
-vary_k %>%
-    filter(gen == max(gen)) %>%
-    ggplot(aes(D, S, fill=compositionality)) +
-    heatmap
-    facet_grid(~K)
+df2 %>%
+    filter(D == 1024, S==20)
+    ggplot(aes(gen, compositionality, color=factor(K))) +
+    geom_line(mapping=aes(group = interaction(S, K, D, pop)), linewidth=.2, alpha=1) +
+    mean_line(linewidth=.7) +
     theme()
-    # labs(x="Generation", y="Compositionality Rate", color="Tasks (K)") +
-    # discrete_sequential("Purple-Orange", rev=T) + rev_legend +
-    # ylim(0, 1)
-fig("vary_k", w=8)
+
+fig()
 """
