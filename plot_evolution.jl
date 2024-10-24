@@ -22,7 +22,9 @@ end
 
 # %% ==================== first plot ====================
 
-run_sim_infinite(S = [5, 10], D = 1 .* 3 .^ (1:5), p_r=.5, p_brr=0.5, init=.01)
+# run_sim_infinite(S = [5, 10], D = 1 .* 3 .^ (1:5), p_r=1, p_brr=0.5, init=.01)
+
+run_sim_infinite(S = [4, 8], D = 1 .* 3 .^ (1:5), p_r=1, p_brr=0.5, init=.01)
 # run_sim_infinite(S = [20, 30], D = 100 .* [1, 4, 16], p_0=.01)
 
 # run_sim_infinite(S = [20, 40], D = 200 .* [1, 2, 3, 4, 8, 16], init=.01)
@@ -38,7 +40,7 @@ df %>%
     gridlines +
     theme()
 
-fig("evolution_DS-random", w=7, h=3)
+# fig("evolution_DS-random", w=7, h=3)
 """
 
 # %% --------

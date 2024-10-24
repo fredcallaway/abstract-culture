@@ -6,7 +6,7 @@ using Optim
 # %% --------
 
 R"""
-FIGS_PATH = "~/papers/cultural-abstractions/figs/"
+FIGS_PATH = "~/papers/cultural-abstractions/figures/src/"
 MAKE_PDF = TRUE
 """
 

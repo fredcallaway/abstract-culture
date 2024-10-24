@@ -109,6 +109,7 @@ task = @remote run_sim_asymptote(;N=100000, K=[1, 20, 100], S, D = D, p_r=1., in
     vary_k_partial = fetch(vary_k_partial)
 
     @rput vary_k_partial
+
 R"""
 vary_k_partial %>%
     mutate(D = factor(D)) %>%
@@ -127,7 +128,10 @@ fig(w=8)
 """
 end
 
+serialize("tmp/oct10-vary_k_partial", vary_k_partial)
+
 # %% ==================== convergence ====================
+@rput vary_k_partial
 
 R"""
 data = vary_k_partial %>%

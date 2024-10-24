@@ -9,7 +9,7 @@ function expected_cost(env::RedBlackEnv)
    )
 end
 
-indi_cost = dataframe(grid(S=10, K=1:50)) do (;S, K)
+indi_cost = dataframe(grid(S=1:50, K=1:50)) do (;S, K)
     expected_cost(RedBlackEnv(;S, K))
 end
 @rput indi_cost
@@ -18,10 +18,21 @@ end
 R"""
 # library(ggbreak)
 
+RED = "#F97800"
+PINK = "#ECA2CB"
+TEAL = "#119FBA"
+
+cpal = scale_colour_manual(values=c(
+    idiosyncratic=TEAL,
+    compositional=RED,
+    `-1` = TEAL,
+    `1` = RED
+), aesthetics=c("fill", "colour"), name="")
+
 indi_cost %>%
-    # filter(!between(K, 50, 100)) %>%
+    filter(S == 10) %>%
     pivot_longer(c(idiosyncratic, compositional), names_to="name", values_to="cost") %>%
-    group_by(name) %>% mutate(cost = cost - lag(cost, default=0)) %>%
+    # group_by(name) %>% mutate(cost = cost - lag(cost, default=0)) %>%
     ggplot(aes(K, cost, color=name)) +
     # geom_vline(xintercept=filter(indi_equality, S==20)$K, linewidth=.4) +
     geom_line() +
@@ -31,30 +42,36 @@ indi_cost %>%
     labs(x="# Tasks", y="Total Cost") +
     no_legend
 
-fig("indi_cost", h=2, w=2.5)
+HEIGHT = 2
+WIDTH = 2.5
+fig("indi_cost")
 """
-
-# %% --------
-
-indi_cost = dataframe(grid(S=1:50, K=1:200)) do (;S, K)
-    expected_cost(RedBlackEnv(;S, K))
-end
-@rput indi_cost
 
 R"""
 indi_cost %>%
     mutate(
         compositional = compositional,
-        advantage = (idiosyncratic - compositional) / K,
+        advantage = (idiosyncratic - compositional),
+        advantage = sign(advantage) * abs(advantage)
+        # advantage = factor(sign((idiosyncratic - compositional))),
+        # advantage = (idiosyncratic - compositional) / K,
         # advantage = 2 * (advantage > 0) - 1
     ) %>%
     ggplot(aes(K, S, fill=advantage)) +
     heatmap() +
-    scale_fill_continuous_diverging(h1=197, h2=350, c1=180, l1=20, l2=95, p1=1, p2=1.5, rev=F, name="compositional advantage")
+    scale_fill_gradient2(
+      low = "#00A4C3",    # color for low values
+      mid = "white",    # color for mid values
+      high = RED,  # color for high values
+      midpoint = 0        # value where the mid color is applied
+    ) +
+    theme(legend.title = element_blank())
+    # cpal + no_legend + coord_fixed()
+    # scale_fill_continuous_diverging(h1=197, h2=29, c1=180, l1=30, l2=95, p1=1, p2=1.5, rev=F, name="compositional advantage")
     # geom_line(aes(fill=NaN), data=filter(indi_equality, K <= 100), linewidth=.4, linetype="dashed")
 
 
-fig("indi_cost_heat", w=4)
+fig("indi_cost_heat", w=WIDTH+.5)
 """
 
 # %% ==================== cost without replacement ====================

@@ -26,7 +26,7 @@ library(ggrastr)
 
 # %% ==================== Project-specific ====================
 
-RED = "#E62A65"
+RED = "#E86623"
 PINK = "#ECA2CB"
 TEAL = "#07A9C0"
 
@@ -642,11 +642,12 @@ fancy_name_compact = function(lab) {
 }
 
 theme_update(
+    text = element_text(family = "Helvetica"),
     axis.title.x = element_text_transform(transform = fancy_name),
     axis.title.y = element_text_transform(transform = fancy_name),
     # legend.text = element_text(),
     legend.title = element_text_transform(transform = fancy_name_compact),
-    strip.text = element_text_transform(transform = fancy_name)
+    strip.text = element_text_transform(transform = fancy_name),
 )
 
 no_fancy = theme(
@@ -748,6 +749,7 @@ fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_
         }
 
     }
+    return(p)
     # invisible(dev.off())
     # knitr::include_graphics(p)
 }
