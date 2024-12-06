@@ -1,7 +1,7 @@
 using Random
 using Base: @kwdef
 using Serialization
-using AxisKeys
+
 using SplitApplyCombine
 import Base.Iterators: product
 using Statistics
@@ -282,26 +282,33 @@ function wrap_pivot(df::DataFrame, val, f; dims...)
     end
 end
 
-macro bywrap(x, what, val, default=missing)
-    arg = :(:_val = $val)
-    esc(quote
-        b = $(DataFramesMeta.by_helper(x, what, arg))
-        what_ = $what isa Symbol ? ($what,) : $what
-        wrapdims(b, :_val, what_..., sort=true; default=$default)
-    end)
-end
+# using AxisKeys
 
-function keyed(name, xs)
-    KeyedArray(xs; Dict(name => xs)...)
-end
+# keymax(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmax(X).I))...)
+# keymax(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmax(x)]
+# keymin(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmin(X).I))...)
+# keymin(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmin(x)]
 
-function dataframe(x::KeyedArray)
-    @chain x begin
-        DataFrame
-        @rtransform $AsTable = :value
-        select(Not(:value))
-    end
-end
+# macro bywrap(x, what, val, default=missing)
+#     arg = :(:_val = $val)
+#     esc(quote
+#         b = $(DataFramesMeta.by_helper(x, what, arg))
+#         what_ = $what isa Symbol ? ($what,) : $what
+#         wrapdims(b, :_val, what_..., sort=true; default=$default)
+#     end)
+# end
+
+# function keyed(name, xs)
+#     KeyedArray(xs; Dict(name => xs)...)
+# end
+
+# function dataframe(x::KeyedArray)
+#     @chain x begin
+#         DataFrame
+#         @rtransform $AsTable = :value
+#         select(Not(:value))
+#     end
+# end
 
 macro require(ex)
     quote
@@ -341,24 +348,12 @@ function dataframe(f, params; parallel=false, pbar=parallel, splat=false)
     end |> skipmissing |> collect |> DataFrame
 end
 
-keymax(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmax(X).I))...)
-keymax(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmax(x)]
-keymin(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmin(X).I))...)
-keymin(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmin(x)]
-
 round1(x) = round(x; digits=1)
 round2(x) = round(x; digits=2)
 round3(x) = round(x; digits=3)
 round4(x) = round(x; digits=4)
 
 fmt(digits, x) = Printf.format(Printf.Format("%.$(digits)f"), x)
-
-function Base.diff(K::KeyedArray; dims, removefirst::Bool=true)
-    range = removefirst ? (2:size(K, dims)) : (1:size(K,dims)-1)
-    out = similar(selectdim(K, dims, range) )
-    out[:] = Base.diff(parent(parent(K)); dims=AxisKeys.dim(parent(K),dims))
-    return out
-end
 
 Base.dropdims(idx::Union{Symbol,Int}...) = X -> dropdims(X, dims=idx)
 squeezify(f) = (X, dims...) -> dropdims(f(X; dims); dims)
@@ -407,3 +402,20 @@ one_index(x::Int) = x + 1
 one_index(x::AbstractArray) = map(one_index, x)
 one_index(x::Tuple) = map(one_index, x)
 one_index(x::NamedTuple) = map(one_index, x)
+
+
+
+# using AxisKeys
+
+# keymax(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmax(X).I))...)
+# keymax(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmax(x)]
+# keymin(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmin(X).I))...)
+# keymin(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmin(x)]
+
+# function Base.diff(K::KeyedArray; dims, removefirst::Bool=true)
+#     range = removefirst ? (2:size(K, dims)) : (1:size(K,dims)-1)
+#     out = similar(selectdim(K, dims, range) )
+#     out[:] = Base.diff(parent(parent(K)); dims=AxisKeys.dim(parent(K),dims))
+#     return out
+# end
+
