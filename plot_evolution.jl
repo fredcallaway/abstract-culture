@@ -20,6 +20,7 @@ function run_sim_infinite(;n_gen=30,
     df
 end
 
+
 # %% ==================== first plot ====================
 
 # run_sim_infinite(S = [5, 10], D = 1 .* 3 .^ (1:5), p_r=1, p_brr=0.5, init=.01)

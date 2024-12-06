@@ -2,12 +2,60 @@ include("utils.jl")
 include("r.jl")
 # %% --------
 
-properties((;B, N)) =     (
-        guess_rate = B / N,
-        chance_compositionality = 1 / B,
-        partial_solution_prob = 1/√N,
-        partial_advantage = √N / B,
-    )
+
+map(6:8) do d
+    g1 = Geometric(20 / d^4)
+    g2 = Geometric(1 / d^2)
+    quantile(g1, .75) + 1
+end
+
+using StatsPlots
+# %% --------
+
+d = 9; q = .5
+# d = 6; q=.99
+g1 = Geometric(20 / d^4)
+quantile(g1, .75)
+g2 = Geometric(1 / d^2)
+
+
+p = plot()
+foreach((g1, g2)) do g
+    gp = Truncated(g, 0, quantile(g, q))
+    x = 0:quantile(gp, 0.999)
+    px = pdf(gp, x)
+    @show sum(px .* x)
+    plot!(x, px, label=string(g))
+end
+
+# %% --------
+d = 9;
+q = 0.5;
+g1 = Geometric(20 / d^4)
+g2 = Geometric(1 / d^2)
+map((g1, g2)) do g
+    x = 0:quantile(g, q)
+    px = pdf(g, x)
+    normalize!(px)
+    dg = DiscreteNonParametric(x, px)
+    mean(dg), std(dg), maximum(dg)
+end
+
+
+# %% --------
+
+# (;mean = mean(g1) / mean(g2), quantile = (1 + quantile(g1, 0.75)) / (1 + quantile(g2, 0.75)))
+
+Geometric()
+# %% --------
+
+
+properties((; B, N)) = (
+    guess_rate=B / N,
+    chance_compositionality=1 / B,
+    partial_solution_prob=1 / √N,
+    partial_advantage=√N / B,
+)
 
 
 df = dataframe(properties, grid(B=1:20, N=2 .^ (5:8)))
@@ -59,7 +107,7 @@ fig()
 
 params = flatmap(4:6) do S
     map(1:5) do m
-        (;B=S*m, N=S^4, m)
+        (; B=S * m, N=S^4, m)
     end
 end
 

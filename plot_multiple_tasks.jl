@@ -1,5 +1,5 @@
 include("remote.jl")
-connect_repl("hb120")
+# connect_repl("hb120")
 
 # %% --------
 
@@ -95,9 +95,13 @@ stable %>%
 fig()
 """
 
+# %% --------
+
+# run_sim_finite(N=20, K=5, S=5, D=[5,10,20], p_0=.05, p_brr=.3, p_r=.25, p_b)
+
 # %% ==================== plot asymptote ====================
 
-task = @remote run_sim_asymptote(;N=100000, K=[1, 20, 100], S, D = D, p_r=1., init=0., p_0=.01, repeats=10)
+task = run_sim_asymptote(;N=100000, K=[1, 20, 100], S, D = D, p_r=1., init=0., p_0=.01, repeats=10)
 
 
 # %% --------
