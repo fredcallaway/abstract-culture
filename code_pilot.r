@@ -1,14 +1,18 @@
 # %% --------
 suppressPackageStartupMessages(source("base.r"))
 
-FIGS_PATH <- "figs/codes/code-pilot-"
+version <- "code-pilot-v4"
+FIGS_PATH <- glue("figs/codes/code-pilot-{version}/")
 
-df <- read_csv("tmp/code-pilot.csv") |>
+df <- read_csv(glue("data/{version}/trials.csv")) |>
     mutate(
+        # full_solution_type = paste0(solution_type, if_else(used_manual, "-M", "-?")),
         full_solution_type = paste0(solution_type, if_else(used_manual, "-M", "-?")),
         compositional = factor(compositional, levels = c("none", "partial", "full", "exact")),
         version = substr(version, 12, 15)
     ) |> labelize(bespoke, "available", "unavailable")
+
+
 
 RED <- "#E86623"
 TEAL <- "#07A9C0"
@@ -27,6 +31,8 @@ spal <- scale_fill_manual(values = c(
     "compositional-?" = lighten(RED, .5)
 
 ))
+
+df
 
 
 # %% --------
