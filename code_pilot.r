@@ -1,7 +1,7 @@
 # %% --------
 suppressPackageStartupMessages(source("base.r"))
 
-version <- "code-pilot-v4"
+version <- "code-pilot-v45"
 FIGS_PATH <- glue("figs/codes/code-pilot-{version}/")
 
 df <- read_csv(glue("data/{version}/trials.csv")) |>
@@ -10,10 +10,13 @@ df <- read_csv(glue("data/{version}/trials.csv")) |>
         full_solution_type = paste0(solution_type, if_else(used_manual, "-M", "-?")),
         compositional = factor(compositional, levels = c("none", "partial", "full", "exact")),
         version = substr(version, 12, 15)
-    ) |> labelize(bespoke, "available", "unavailable")
+    ) |>
+    labelize(bespoke, "available", "unavailable") |> 
+    mutate(pid = paste0(version, "-", as.character(dense_rank(uid))), .by=version)
 
+# %% --------
 
-
+DPI <- 300
 RED <- "#E86623"
 TEAL <- "#07A9C0"
 
@@ -32,49 +35,51 @@ spal <- scale_fill_manual(values = c(
 
 ))
 
-df
-
-
 # %% --------
 
 df |>
     ggplot(aes(compositional, fill = full_solution_type)) +
     geom_bar(position = "fill") +
     coord_equal(ratio = 3) +
-    ggplot2::facet_grid(bespoke~version) +
+    # ggplot2::facet_grid(bespoke~version) +
+    facet_grid(~bespoke) +
     labs(x="compositional manual info", y="proportion",
-    fill="solution type",
-    caption="-M means by manual, -? means by guessing") +
+         fill="solution type",
+         caption="-M means by manual, -? means by guessing") +
     spal
-DPI <- 300
 fig("solution-rates", w=8, h=4)
+
 # %% --------
 df |>
-    ggplot(aes(compositional, 1 * (solution_type == "compositional"), fill = bespoke)) +
-    stat_summary(fun = mean, geom = "bar", position = "dodge") +
-    stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = .3, position = position_dodge(width = 1)) +
-    ylab("Compositional solution") +
-    coord_equal(ratio = 3) +
-    facet_wrap(~version)
+    ggplot(aes(compositional, 1 * (solution_type == "compositional"))) +
+    bars(fill=RED) +
+    facet_grid(~bespoke) +
+    labs(x="Compositional in Manual?", y="Compositional Rate")
+
+fig("compositional-rate", w=5)
 
 # %% --------
 
+df |>
+    ggplot(aes(compositional, 1*used_manual)) +
+    bars() +
+    facet_grid(~bespoke) +
+    labs(x="Compositional in Manual?", y="Manual Usage")
+
+fig("manual-rate", w=5)
+
 # %% --------
+
+
 
 df |> 
-    filter(bespoke == "unavailable") |>
+    filter(duration < quantile(duration, .95)) |> 
     ggplot(aes(compositional, duration, color=solution_type)) +
     geom_quasirandom(size=.2) + cpal +
-    stat_summary(fun = mean, size = .5, shape = 4) +
-    facet_wrap(~version) +
-    labs(caption="bespoke unavailable")
+    points() +
+    facet_wrap(~bespoke)
 
-fig("solution-time", w=8, h=2.5)
-# %% --------
-
-df |>
-    filter(compositional == "partial", bespoke == "unavailable") |> 
-    select(duration, solution_type)
+fig("solution-time", w=6, h=2.5)
 
 # %% --------
 
@@ -92,25 +97,22 @@ df |>
 
 # %% --------
 
-pids = df |> 
-    distinct(uid, version) |> 
-    group_by(version) |>
-    mutate(
-        pid = paste0(version, "-", as.character(row_number()))
-    )
-
-df = df |> left_join(pids)
-# %% --------
-
 df |>
-    mutate(uid = substr(uid, 12, 100)) |>
-    mutate(bespoke = substr(bespoke, 1, 1)) |>
+    # drop duplicate trials
+    slice_head(n=1, by=c(pid, bespoke, compositional)) |> 
+    mutate(bespoke = substr(bespoke, 1, 2)) |>
     ggplot(aes(bespoke, compositional, fill = full_solution_type)) +
     geom_tile() +
-    ggplot2::facet_wrap(~pid, ncol = 15) +
-    coord_equal() + spal
+    ggplot2::facet_wrap(~pid, nrow = 2) +
+    coord_equal() + spal + no_gridlines
 
 fig("individual-solutions", w = 10, h = 5)
+
+# %% --------
+
+df |> 
+    filter(bespoke == "unavailable", compositional == "none", solution_type == "compositional") |> 
+    select(uid, trial_number, n_button_compositional)
 
 
 # %% --------
@@ -122,3 +124,12 @@ df |>
     facet_wrap(~uid, ncol = 14) +
     coord_equal()
 fig("compositional-bespoke-none", w = 10, h = 5)
+
+# %% --------
+
+df |> 
+    filter(compositional == "none", solution_type == "compositional") |> 
+    ggplot(aes(n_button_compositional)) +
+    geom_bar()
+
+fig()

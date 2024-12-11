@@ -5,8 +5,8 @@ using DataFrames
 
 # %% --------
 
-versions = ["code-pilot-v4"]
-outdir = "data/code-pilot-v4/"
+versions = ["code-pilot-v4", "code-pilot-v5"]
+outdir = "data/code-pilot-v45/"
 mkpath(outdir)
 function ffmap(f, args)
     results = skipmissing(map(f, args))
@@ -25,14 +25,15 @@ function pframe(f, data=participants)
 end
 
 participants = load_participants(versions...)
+@show nrow(participants)
 uids = participants.uid
 trials = mapreduce(load_trials, vcat, participants.uid[2:end])
 
-# %% --------
+# %% ===== check for problems =================================================
 
 n_failed = sum(uids) do uid
     events = load_events(uid)
-    !isempty(filtermatch(events, "experiment.tooManyTries"))
+    !isempty(filtermatch(events, "experiment.terminate"))
 end
 if n_failed > 0
     @warn "$n_failed participants failed the experiment"
@@ -48,9 +49,14 @@ end
 parse_task(task) = @chain task collect parse.(Int, _) Tuple
 
 function parse_manual(manual::Vector)
+    # tmp
     map(manual) do m
+        if m["task"] == "null"
+            @warn "null task"
+            return missing
+        end
         (; task=parse_task(m["task"]), compositional=m["compositional"], code=m["code"])
-    end
+    end |> skipmissing |> collect
 end
 
 bespoke_knowledge(s::InformationState) = any(x->x.task == s.task && !x.compositional, s.manual)
@@ -70,12 +76,6 @@ function InformationState(t::Trial)
     task = @chain init["task"] collect parse.(Int, _) Tuple
     InformationState(manual, task)
 end
-
-filtermatch(uids[1], "experiment.initialize")[1]["PARAMS"]["manual"]
-get_params(trials[1].uid)["manual"]
-trials[1].events[1]["manual"]
-
-t.events
 
 n_try(t::Trial) = length(filtermatch(t.events, "machine.enter"))
 n_button(t::Trial) = sum(startswith(get(e, "action", ""), "nextCode") for e in t.events)
@@ -171,9 +171,9 @@ feedback = pframe() do uid
     # ensure_keys!(d, ["whynot", "feedback"])
 end
 
-# for x in feedback.special2
-#     println(x)
-# end
+for x in feedback.special2
+    println("- ", x)
+end
 println("------------ feedback ------------")
 for x in feedback.feedback
     if x != ""
