@@ -47,7 +47,7 @@ function extract_parameters(uid::String, keys...)
     Dict{String,Any}(pick_dict(params, keys))
 end
 
-@memoize function load_participants(versions...; all_generations=false, keep_incomplete=false, keep_extras=false)
+@memoize function load_participants(versions...; all_generations=false, keep_incomplete=false, keep_failed=false,keep_extras=false)
     if all_generations
         versions = mapreduce(vcat, versions) do v
             filter(readdir("../machine-task/data/raw")) do v1
@@ -67,19 +67,20 @@ end
             @rtransform! @astable begin
                 :version = version
                 :uid = string(version, "-", :wid)
-                :workerid = idents[:wid]
+                # :workerid = idents[:wid]
                 events = load_events(:uid)
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
+                :failed = !isnothing(findnextmatch(events, 1, "experiment.terminate")[1])
                 :total_time = (events[end]["time"] - events[1]["time"]) / 60000
             end
         end
-        # if version < "vM7"
-        #     select!(df, Not([:assignmentId, :hitId, :status, :counterbalance, :mode]))
-        # end
-        if keep_incomplete
-            return df
+        if !keep_incomplete
+            @subset! df :complete
         end
-        @subset! df :complete
+        if !keep_failed
+            @warn "removing $(sum(df.failed)) failed participants"
+            @rsubset! df ! :failed
+        end
         # see old-data.jl for cut code
         df
     end
@@ -123,6 +124,9 @@ end
     events = load_events(uid)
     version, wid = rsplit(uid, "-"; limit=2)
     start_main = findnextmatch(events, 1, "timeline.start.main")[2]
+    if isnothing(start_main)
+        error("no main start for $uid")
+    end
     g = group(e->get(e, "trialID", ""), events[start_main:end])
     delete!(g, "")
     map(enumerate(g)) do (trial_number, trial_events)

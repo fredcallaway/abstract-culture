@@ -1,13 +1,26 @@
+# %% --------
+
 include("utils.jl")
 include("data.jl")
 
 using DataFrames
+using TOML
 
-# %% --------
+empty!(ARGS)
+push!(ARGS, "code-pilot-v11")
 
-versions = ["code-pilot-v4", "code-pilot-v5"]
-outdir = "data/code-pilot-v45/"
+if length(ARGS) == 0
+    # Pull from experiment config
+    config = read("../machine-task/config.txt", String)
+    version = match(r"experiment_code_version = (.*)", config).captures[1]
+else
+    version = ARGS[1]
+end
+
+println("Processing version: $version")
+outdir = "data/$(version)/"
 mkpath(outdir)
+
 function ffmap(f, args)
     results = skipmissing(map(f, args))
     while eltype(results) <: AbstractVector
@@ -24,22 +37,23 @@ function pframe(f, data=participants)
     end
 end
 
-participants = load_participants(versions...)
+participants = load_participants(version; keep_failed=false)
 @show nrow(participants)
-uids = participants.uid
-trials = mapreduce(load_trials, vcat, participants.uid[2:end])
 
-# %% ===== check for problems =================================================
+uid2pid = Dict(participants.uid .=> participants.pid)
 
-n_failed = sum(uids) do uid
-    events = load_events(uid)
-    !isempty(filtermatch(events, "experiment.terminate"))
-end
-if n_failed > 0
-    @warn "$n_failed participants failed the experiment"
-end
+trials = mapreduce(load_trials, vcat, participants.uid)
+participants |> CSV.write(outdir * "participants.csv")    
 
 # %% --------
+
+tt = filter(trials) do t
+    uid2pid[t.uid] == 6
+end
+
+tt[2].events
+# %% ===== trials.csv =========================================================
+
 
 struct InformationState
     manual::Vector{@NamedTuple{task::Tuple{Int64,Int64}, compositional::Bool, code::String}}
@@ -103,29 +117,44 @@ end
 
 duration(t::Trial) = (t.events[end]["time"] - t.events[1]["time"]) / 1000
 
+
+function maybe_time(events, e)
+    e = findnextmatch(events, e)[1]
+    isnothing(e) ? missing : e["time"]
+end
+
+function response_times(t::Trial)
+    events = t.events
+    start = maybe_time(events, "machine.run")
+    rt_select = maybe_time(events, "machine.enter")
+    rt_left = maybe_time(events, "machine.button.left")
+    rt_right = maybe_time(events, "machine.button.right")
+    rt_comp = safe_minimum(skipmissing([rt_left, rt_right]); default=missing)
+    rt_bespoke = maybe_time(events, "machine.button.bespoke")
+    map(x -> (x - start) / 1000, (;rt_select, rt_comp, rt_bespoke))
+end
+
 df = map(trials) do t
-    # if ismissing(solution(t))
-    #     return missing
-    # end
     info = InformationState(t)
     (;
         version = t.version,
-        uid = t.uid,
+        pid = uid2pid[t.uid],
         trial_number = t.trial_number,
         duration = duration(t),
         n_try = n_try(t),
-        # n_button = n_button(t),
         n_button_bespoke = sum(get(e, "action", "") == "nextCode.bespoke" for e in t.events),
         n_button_compositional = sum(get(e, "action", "") in ("nextCode.left", "nextCode.right") for e in t.events),
         solution_type = solution_type(t),
         used_manual = used_manual(t, info),
-        knowledge(info)...
+        knowledge(info)...,
+        response_times(t)...,
     )
 end |> skipmissing |> collect |> DataFrame
 
 df |> CSV.write(outdir * "trials.csv")
 
-# %% --------
+
+# %% ===== instruct_times.csv =================================================
 
 stages = map(filtermatch(load_events(participants.uid[1]), "instructions.runStage")) do e
     e["event"]
@@ -140,7 +169,9 @@ instruct_times = pframe() do uid
     end
 end
 
-@chain instruct_times begin
+instruct_times |> CSV.write(outdir * "instruct_times.csv")
+
+x = @chain instruct_times begin
     @groupby :stage
     @combine begin
         :time = mean(:time)
@@ -150,7 +181,72 @@ end
     end
 end
 
-# %% ==================== feedback ====================
+# %% ===== button_times.csv =================================================
+
+button_times = pframe() do uid
+    map(load_trials(uid)) do t
+        map(filtermatch(t.events, "machine.button")) do e
+            (; time=e["time"] / 1000, 
+            kind=endswith(e["event"], "bespoke") ? :bespoke : :compositional)
+        end
+    end
+end
+
+button_times |> CSV.write(outdir * "button_times.csv")
+
+# %% --------
+
+
+# %% ===== events.csv =========================================================
+
+participants[6, :]
+
+function solutions(t::Trial)
+    x = invert(t.events[1]["solutions"])
+    (;bespoke=x["bespoke"], compositional=x["compositional"])
+end
+
+pframe() do uid
+    map(load_trials(uid)) do t
+        sol = solutions(t)
+        start = findnextmatch(t.events, "machine.run")[1]["time"]
+        map(t.events[3:end]) do e
+            if e["event"] == "machine.enter"
+                if startswith(e["action"], "select")
+                    event = :dial
+                    pos = parse(Int, e["action"][end]) + 1
+                    c = e["code"][pos] == sol.compositional[pos]
+                    b = e["code"][pos] == sol.bespoke[pos]
+                    kind = 
+                        c && b ? :ambiguous :
+                        c ? :compositional :
+                        b ? :bespoke :
+                        :wrong
+                else
+                    event = :button
+                    kind = endswith(e["action"], "bespoke") ? :bespoke : :compositional
+                end
+            elseif startswith(e["event"], "machine.solution")
+                event = "solution"
+                kind = endswith(e["event"], "bespoke") ? :bespoke : :compositional
+            else
+                return missing
+            end
+            (; time = (e["time"] - start) / 1000, trial_number=t.trial_number, event, kind)
+        end
+    end
+end |> CSV.write(outdir * "events.csv")
+
+# %% --------
+
+pframe() do uid
+    events = load_events(uid)
+    map(filtermatch(events, "instructions.showHelp")) do e
+        (; stage=e["stage"], text=e["text"])
+    end
+end
+
+# %% ===== feedback.csv ========================================================
 
 function ensure_keys!(d, keys)
     for k in keys
@@ -170,18 +266,20 @@ feedback = pframe() do uid
     # (difficulty=x["difficulty"], feedback=x["feedback"])
     # ensure_keys!(d, ["whynot", "feedback"])
 end
-
-for x in feedback.special2
-    println("- ", x)
-end
-println("------------ feedback ------------")
-for x in feedback.feedback
-    if x != ""
-        println("- ", x)
-    end
-end
+feedback |> CSV.write(outdir * "feedback.csv")
 
 # %% --------
+
+pframe() do uid
+    events = load_events(uid)
+    x = findnextmatch(events, 1, "instructionsSurvey.submitted")[1]
+    NamedTuple(x)
+    # (difficulty=x["difficulty"], feedback=x["feedback"])
+    # ensure_keys!(d, ["whynot", "feedback"])
+end |> CSV.write(outdir * "instructions-survey.csv")
+
+# %% --------
+
 
 times = pframe() do uid
     events = load_events(uid)
@@ -204,4 +302,4 @@ times = pframe() do uid
     # d["workerid"] = idents[split(uid, "-")[end]]
     d
 end
-times
+times |> CSV.write(outdir * "times.csv")

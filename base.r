@@ -140,6 +140,14 @@ glue = glue::glue
 
 # %% ==================== Miscellany ====================
 
+read_csvs <- function(versions, name, dir="data") {
+    map(versions, ~ 
+        read_csv(glue("{dir}/{.x}/{name}.csv")) |> 
+        mutate(version = .x)
+    ) |> 
+    bind_rows()
+}
+
 human_model_frame = function(human, model) {
     bind_rows(
         mutate(model, agent="model"),
@@ -736,8 +744,8 @@ fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_
         return()
     }
     ggsave("/tmp/fig.png", width=w, height=h, dpi=dpi, ...)
-    stamp = format(Sys.time(), "%m-%d-%H-%M-%S")
-    p = glue('".fighist/{gsub("/", "-", name)}-{stamp}.png"')
+    stamp <- format(Sys.time(), "%m-%d-%H-%M-%S")
+    p <- glue('".fighist/{gsub("/", "-", name)}-{stamp}.png"')
     system(glue('mv /tmp/fig.png {p}'))
     if (name != "tmp") {
         system(glue('mkdir -p `dirname {path}{name}.png`'))

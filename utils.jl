@@ -364,6 +364,8 @@ ssum = squeezify(sum)
 
 safe_maximum(x; default) = isempty(x) ? default : maximum(x)
 safe_maximum(f::Function, x; default) = isempty(x) ? default : maximum(f, x)
+safe_minimum(x; default) = isempty(x) ? default : minimum(x)
+safe_minimum(f::Function, x; default) = isempty(x) ? default : minimum(f, x)
 safe_mean(x; default) = isempty(x) ? default : mean(x)
 
 function monte_carlo(f, N=10000)
