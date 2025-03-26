@@ -466,6 +466,14 @@ gridlines = theme(
     panel.grid.major.y = element_line(color="#EDEDED"),
 )
 
+grid_y = theme(
+    panel.grid.major.y = element_line(color="#EDEDED"),
+)
+
+grid_x = theme(
+    panel.grid.major.x = element_line(color="#EDEDED"),
+)
+
 no_xaxis_ticks = theme(
     # axis.title.x=element_blank(),
     axis.text.x=element_blank(),
@@ -479,6 +487,12 @@ no_yaxis_ticks = theme(
     # axis.title.x=element_blank(),
     axis.text.y=element_blank(),
     axis.ticks.y=element_blank()
+)
+
+no_xaxis_ticks = theme(
+    # axis.title.x=element_blank(),
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank()
 )
 
 no_yaxis = theme(
