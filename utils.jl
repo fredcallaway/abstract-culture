@@ -21,6 +21,10 @@ const TOL = 1e-5
 # %% ==================== Project-specific ====================
 
 
+function Base.NamedTuple(d::Dict{String})
+    NamedTuple(Dict(Symbol(k) => v for (k, v) in d))
+end
+
 expectation(f, lo, hi) = first(quadgk(f, lo, hi))
 
 function expectation(f::Function, d::Distribution; lo=quantile(d, TOL), hi=quantile(d, 1-TOL))
