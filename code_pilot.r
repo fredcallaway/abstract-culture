@@ -1,5 +1,5 @@
 # %% --------
-suppressPackageStartupMessages(source("base.r"))
+source("base.r")
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) == 0) {
@@ -9,40 +9,16 @@ if (length(args) == 0) {
 } else {
     version <- args[1]
 }
+
+
 versions <- c(version)
+
 FIGS_PATH <- glue("figs/codes/{version}/")
 
 participants <- read_csvs(versions, "participants") %>% 
     select(-c(useragent, wid, active_minutes))
 
-df <- read_csvs(c(version), "trials") |>
-    mutate(
-        # full_solution_type = paste0(solution_type, if_else(used_manual, "-M", "-?")),
-        # full_solution_type = paste0(solution_type, if_else(used_manual, "-M", "-?")),
-        # compositional = factor(compositional, levels = c("none", "partial", "full", "exact")),
-        compositional = factor(compositional, levels = c("none", "partial", "full", "exact")),
-        is_compositional = 1* (solution_type == "compositional"),
-        version = substr(version, 12, 15)
-    ) |>
-    labelize(bespoke, "available", "unavailable") %>% 
-    mutate(trial_type = paste0(
-        "B", if_else(bespoke=="available", "*", "0"), 
-        "-", 
-        "C", case_when(
-            compositional=="none" ~ "0",
-            compositional=="partial" ~ "1",
-            compositional=="full" ~ "2",
-            compositional=="exact" ~ "*"
-        )
-    )) %>% 
-    left_join(select(participants, pid, bespokeSide), by="pid")
-
-
-df %>% 
-    group_by(bespoke, compositional) %>% 
-    summarise(p_compositional = mean(solution_type == "compositional")) %>% 
-    write_csv(glue("tmp/compositional-rates-{version}.csv"))
-
+df <- read_csvs(versions, "trials")
 
 DPI <- 300
 RED <- "#E86623"
@@ -55,27 +31,93 @@ cpal <- scale_colour_manual(values = c(
     `1` = RED
 ), aesthetics = c("fill", "colour"), name = "")
 
-
 print(glue("----- ANALYZING VERSION {version} -----"))
 print(glue("{length(unique(df$pid))} participants and {nrow(df)} trials"))
 
-# %% --------
+# %% ===== catch trials =======================================================
 
-df |>
-    mutate(compositionalSide = if_else(bespokeSide == "left", "right", "left")) |>
-    # mutate(solution_type = if_else(n_button_bespoke > 20, "bespoke", solution_type)) |>
-    ggplot(aes(compositionalSide, 1 * (solution_type == "compositional"))) +
-    bars(fill=RED) +
-    ylim(0, 1) +
-    labs(x="Compositional Side", y="Compositional Rate")
-
-fig("compositional-rate-single")
+df %>% 
+    filter(is_catch) %>% 
+    ggplot(aes(trial_type, 1*choose_best)) +
+    bars() +
+    coord_flip()
+    
+fig()
 
 # %% --------
 
-df |>
-    # mutate(solution_type = if_else(n_button_bespoke > 20, "bespoke", solution_type)) |>
-    ggplot(aes(compositional, 1 * (solution_type == "compositional"))) +
+df %>% 
+    filter(is_catch) %>% 
+    ggplot(aes(trial_number, 1*choose_best, color=trial_type)) +
+    point_line()
+    
+fig()
+
+# %% --------
+df %>% 
+    filter(is_catch | (trial_number == 0)) %>% 
+    mutate(trial_type = fct_reorder(trial_type, trial_number)) %>%    
+    ggplot(aes(pid, trial_type, fill=choose_best)) +
+    geom_tile() +
+    scale_fill_manual(values = c(`TRUE`="forestgreen", `FALSE`="red"))
+
+fig(w=7, h=2)
+
+# %% ===== exclusions =========================================================
+
+pass_rate <- df %>% 
+    filter(is_catch) %>% 
+    summarise(pass_rate = mean(choose_best), .by=pid)
+
+
+pass_rate %>% 
+    ggplot(aes(factor(pass_rate))) +
+    geom_bar()
+
+fig()
+
+# %% --------
+
+harder <- read_csvs(versions, "bespoke_efficiency")
+
+pass_instructions <- df %>% 
+    filter(is_practice) %>% 
+    drop_na(effort_difference) %>% 
+    transmute(pid, pass_practice = choose_best)
+
+# %% --------
+
+main_trials <- df %>% 
+    filter(!is_catch, !is_practice) %>% 
+    left_join(pass_rate, by="pid") %>% 
+    # filter(pass_rate > 0.5) %>% 
+    filter(pass_rate == 1) %>% 
+    mutate(
+        bespoke = factor(
+            substr(trial_type, 4, 8),
+            levels = c("zilch", "exact")
+        ),
+        compositional = factor(
+            substr(trial_type, 16, 30), 
+            levels = c("zilch", "partial", "full", "exact")),
+        solution_type = if_else(choose_compositional, "compositional", "bespoke")
+    )
+
+n_final <- main_trials %>% with(length(unique(pid)))
+n_initial <- df %>% with(length(unique(pid)))
+n_drop <- n_initial - n_final
+
+print(glue("Dropped {n_drop}/{n_initial} ({round(n_drop / n_initial * 100)}%) participants; {n_final} participants remain"))
+
+# %% ===== compositionality rate ==============================================
+
+main_trials %>% 
+    group_by(bespoke, compositional) %>%
+    summarise(p_compositional=mean(choose_compositional)) %>% 
+    write_csv(glue("tmp/compositional-rates-{version}.csv"))
+
+main_trials |>
+    ggplot(aes(compositional, 1 * choose_compositional)) +
     bars(fill=RED) +
     facet_grid(~bespoke) +
     ylim(0, 1) +
@@ -83,12 +125,26 @@ df |>
 
 fig("compositional-rate", w=5)
 
+# %% ===== feedback ===========================================================
+
+feedback <- read_csvs(versions, "feedback")
+
+feedback %>% 
+    select(pid, description) %>% 
+    print(n=100)
+
 # %% --------
 
-df |> 
+feedback %>% 
+    select(pid, feedback) %>% 
+    print(n=100)
+
+# %% ===== timing =======================================================
+
+main_trials |> 
     filter(duration < quantile(duration, .95)) |> 
     ggplot(aes(compositional, duration, color=solution_type)) +
-    geom_quasirandom(size=.2) + cpal +# %% --------yy
+    geom_quasirandom(size=.2) + cpal +
     points() +
     facet_wrap(~bespoke)
 
@@ -96,11 +152,100 @@ fig("solution-time", w=6, h=2.5)
 
 # %% --------
 
+times <- read_csvs(versions, "times")
+
+times %>% summarise(across(-c(pid, version), median))
+
+
+# %% --------
+
+instruct_times <- read_csvs(versions, "instruct_times")
+
+instruct_times %>% 
+    agg(time, stage, median)
+
+
+# %% --------
+
+type_times <- df %>% 
+    # filter(duration < 200) %>% 
+    group_by(trial_type) %>% 
+    summarise(duration = mean(duration))
+
+# %% --------
+
+catch_time <- type_times %>% filter(is_catch) %>% with(sum(duration))
+
+# %% --------
+
+main_times <- main_trials %>% 
+    filter(duration < 200) %>% 
+    group_by(bespoke, compositional) %>% 
+    summarise(duration =mean(duration))
+
+get_time <- function(bespoke, compositional) {
+    main_times %>% 
+        filter(bespoke == !!bespoke, compositional == !!compositional) %>% 
+        pull(duration)
+}
+
+main_time <- get_time("exact", "zilch") * 3 +
+    get_time("zilch", "zilch") * 3 +
+    get_time("zilch", "partial") + get_time("zilch", "full") * 2
+
+not_main + (main_time + catch_time) / 60
+
+
+# %% --------
+df %>% 
+    mutate(solution_type = if_else(choose_compositional, "compositional", "bespoke")) %>% 
+    ggplot(aes(trial_type, duration, color=solution_type)) +
+    geom_point() +
+    coord_flip() +
+    cpal +
+    theme(legend.position = "none")
+
+fig()
+
+# %% --------
+
+df %>% 
+    ggplot(aes(trial_number, duration)) +
+    points() +
+    geom_smooth(method="lm")
+
+fig()
+
+
+# %% --------
+
+
+5 + 8
+
+# (15 / 4) * 1.333 * 4/3
+
+# %% --------
+
+button_times <- read_csvs(versions, "button_times")
+
+button_times |> 
+    mutate(delay = time - lag(time)) %>% 
+    filter(delay < 2, delay>0) |> 
+    ggplot(aes(delay, fill=kind)) +
+    geom_histogram(position="identity", alpha=0.8)
+
+fig()
+
+# %% ===== IDK ================================================================
+
+
+# %% --------
+
 besp_dials <- 4
 comp_dials <- 3
 avg_dial_tries <- 4.5
 
-expected <- distinct(df, bespoke, compositional, solution_type) %>% 
+expected <- distinct(main_trials, bespoke, compositional, solution_type) %>% 
     rowwise() %>% 
     mutate(n_try = case_when(
         solution_type == "bespoke" && bespoke == "available" ~ besp_dials,
@@ -117,7 +262,7 @@ chance_lines <- function(yvar, linetype="dashed", ...) {
     geom_errorbar(mapping=aes(y={{yvar}}, ymin = {{yvar}}, ymax = {{yvar}}), linetype = linetype, size=.3, data=expected, ...)
 }
 
-df |> 
+main_trials |> 
     # filter(duration < quantile(duration, .95)) |> 
     ggplot(aes(compositional, n_try, color=solution_type)) +
     chance_lines(n_try, linetype="solid") +
@@ -140,28 +285,6 @@ df |>
 
 fig("individual-solutions", w = 10, h = 5)
 
-# %% ===== timing =======================================================
-
-times <- read_csvs(versions, "times") 
-
-times %>% summarise(across(-c(pid, version), mean))
-
-times %>% 
-    mutate(expected = debrief + instructions + main / 8) %>% 
-    summarise(mean(expected), median(expected))
-
-
-# %% --------
-
-button_times <- read_csvs(versions, "button_times")
-
-button_times |> 
-    mutate(delay = time - lag(time)) %>% 
-    filter(delay < 2, delay>0) |> 
-    ggplot(aes(delay, fill=kind)) +
-    geom_histogram(position="identity", alpha=0.8)
-
-fig()
 
 # %% ===== events =============================================================
 events <- read_csvs(versions, "events")
@@ -239,13 +362,13 @@ events %>%
     select(time, dial, pos, val) %>% 
     print(n=100)
 
-# %% ===== feedback ===========================================================
 
-feedback <- read_csvs(versions, "feedback")
+
+# %% --------
+
 feedback %>% 
-    arrange(preference) %>% 
-    select(pid, preference, preference_reason) %>% 
-    print(n=100)
+    left_join(pass_rate) %>% 
+    select(pid, pass_rate, description)
 
 # %% --------
 

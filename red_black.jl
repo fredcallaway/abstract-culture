@@ -18,7 +18,7 @@ Knowledge(S::Int) = Knowledge(falses(S, S), falses(S), falses(S), 0)
 abstract type AgentPolicy end
 
 struct TabularPolicy <: AgentPolicy
-    table::SMatrix{2, 4, Float64} # bespoke (no/yes) × compositional (none, partial, full, exact)
+    table::SMatrix{2, 4, Float64} # p(red) for bespoke (no/yes) × compositional (none, partial, full, exact)
 end
 
 @kwdef struct RedBlackEnv

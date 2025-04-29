@@ -7,7 +7,7 @@ using DataFrames
 using TOML
 
 empty!(ARGS)
-push!(ARGS, "code-pilot-v17")
+# push!(ARGS, "code-pilot-v21")
 
 if length(ARGS) == 0
     # Pull from experiment config
@@ -16,6 +16,7 @@ if length(ARGS) == 0
 else
     version = ARGS[1]
 end
+
 
 println("Processing version: $version")
 outdir = "data/$(version)/"
@@ -37,167 +38,140 @@ function pframe(f, data=participants)
     end
 end
 
-participants = load_participants(version; keep_failed=false)
-names(participants)
+participants = load_participants(version)
 @show nrow(participants)
 
 uid2pid = Dict(participants.uid .=> participants.pid)
+pid2uid = Dict(participants.pid .=> participants.uid)
 
 trials = mapreduce(load_trials, vcat, participants.uid)
-participants |> CSV.write(outdir * "participants.csv")    
-
-# %% --------
-
-
-task(t::Trial) = @chain t.events[1]["task"] collect parse.(Int, _) Tuple
-solution(t::Trial, type) = t.events[1]["solutions"][string(type)]
-
-function check_reuse(uid; baseline=false)
-    tt = load_trials(uid)
-    flatmap(enumerate(tt)) do (trial_number, t)
-        map(filtermatch(t.events, "machine.select")) do e
-            # check if the entered number was a solution for a past trial
-            # for bespoke, task must match exactly
-            # for left/right, task[1] or task[2] must match
-            current_task = task(t)
-            entered_number = baseline ? string(rand(1:9))[1] : e["val"][1]
-            is_previous_solution = any(1:trial_number-1) do prev_num
-                prev_t = tt[prev_num]
-                prev_task = task(prev_t)
-                prev_solution = solution(prev_t, e["kind"])
-                prev_solution_used = solution_type(prev_t)
-
-                used_relevant_solution = (prev_solution_used == "bespoke") == (e["kind"] == "bespoke")
-                used_relevant_solution || return false
-
-                is_match = (
-                    (e["kind"] == "bespoke" && prev_task == current_task) ||
-                    (e["kind"] == "left" && prev_task[1] == current_task[1]) ||
-                    (e["kind"] == "right" && prev_task[2] == current_task[2])
-                )
-
-                is_match && prev_solution[one_index(e["pos"])] == entered_number
-            end
-            
-            is_previous_solution
-        end
-    end |> sum
-end
-
-uid = participants.uid[1]
-res = map(participants.uid) do uid
-    baseline = repeatedly(100) do
-        check_reuse(uid; baseline=true)
-    end
-    mean(check_reuse(uid) .> baseline)
-end
-
-
-
-
-# %% --------
-
-
-
+participants |> CSV.write(outdir * "participants.csv")
 
 # %% ===== trials.csv =========================================================
 
-struct InformationState
-    manual::Vector{@NamedTuple{task::Tuple{Int64,Int64}, compositional::Bool, code::String}}
-    task::Tuple{Int64,Int64}
+function parse_knowledge(task, manual)
+    man_tasks = [e["task"] for e in manual]
+    exact = any(mt == task for mt in man_tasks)
+    left = any(mt[1] == task[1] for mt in man_tasks)
+    right = any(mt[2] == task[2] for mt in man_tasks)
+    exact ? :exact : left && right ? :full : left || right ? :partial : :zilch
 end
 
-parse_task(task) = @chain task collect parse.(Int, _) Tuple
-
-function parse_manual(manual::Vector)
-    # tmp
-    map(manual) do m
-        if m["task"] == "null"
-            @warn "null task"
-            return missing
-        end
-        (; task=parse_task(m["task"]), compositional=m["kind"] == "compositional", code=m["code"])
-    end |> skipmissing |> collect
+struct Machine
+    task::String
+    knowledge::Symbol
+    n_dial::Int
+    kind::Symbol
 end
 
-bespoke_knowledge(s::InformationState) = any(x->x.task == s.task && !x.compositional, s.manual)
+machine_type(m::Machine) = string(
+    uppercase(string(m.kind)[1]),
+    m.n_dial,
+    "-", m.knowledge
+)
 
-function compositional_knowledge(s::InformationState)
-    exact = any(x->x.task == s.task && x.compositional, s.manual)
-    left = any(x->x.task[1] == s.task[1] && x.compositional, s.manual)
-    right = any(x->x.task[2] == s.task[2] && x.compositional, s.manual)
-    exact ? :exact : left && right ? :full : left || right ? :partial : :none
+function effort(machine; action_cost=1, search_cost=3)
+    search_multiplier = Dict(
+        :exact => 0,
+        :full => 0,
+        :partial => 0.5,
+        :zilch => 1,
+    )[machine.knowledge]
+    
+    machine.n_dial * (action_cost + search_multiplier * search_cost)
 end
 
-knowledge(s::InformationState) = (; bespoke=bespoke_knowledge(s), compositional=compositional_knowledge(s))
-
-function InformationState(t::Trial)
+function parse_machines(t::Trial)
     init = findnextmatch(t.events, "machine.initialize")[1]
-    manual = parse_manual(init["manual"])
-    task = @chain init["task"] collect parse.(Int, _) Tuple
-    InformationState(manual, task)
-end
-
-n_try(t::Trial) = length(filtermatch(t.events, "machine.select"))
-solution_type(t::Trial) = filtermatch(t.events, "machine.solution")[end]["kind"]
-
-function used_manual(t::Trial, info::InformationState)
-    return missing
-end
-
-duration(t::Trial) = (t.events[end]["time"] - t.events[1]["time"]) / 1000
-
-function maybe_time(events, e)
-    e = findnextmatch(events, e)[1]
-    isnothing(e) ? missing : e["time"]
-end
-
-function response_times(t::Trial)
-    events = t.events
-    start = maybe_time(events, "machine.run")
-    rt_select = maybe_time(events, "machine.select")
-    rt_left = maybe_time(events, "machine.button.left")
-    rt_right = maybe_time(events, "machine.button.right")
-    rt_comp = safe_minimum(skipmissing([rt_left, rt_right]); default=missing)
-    rt_bespoke = maybe_time(events, "machine.button.bespoke")
-    map(x -> (x - start) / 1000, (;rt_select, rt_comp, rt_bespoke))
-end
-
-df = map(trials) do t
-    info = InformationState(t)
-    (;
-        version = t.version,
-        pid = uid2pid[t.uid],
-        trial_number = t.trial_number,
-        duration = duration(t),
-        n_try = n_try(t),
-        # n_button_bespoke = sum(get(e, "action", "") == "nextCode.bespoke" for e in t.events),
-        # n_button_compositional = sum(get(e, "action", "") in ("nextCode.left", "nextCode.right") for e in t.events),
-        solution_type = solution_type(t),
-        # used_manual = used_manual(t, info),
-        knowledge(info)...,
-        # response_times(t)...,
-    )
-end |> skipmissing |> collect |> DataFrame
-
-df |> CSV.write(outdir * "trials.csv")
-
-# %% --------
-# include("red_black.jl")
-# env = RedBlackEnv(;S=5, N=30, K=1, M=[5, 20, 50], )
-# sim = simulate(env, 10)
-
-function print_trial(t::Trial)
-    start = t.events[1]["time"]
-    foreach(t.events[3:end]) do e
-        println((e["time"] - start), " ", e["event"], " ", get(e, "kind", ""))
+    map(init["machines"]) do mach
+        task = init["task"]
+        knowledge = parse_knowledge(task, mach["manual"])
+        n_dial = length(mach["code"])
+        kind = Symbol(mach["kind"])
+        Machine(task, knowledge, n_dial, kind)
     end
 end
 
-# t = filter(trials) do t
-#     solution_type(t) == "left"
-# end |> first
-# print_trial(trials[11])
+df = map(trials) do t
+    machines = parse_machines(t)
+
+    eff = effort.(machines)
+    ranks = sortperm(eff)
+
+    sol = try
+        filtermatch(t.events, "machine.solution")[end]
+    catch
+        @warn "no solution for $uid"
+        return missing
+    end
+    choice = sol["position"] + 1
+    # trial_type = join(map(machine_type, machines[ranks]), " vs ")
+    trial_type = join(sort(map(machine_type, machines)), " vs ")
+    n_click = length(filtermatch(t.events, "machine.select"))
+
+    (;
+        pid = uid2pid[t.uid],
+        t.trial_number, 
+        trial_type,
+        is_catch = is_catch(t),
+        is_practice = is_practice(t),
+        choose_left = choice == 1,
+        choose_best = choice == ranks[1],
+        choose_compositional = sol["kind"] == "compositional",
+
+        effort_difference = length(machines) > 1 ? abs(eff[2] - eff[1]) : missing,
+        duration = duration(t),
+        n_click,
+        mach1 = machine_type(machines[1]),
+        mach2 = length(machines) > 1 ? machine_type(machines[2]) : missing,
+    )
+end |> skipmissing |> DataFrame
+df |> CSV.write(outdir * "trials.csv")
+
+
+
+# %% --------
+
+chosen(t::Trial) = filtermatch(t.events, "machine.solution")[end]["position"] + 1
+
+df = pframe() do uid
+    trials = load_trials(uid)
+    n_guess = ffmap(trials) do t
+        @require t.trial_number == 0 || is_catch(t)
+        machines = parse_machines(t)
+        choice = chosen(t)
+        mach = machines[choice]
+
+        @require mach.knowledge == :zilch
+        # n_guess = zeros(Int, mach.n_dial)
+        guessed = [Set{Int}() for _ in 1:mach.n_dial]
+        for e in filtermatch(t.events, "machine.select")
+            if e["machineIdx"]+1 == choice
+                pos = e["pos"] + 1
+                if e["kind"] == "right"
+                    pos += (mach.n_dial ÷ 2)
+                end
+
+                v = parse(Int,e["val"])
+                if v != 0
+                    push!(guessed[pos], v)
+                end
+            end
+        end
+        map(guessed) do g
+            (;t.trial_number, n=length(g))
+        end
+    end
+end
+df |> CSV.write(outdir * "n_guess.csv")
+
+# %% --------
+
+pframe() do uid
+    events = load_events(uid)
+    x = findnextmatch(events, 1, "instructions.bespoke_efficiency.choice")[1]
+    (;choice=x["choice"], time=x["time"])
+end |> CSV.write(outdir * "bespoke_efficiency.csv")
 
 # %% --------
 
@@ -207,24 +181,6 @@ pframe() do uid
     end
 end |> CSV.write(outdir * "browser_focus.csv")
 
-# %% --------
-# # You can always determine the exact code to make a shape using the manuals.
-# # You need to use both machines to complete every round.
-# # How many digits are in the blue machine's codes?
-# # How many digits are in the orange machine's codes?
-# questions = [
-#     "full_info",
-#     "use_both",
-#     "blue_digits",
-#     "orange_digits",
-# ]
-
-# pframe() do uid
-#     e = findnextmatch(load_events(uid), "quiz.check")[1]
-#     map(questions, e["answers"], e["correct"]) do question, answer, correct
-#         (; question, answer, correct)
-#     end
-# end |> CSV.write(outdir * "quiz.csv")
 
 # %% ===== instruct_times.csv =================================================
 
@@ -258,7 +214,7 @@ end
 
 pframe() do uid
     map(load_trials(uid)) do t
-        start = findnextmatch(t.events, "machine.run")[1]["time"]
+        start = findnextmatch(t.events, "machine.initialize")[1]["time"]
         map(eachindex(t.events)) do i
             e = t.events[i]
             if e["event"] == "machine.select"

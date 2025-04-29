@@ -20,7 +20,6 @@ const TOL = 1e-5
 
 # %% ==================== Project-specific ====================
 
-
 function Base.NamedTuple(d::Dict{String})
     NamedTuple(Dict(Symbol(k) => v for (k, v) in d))
 end
@@ -61,6 +60,8 @@ function expected_maximum(dists)
 end
 
 # %% ==================== General Purpose ====================
+
+Base.write(fp::String) = Base.Fix1(write, fp)
 
 function ensure_keys(d::Dict{K,V}, keys) where {K,V}
     d1 = Dict{Union{K,eltype(keys)}, Union{V,Missing}}(d)

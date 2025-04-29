@@ -1,0 +1,178 @@
+# %% ===== power analysis utilities ===========================================
+
+# library(simr)
+
+FIGS_PATH <- "figs/predictions/"
+version <- "v23"
+
+sample_stat = function(groups, N, statistic) {
+    data = sample(groups, N, replace=T) %>% 
+        # map(~ mutate(.x, wid=round(1e10 * runif(1)))) %>%
+        bind_rows
+    tryCatch(statistic(data), error=function(c) NaN)
+}
+
+power_analysis = function(groups, N, n_sim, statistic) {
+    results = map(N, ~ replicate(n_sim, sample_stat(groups, .x, statistic))) %>% unlist
+    expand.grid(
+        sim_i = 1:n_sim,
+        N = N
+    ) %>% 
+    rowwise() %>% 
+    mutate(
+        stat = sample_stat(groups, N, statistic)
+    ) %>% ungroup()
+}
+
+make_groups <- function(data, key) {
+    data %>% 
+        nest_by({{key}}, .keep=TRUE) %>% 
+        with(data)
+}
+
+calculate_power <- function(results, alpha=.05) {
+    results %>% 
+        group_by(N) %>% 
+        summarise(
+            power = mean(stat < alpha),
+            n_sim = n(),
+            power_lower = power - 1.96 * sqrt(power * (1-power) / n_sim),
+            power_upper = power + 1.96 * sqrt(power * (1-power) / n_sim)
+        )
+}
+
+# %% --------
+
+predictions <- read_csv(glue("tmp/predictions-{version}.csv")) %>% filter(N==50)
+
+predictions |> 
+    ggplot(aes(gen, compositionality)) +
+    geom_line(mapping=aes(group=pop), linewidth=.2, color=RED, alpha=.1) +
+    # stat_mean_and_quantiles(color=RED) +
+    geom_line(data=filter(predictions, pop <= 300 / N), mapping=aes(group=pop), linewidth=1, color=BLACK) +
+    facet_grid(N~D) + ylim(0, 1)
+
+fig("possible_result", w=7, h=3)
+
+# %% --------
+
+predictions %>% 
+    filter(N==50, D==8) %>% 
+    filter(gen > 7) %>% 
+    group_by(D) %>%
+    summarise(
+        mean = mean(compositionality),
+        sem = sd(compositionality) / sqrt(n())
+    )
+
+100 * 15 * (1/.8) * 4
+
+.8
+
+# %% --------
+
+get_power <- function(data, prm_N, comparison) {
+    groups <- predictions %>% 
+        filter(N == prm_N) %>% 
+        filter(D %in% c(comparison, 8)) %>% 
+        filter(gen == 10) %>% 
+        select(D, pop, compositionality) %>% 
+        make_groups(pop)
+    
+    N <- c(3,6,9)
+    n_sim <- 500
+
+    p1 <- power_analysis(groups, N, n_sim, . %>% 
+        wilcox.test(compositionality ~ I(D == 8), data=., alternative="less", correct=F) %>% 
+        with(p.value)
+    )
+    calculate_power(p1) %>% 
+        rename(populations = N) %>% 
+        mutate(comparison=comparison, N=prm_N)
+}
+
+result <- predictions %>% 
+    distinct(N, D) %>% 
+    filter(D != 8) %>% 
+    rowwise() %>% 
+    reframe(get_power(predictions, N, D))
+
+result %>% 
+    mutate(comparison = glue("8 vs. {comparison}")) %>% 
+    fctrize(populations) %>% 
+    ggplot(aes(populations, power, color=comparison)) +
+        geom_point() +
+        geom_line(aes(group=comparison)) +
+        geom_errorbar(aes(ymin=power_lower, ymax=power_upper), width=0.2) +
+        facet_wrap(~N)
+
+fig(w=4)    
+
+# %% --------
+
+get_power_by_gen <- function(data, n_gen, comparison) {
+    groups <- predictions %>% 
+        filter(D %in% c(comparison, 8)) %>% 
+        filter(gen > 10 - n_gen) %>% 
+        summarise( compositionality = mean(compositionality), .by=c(D, pop)) %>% 
+        make_groups(pop)
+    
+    # N <- c(3,6,9)
+    N <- c(6)
+    n_sim <- 1000
+
+    p1 <- power_analysis(groups, N, n_sim, . %>% 
+        wilcox.test(compositionality ~ I(D == 8), data=., alternative="less", correct=F) %>% 
+        with(p.value)
+    )
+    calculate_power(p1) %>% 
+        rename(populations = N) %>% 
+        mutate(comparison=comparison, n_gen=n_gen)
+}
+
+result <- expand.grid(
+        D = c(2, 32),
+        n_gen = 1:5
+    ) %>% 
+    rowwise() %>% 
+    reframe(get_power_by_gen(predictions, n_gen, D))
+
+# %% --------
+
+result %>% 
+    mutate(comparison = glue("8 vs. {comparison}")) %>% 
+    ggplot(aes(n_gen, power, color=comparison)) +
+        geom_point() +
+        geom_line(aes(group=comparison)) +
+        geom_errorbar(aes(ymin=power_lower, ymax=power_upper), width=0.2)
+
+fig(w=5)
+
+
+# %% --------
+
+groups <- predictions %>% 
+    filter(N == 50) %>% 
+    filter(gen == 9) %>% 
+    select(D, pop, compositionality) %>% 
+    filter(D %in% c(2, 8)) %>% 
+    make_groups(pop)
+
+N <- seq(3, 9)
+n_sim <- 100
+
+p1 <- power_analysis(groups, N, n_sim, . %>% 
+    wilcox.test(compositionality ~ I(D == 8), data=., alternative="greater", exact=T) %>% 
+    with(p.value)
+)
+
+
+p1 %>% 
+    calculate_power() %>% 
+    ggplot(aes(N, power)) +
+        geom_point() +
+        geom_line()
+        # geom_smooth(se=F)
+
+fig()
+# %% --------

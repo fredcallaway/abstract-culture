@@ -102,13 +102,15 @@ end
 end
 
 
-
 struct Trial
-    version::String
-    uid::String
-    trial_number::Int
+    uid::String  # participant unique identifier
+    trial_number::Int  # 1 is the first main trial (0 is last instruction trial)
     events::Vector{Dict{String,Any}}
 end
+trial_id(t::Trial) = t.events[1]["trialID"]
+is_practice(t::Trial) = occursin("instruct", trial_id(t))
+is_catch(t::Trial) = occursin("catch", trial_id(t))
+# is_practice(t::Trial) = t.trial_number < 1
 
 function Base.show(io::IO, t::Trial)
     print(io, typeof(t), "($(t.uid), $(t.trial_number), ...)")
@@ -118,18 +120,24 @@ end
 #     length(t.path) - 1
 # end
 
-# duration(t::Trial) = t.end_time - t.start_time
+start_time(t::Trial) = t.events[1]["time"]
+end_time(t::Trial) = t.events[end]["time"]
+duration(t::Trial) = end_time(t) - start_time(t)
 
 @memoize function load_trials(uid)
     events = load_events(uid)
-    version, wid = rsplit(uid, "-"; limit=2)
-    start_main = findnextmatch(events, 1, "timeline.start.main")[2]
-    if isnothing(start_main)
-        error("no main start for $uid")
-    end
-    g = group(e->get(e, "trialID", ""), events[start_main:end])
+    g = group(e->get(e, "trialID", ""), events)  # maintains order
     delete!(g, "")
+    # n_instruct = sum(trial_id -> startswith(trial_id, "instruct"), keys(g))
+    n_instruct = 3
     map(enumerate(g)) do (trial_number, trial_events)
-        Trial(version, uid, trial_number, trial_events)
-    end
+        # if trial_number ≤ n_instruct
+        #     for t in trial_events
+        #         t["trialID"] = "instruct.$trial_number"
+        #     end
+        # end
+        Trial(uid, trial_number - n_instruct, trial_events)
+    end    
 end
+
+# %% --------
