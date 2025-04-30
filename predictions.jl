@@ -1,7 +1,8 @@
 include("red_black.jl")
 using DataFrames, CSV
 using JSON
-# include("r.jl")
+using Optim
+
 
 # %% --------
 
@@ -22,79 +23,98 @@ function parse_policy(file)
     end |> TabularPolicy
 end
 
-agent_policy = og_policy = parse_policy("tmp/compositional-rates-code-pilot-$version.csv")
-# agent_policy = classic_policy(;p_r=0.5, p_brr=0., p_0=0.1)
+human_policy = parse_policy("tmp/compositional-rates-code-pilot-$version.csv")
 baseline = agent_policy.table[1, 1]
 
-agent_policy.table
-
-
-# %% --------
-# D = [2, 3, 4, 8, 16, 24, 32]
 N = [32, 50, 100]
 D = [2, 8, 32]
 n_gen = 15
-df = dataframe(grid(;D, N, pop=1:500)) do (;D, N, pop)
-    D > N && return missing
-    env = RedBlackEnv(;S=4, D, K=1, N, agent_policy, replace_demos=false)
-    imap(red_rate.(simulate(env, n_gen))[2:end]) do gen, compositionality
-        (;gen, compositionality)
+
+function make_predictions(agent_policy)
+    # D = [2, 3, 4, 8, 16, 24, 32]
+    df = dataframe(grid(;D, N, pop=1:500)) do (;D, N, pop)
+        D > N && return missing
+        env = RedBlackEnv(;S=4, D, K=1, N, agent_policy, replace_demos=false)
+        imap(red_rate.(simulate(env, n_gen))[2:end]) do gen, compositionality
+            (;gen, compositionality)
+        end
     end
 end
 
-df |> CSV.write("tmp/predictions-$version.csv")
-# %% --------
-
-R"""
-
-$df |> 
-    ggplot(aes(gen, compositionality, group=pop)) +
-    geom_line(linewidth=.1, color=RED) +
-    geom_hline(yintercept=$baseline, linetype="dashed", linewidth=.3) +
-    facet_grid(N~D) + ylim(0, 1) +
-    scale_x_continuous(breaks=c(1, 4, 7, 10))
-
-fig(w=7, h=4)
-"""
+make_predictions(human_policy) |> CSV.write("tmp/predictions-$version.csv")
 
 # %% --------
 
-R"""
-$df |> 
-    group_by(gen, N, D) |> 
-    summarise(compositionality=mean(compositionality)) |> 
-    ggplot(aes(gen, compositionality)) +
-    geom_line(color=RED) +
-    geom_hline(yintercept=$baseline, linetype="dashed", linewidth=.3) +
-    facet_grid(N~D) + ylim(0, 1) +
-    scale_x_continuous(breaks=c(1, 4, 7, 10))
 
-fig(w=7, h=4)
-"""
-
-# %% --------
 logistic(x) = 1 / (1 + exp(-x))
+lapse(p, ε) = (1 - ε) * p + ε / 2
 
-function rational_policy(β; action_cost=1, search_cost=3, n_bespoke=6, n_part=2)
-    map(product(0:1, 0:3)) do (b, c)
-        bespoke_cost = n_bespoke * (action_cost + search_cost * (1-b))
-        c = min(c, 2)
-        compositional_cost = n_part * (3action_cost + search_cost * (2-c))
-        logistic(β * (bespoke_cost - compositional_cost))
+function cost_table(;action_cost=1, search_cost=4, n_bespoke=4, n_compositional=6)
+    map(product(0:1, 0:3, false:true)) do (b, c, do_comp)
+        if do_comp
+            c_search = 1 - (0.5min(c, 2))
+            n_compositional * (action_cost + search_cost * c_search)
+            # compositional_cost + 1.5
+        else
+            b_search = 1. - b
+            bespoke_cost = n_bespoke * (action_cost + search_cost * b_search)
+        end
+    end
+end
+
+C = cost_table()
+
+
+
+
+# %% --------
+
+function get_rational_policy(β, ε)
+    map(diff(cost_table(), dims=3)[:, :]) do bespoke_advantage
+        p = logistic(β * -bespoke_advantage)
+        lapse(p, ε)
+        # bespoke_cost - compositional_cost
         # bespoke_cost, compositional_cost
     end |> TabularPolicy
 end
 
-rational_policy(0.3).table
+softmax_policy = get_rational_policy(0.3, 0.05)
+softmax_policy.table
 
 using Optim
-target = og_policy.table[:, 1:3]
 res = optimize(0, 1) do β
-    abs.(rational_policy(β).table[:, 1:3] .- target) |> sum
+    abs.(get_rational_policy(β, .05).table .- human_policy.table) |> sum
 end
 res.minimizer
+get_rational_policy(res.minimizer, 0.05).table
+human_policy.table
 
-agent_policy = rational_policy(res.minimizer)
+cost_table()
+
+diff(cost_table(), dims=3)[:, :]
+
+
+# %% --------
+
+function epsilon_policy(ε=0.5)
+    X = [
+        0 1 1 1;
+        0 0 0 0
+    ]
+    TabularPolicy(@. X * (1 - ε) + (1 - X) * ε)
+end
+
+
+using Optim
+res = optimize(0, 1) do ε
+    abs.(epsilon_policy(ε).table .- human_policy.table) |> sum
+end
+res.minimizer
+# %% --------
+
+make_predictions(epsilon_policy(0.135)) |> CSV.write("tmp/predictions-epsilon-$version.csv")
+
+# %% --------
 
 # %% --------
 

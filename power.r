@@ -1,6 +1,8 @@
 # %% ===== power analysis utilities ===========================================
 
-# library(simr)
+source("base.r")
+library(coin)
+
 
 FIGS_PATH <- "figs/predictions/"
 version <- "v23"
@@ -42,60 +44,59 @@ calculate_power <- function(results, alpha=.05) {
 }
 
 # %% --------
+version <- "v23"
 
-predictions <- read_csv(glue("tmp/predictions-{version}.csv")) %>% filter(N==50)
+model_predictions <- read_csv(glue("tmp/predictions-epsilon-{version}.csv")) %>% filter(N==50) %>% filter(gen < 11)
+human_predictions <- read_csv(glue("tmp/predictions-{version}.csv")) %>% filter(N==50) %>% filter(gen < 11)
 
-predictions |> 
+model_predictions |> 
     ggplot(aes(gen, compositionality)) +
     geom_line(mapping=aes(group=pop), linewidth=.2, color=RED, alpha=.1) +
     # stat_mean_and_quantiles(color=RED) +
-    geom_line(data=filter(predictions, pop <= 300 / N), mapping=aes(group=pop), linewidth=1, color=BLACK) +
+    geom_line(data=filter(human_predictions, pop <= 300 / N), mapping=aes(group=pop), linewidth=1, color=BLACK) +
     facet_grid(N~D) + ylim(0, 1)
 
 fig("possible_result", w=7, h=3)
 
 # %% --------
 
-predictions %>% 
-    filter(N==50, D==8) %>% 
-    filter(gen > 7) %>% 
-    group_by(D) %>%
-    summarise(
-        mean = mean(compositionality),
-        sem = sd(compositionality) / sqrt(n())
-    )
-
-100 * 15 * (1/.8) * 4
-
-.8
+data <- human_predictions %>% filter(gen == 10, pop < 7) %>% filter(D != 2) %>% mutate(D8 = factor(D == 8))
+test <- wilcox_test(compositionality ~ D8, data=data, distribution = "exact", alternative="less")
+pvalue(test)
 
 # %% --------
 
 get_power <- function(data, prm_N, comparison) {
-    groups <- predictions %>% 
+    groups <- human_predictions %>% 
         filter(N == prm_N) %>% 
         filter(D %in% c(comparison, 8)) %>% 
         filter(gen == 10) %>% 
-        select(D, pop, compositionality) %>% 
+        mutate(D8 = factor(D == 8)) %>% 
+        select(D8, pop, compositionality) %>% 
         make_groups(pop)
     
-    N <- c(3,6,9)
-    n_sim <- 500
+    N <- c(6)
+    n_sim <- 100
 
-    p1 <- power_analysis(groups, N, n_sim, . %>% 
-        wilcox.test(compositionality ~ I(D == 8), data=., alternative="less", correct=F) %>% 
-        with(p.value)
+    power_analysis(groups, N, n_sim, . %>% 
+        wilcox_test(compositionality ~ D8, data=., alternative="less", distribution = "exact") %>% 
+        pvalue
     )
-    calculate_power(p1) %>% 
-        rename(populations = N) %>% 
-        mutate(comparison=comparison, N=prm_N)
 }
 
-result <- predictions %>% 
+get_power(human_predictions, 50, 32) %>% count(stat)
+
+
+
+# %% --------
+
+result <- human_predictions %>% 
     distinct(N, D) %>% 
     filter(D != 8) %>% 
     rowwise() %>% 
-    reframe(get_power(predictions, N, D))
+    reframe(get_power(human_predictions, N, D))
+
+result
 
 result %>% 
     mutate(comparison = glue("8 vs. {comparison}")) %>% 
@@ -111,9 +112,9 @@ fig(w=4)
 # %% --------
 
 get_power_by_gen <- function(data, n_gen, comparison) {
-    groups <- predictions %>% 
+    groups <- human_predictions %>% 
         filter(D %in% c(comparison, 8)) %>% 
-        filter(gen > 10 - n_gen) %>% 
+        filter(gen %in% c(8,9,10)) %>% 
         summarise( compositionality = mean(compositionality), .by=c(D, pop)) %>% 
         make_groups(pop)
     
@@ -135,9 +136,7 @@ result <- expand.grid(
         n_gen = 1:5
     ) %>% 
     rowwise() %>% 
-    reframe(get_power_by_gen(predictions, n_gen, D))
-
-# %% --------
+    reframe(get_power_by_gen(human_predictions, n_gen, D))
 
 result %>% 
     mutate(comparison = glue("8 vs. {comparison}")) %>% 
@@ -151,7 +150,7 @@ fig(w=5)
 
 # %% --------
 
-groups <- predictions %>% 
+groups <- human_predictions %>% 
     filter(N == 50) %>% 
     filter(gen == 9) %>% 
     select(D, pop, compositionality) %>% 
