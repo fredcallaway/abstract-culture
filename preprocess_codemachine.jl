@@ -16,7 +16,7 @@ if length(ARGS) == 0
 else
     version = ARGS[1]
 end
-
+version = "code-pilot-v23"
 
 println("Processing version: $version")
 outdir = "data/$(version)/"
@@ -119,7 +119,7 @@ df = map(trials) do t
         choose_best = choice == ranks[1],
         choose_compositional = sol["kind"] == "compositional",
 
-        effort_difference = length(machines) > 1 ? abs(eff[2] - eff[1]) : missing,
+        effort_difference = length(machines) > 1 ? eff[2] - eff[1] : missing,
         duration = duration(t),
         n_click,
         mach1 = machine_type(machines[1]),
@@ -127,7 +127,6 @@ df = map(trials) do t
     )
 end |> skipmissing |> DataFrame
 df |> CSV.write(outdir * "trials.csv")
-
 
 
 # %% --------

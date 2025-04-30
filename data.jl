@@ -47,7 +47,7 @@ function extract_parameters(uid::String, keys...)
     Dict{String,Any}(pick_dict(params, keys))
 end
 
-@memoize function load_participants(versions...; all_generations=false, keep_incomplete=false, keep_failed=false,keep_extras=false)
+@memoize function load_participants(versions...; all_generations=false, keep_incomplete=false, keep_failed=false, keep_extras=false)
     if all_generations
         versions = mapreduce(vcat, versions) do v
             filter(readdir("../machine-task/data/raw")) do v1

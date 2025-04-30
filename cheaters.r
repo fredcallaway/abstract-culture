@@ -14,13 +14,16 @@ reg <- n_guess %>%
 n_guess %>% 
     agg(n, pid) %>% 
     left_join(reg, by="pid") %>% 
-    ggplot(aes(n, p.value, color=p.value < 1e-3)) +
+    left_join(times) %>% 
+    left_join(select(participants, pid, workerid)) %>% 
+    ggplot(aes(n, p.value, color=workerid == "67de239c06b421f44e118eaf")) +
     geom_point() +
     scale_y_log10() +
     expand_limits(x=c(1,9)) +
     xlab("Average Number of Guesses") +
     geom_vline(xintercept = 5, linetype="dashed") +
-    no_legend + scale_color_manual(values = c(`TRUE`="red", `FALSE`="black"))
+    no_legend + 
+    scale_color_manual(values = c(`TRUE`="red", `FALSE`="black"))
     
 fig()
 
@@ -38,6 +41,11 @@ n_guess %>%
 fig()
 
 
+# %% --------
+
+selects <- read_csvs(versions, "selects")
+
+selects
 # %% --------
 
 

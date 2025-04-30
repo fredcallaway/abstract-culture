@@ -10,6 +10,7 @@ if (length(args) == 0) {
     version <- args[1]
 }
 
+version <- "code-pilot-v23"
 
 versions <- c(version)
 
@@ -34,40 +35,16 @@ cpal <- scale_colour_manual(values = c(
 print(glue("----- ANALYZING VERSION {version} -----"))
 print(glue("{length(unique(df$pid))} participants and {nrow(df)} trials"))
 
-# %% ===== catch trials =======================================================
-
-df %>% 
-    filter(is_catch) %>% 
-    ggplot(aes(trial_type, 1*choose_best)) +
-    bars() +
-    coord_flip()
-    
-fig()
-
-# %% --------
-
-df %>% 
-    filter(is_catch) %>% 
-    ggplot(aes(trial_number, 1*choose_best, color=trial_type)) +
-    point_line()
-    
-fig()
-
-# %% --------
-df %>% 
-    filter(is_catch | (trial_number == 0)) %>% 
-    mutate(trial_type = fct_reorder(trial_type, trial_number)) %>%    
-    ggplot(aes(pid, trial_type, fill=choose_best)) +
-    geom_tile() +
-    scale_fill_manual(values = c(`TRUE`="forestgreen", `FALSE`="red"))
-
-fig(w=7, h=2)
 
 # %% ===== exclusions =========================================================
 
 pass_rate <- df %>% 
     filter(is_catch) %>% 
-    summarise(pass_rate = mean(choose_best), .by=pid)
+    summarise(
+        pass_rate = mean(choose_best),
+        n_fail = sum(!choose_best),
+        .by=pid
+    )
 
 
 pass_rate %>% 
@@ -76,22 +53,14 @@ pass_rate %>%
 
 fig()
 
-# %% --------
-
-harder <- read_csvs(versions, "bespoke_efficiency")
-
-pass_instructions <- df %>% 
-    filter(is_practice) %>% 
-    drop_na(effort_difference) %>% 
-    transmute(pid, pass_practice = choose_best)
 
 # %% --------
 
 main_trials <- df %>% 
     filter(!is_catch, !is_practice) %>% 
     left_join(pass_rate, by="pid") %>% 
-    # filter(pass_rate > 0.5) %>% 
-    filter(pass_rate == 1) %>% 
+    filter(n_fail <= 1) %>% 
+    # filter(pass_rate == 1) %>% 
     mutate(
         bespoke = factor(
             substr(trial_type, 4, 8),
@@ -125,6 +94,50 @@ main_trials |>
 
 fig("compositional-rate", w=5)
 
+# %% --------
+
+main_trials %>% 
+    mutate(effort_difference = if_else(choose_compositional == choose_left, effort_difference, -effort_difference)) %>% 
+    agg(choose_compositional, c(trial_type, effort_difference))  %>% 
+    ggplot(aes(effort_difference, 1 * choose_compositional)) +
+    geom_point() + expand_limits(y=c(0, 1))
+
+fig()
+
+
+# %% ===== catch trials =======================================================
+
+df %>% 
+    filter(is_catch) %>% 
+    ggplot(aes(trial_type, 1*choose_best)) +
+    bars() +
+    coord_flip()
+    
+fig()
+
+# %% --------
+df %>% 
+    filter(is_catch | (trial_number == 0)) %>% 
+    mutate(trial_type = fct_reorder(trial_type, trial_number)) %>%    
+    ggplot(aes(pid, trial_type, fill=choose_best)) +
+    geom_tile() +
+    scale_fill_manual(values = c(`TRUE`="forestgreen", `FALSE`="red"))
+
+fig(w=7, h=2)
+
+harder <- read_csvs(versions, "bespoke_efficiency")
+
+pass_instructions <- df %>% 
+    filter(is_practice) %>% 
+    drop_na(effort_difference) %>% 
+    transmute(pid, pass_practice = choose_best)
+
+pass_instructions %>% 
+    left_join(harder) %>% 
+    group_by(choice) %>% 
+    summarise(p_pass = mean(pass_practice), n=n())
+
+
 # %% ===== feedback ===========================================================
 
 feedback <- read_csvs(versions, "feedback")
@@ -141,9 +154,21 @@ feedback %>%
 
 # %% ===== timing =======================================================
 
+
+main_trials |>
+    group_by(solution_type, bespoke, compositional) %>% 
+    filter(solution_type == "bespoke") %>% 
+    summarise(duration = median(duration))
+
+
+# %% --------
+
+
 main_trials |> 
+    group_by(bespoke, compositional, solution_type) %>% 
     filter(duration < quantile(duration, .95)) |> 
-    ggplot(aes(compositional, duration, color=solution_type)) +
+    ungroup() %>% 
+    ggplot(aes(compositional, duration/1000, color=solution_type)) +
     geom_quasirandom(size=.2) + cpal +
     points() +
     facet_wrap(~bespoke)
@@ -170,11 +195,8 @@ instruct_times %>%
 type_times <- df %>% 
     # filter(duration < 200) %>% 
     group_by(trial_type) %>% 
+    drop_extreme(duration, q_lo=0.05, q_hi=0.95) %>% 
     summarise(duration = mean(duration))
-
-# %% --------
-
-catch_time <- type_times %>% filter(is_catch) %>% with(sum(duration))
 
 # %% --------
 
@@ -239,11 +261,9 @@ fig()
 # %% ===== IDK ================================================================
 
 
-# %% --------
-
 besp_dials <- 4
 comp_dials <- 3
-avg_dial_tries <- 4.5
+avg_dial_tries <- 5
 
 expected <- distinct(main_trials, bespoke, compositional, solution_type) %>% 
     rowwise() %>% 
@@ -287,7 +307,89 @@ fig("individual-solutions", w = 10, h = 5)
 
 
 # %% ===== events =============================================================
-events <- read_csvs(versions, "events")
+
+events <- read_csvs(versions, "events") %>% 
+    group_by(pid, trial_number) %>% 
+    mutate(
+        rt = time - lag(time, default=0),
+        action_number = row_number()
+    ) %>% 
+    ungroup()
+
+# %% --------
+
+events %>% 
+    group_by(pid, trial_number) %>% 
+    mutate(rt = time - lag(time)) %>% 
+    summarise(rt = median(rt, na.rm=TRUE)) %>% 
+    left_join(select(participants, pid, workerid)) %>% 
+    ggplot(aes(trial_number, rt, group=pid, color=workerid == "67f24dddcc783cdf7a1ea017")) +
+    geom_line(linewidth=.1) +
+    scale_color_manual(values = c(`TRUE`="red", `FALSE`="black")) + no_legend
+
+fig()
+
+# %% --------
+
+events %>% 
+    filter(trial_number > 0) %>% 
+    filter(action_number != 1) %>% 
+    drop_extreme(rt, q_hi=.95) %>% 
+    with(mean(rt))
+
+# %% --------
+
+df %>% 
+    left_join(participants) %>% 
+    filter(workerid == "67abc507448bec46e7dfbffa") %>% 
+    print(n=100)
+
+
+# %% --------
+
+times %>% filter(total < 15) %>% 
+    left_join(participants) %>% 
+    select(workerid, total, main)
+
+# %% --------
+
+
+
+events %>% 
+    left_join(times) %>% 
+    mutate(fast = total < 15) %>% 
+    filter(rt < 4) %>% 
+    ggplot(aes(rt, color=fast)) +
+    geom_density()
+    
+fig()
+
+# %% --------
+
+events %>% 
+    left_join(participants) %>% 
+    left_join(times) %>% 
+    filter(rt < 0.5) %>% 
+    count(workerid, total)
+
+# %% --------
+
+
+
+times %>% 
+    left_join(pass_rate) %>% 
+    left_join(
+        df %>% filter(!is_catch, !is_practice) %>% agg(choose_left)
+    ) %>% 
+    ggplot(aes(total, choose_left)) +
+    geom_point()
+
+fig()
+    
+
+# %% --------
+
+
 # info <- df %>% 
 #     transmute( pid, trial_number, info = paste0(substr(bespoke, 1, 2), "-", substr(compositional, 1, 2)))
 info <- df %>% 
