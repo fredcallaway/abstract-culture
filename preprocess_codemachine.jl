@@ -16,7 +16,7 @@ if length(ARGS) == 0
 else
     version = ARGS[1]
 end
-version = "code-pilot-v23"
+# version = "reg-v2-g2"
 
 println("Processing version: $version")
 outdir = "data/$(version)/"
@@ -41,11 +41,34 @@ end
 participants = load_participants(version)
 @show nrow(participants)
 
+
+# %% --------
+
+valid_pids = @chain participants begin
+    @rsubset(! :failed_catch)
+    @distinct :config
+    @groupby :repetition
+    @transform :agent = 1:length(:pid)
+    @rsubset :agent <= 50
+    @with :pid
+end
+
+@assert length(valid_pids) == 100
+@assert issorted(valid_pids)
+@assert issorted(participants.start_time)
+
+@rtransform! participants :excluded = !(:pid in valid_pids)
+
+
+# %% --------
+
 uid2pid = Dict(participants.uid .=> participants.pid)
 pid2uid = Dict(participants.pid .=> participants.uid)
 
 trials = mapreduce(load_trials, vcat, participants.uid)
 participants |> CSV.write(outdir * "participants.csv")
+@assert participants.pid == 1:nrow(participants)
+
 
 # %% ===== trials.csv =========================================================
 
@@ -92,6 +115,14 @@ function parse_machines(t::Trial)
     end
 end
 
+
+# "main.reg-v1-1-4B-D8-g1-32.f6z2" -> "reg-v1-1-4B-D8"
+function chain_id(id)
+    m = match(r"main\.(reg-v\d[-]\d[-]\d\w-D\d+)", id)
+    return m !== nothing ? m.captures[1] : missing
+end
+
+
 df = map(trials) do t
     machines = parse_machines(t)
 
@@ -113,6 +144,11 @@ df = map(trials) do t
         pid = uid2pid[t.uid],
         t.trial_number, 
         trial_type,
+        task = machines[choice].task,
+        kind = sol["kind"],
+        
+        chain_id = chain_id(trial_id(t)),
+        trial_id = trial_id(t),
         is_catch = is_catch(t),
         is_practice = is_practice(t),
         choose_left = choice == 1,
@@ -128,6 +164,26 @@ df = map(trials) do t
 end |> skipmissing |> DataFrame
 df |> CSV.write(outdir * "trials.csv")
 
+# %% ===== generation solutions json for stimuli generation ===================
+
+
+solutions = @chain df begin
+    @rsubset :pid in valid_pids
+    @rsubset !:is_practice !:is_catch
+    @rtransform :chain_id = chain_id(:trial_id)
+    @rtransform :solution = (;task=:task, kind=:kind)
+    @groupby :chain_id
+    @combine :solutions = [:solution]
+    @with Dict(:chain_id .=> :solutions)
+end
+
+
+@assert all(map(length, values(solutions)) .== 50)
+
+gen_code = match(r"-(g\d+)", version).captures[1]
+fp = "../machine-task/stimuli/solutions-$gen_code.json"
+json(solutions) |> write(fp)
+println("Wrote $fp")
 
 # %% --------
 
@@ -296,3 +352,23 @@ times = pframe() do uid
     d
 end
 times |> CSV.write(outdir * "times.csv")
+
+# %% --------
+
+events = load_events("reg-v2-g3-67600da0497fab54effd903e")
+starts = filter(ematch("timeline.start"), events)
+
+ustarts = unique(e -> e["event"], starts)
+
+# %% ===== mousetracking ======================================================
+
+pframe() do uid
+    events = load_events(uid)
+    imap(filtermatch(events, "mouselog")) do i, mlog
+        map(mlog["events"]) do e
+            (;trial_number=i, x=e["x"], y=e["y"], time=e["time"])
+        end
+    end
+end |> CSV.write(outdir * "mousetracking.csv")
+
+

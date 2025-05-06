@@ -70,9 +70,11 @@ end
                 # :workerid = idents[:wid]
                 events = load_events(:uid)
                 :complete = !isnothing(findnextmatch(events, 1, "experiment.complete")[1])
-                :failed = !isnothing(findnextmatch(events, 1, "experiment.terminate")[1])
+                :failed = !isnothing(findnextmatch(events, 1, "experiment.terminate")[1]) 
+                    # || !isnothing(findnextmatch(events, 1, "experiment.catchFailed")[1])
                 :total_time = (events[end]["time"] - events[1]["time"]) / 60000
             end
+            @orderby :start_time
         end
         if !keep_incomplete
             @subset! df :complete
@@ -110,6 +112,7 @@ end
 trial_id(t::Trial) = t.events[1]["trialID"]
 is_practice(t::Trial) = occursin("instruct", trial_id(t))
 is_catch(t::Trial) = occursin("catch", trial_id(t))
+is_main(t::Trial) = !is_practice(t) && !is_catch(t)
 # is_practice(t::Trial) = t.trial_number < 1
 
 function Base.show(io::IO, t::Trial)

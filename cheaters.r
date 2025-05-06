@@ -10,26 +10,36 @@ reg <- n_guess %>%
     tidy %>% 
     mutate(pid = as.numeric(sub("^pid", "", term)))
 
+# %% --------
+
 
 n_guess %>% 
     agg(n, pid) %>% 
     left_join(reg, by="pid") %>% 
     left_join(times) %>% 
     left_join(select(participants, pid, workerid)) %>% 
-    ggplot(aes(n, p.value, color=workerid == "67de239c06b421f44e118eaf")) +
+    ggplot(aes(n, p.value, color=workerid)) +
     geom_point() +
     scale_y_log10() +
     expand_limits(x=c(1,9)) +
     xlab("Average Number of Guesses") +
     geom_vline(xintercept = 5, linetype="dashed") +
     no_legend + 
-    scale_color_manual(values = c(`TRUE`="red", `FALSE`="black"))
+    scale_color_manual(values = c(`TRUE`="red", `FALSE`="black")) +
+    geom_text(aes(label=workerid), nudge_x = 0.5, size=2)
     
 fig()
 
 cheaters <- reg %>% 
     filter(p.value < .001) %>% 
     select(pid)
+
+
+# %% --------
+
+n_guess %>% 
+    left_join(select(participants, pid, workerid)) %>% 
+    filter(workerid == "6647c6138ad0a72e618533d0")
 
 # %% --------
 

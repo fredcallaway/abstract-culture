@@ -10,8 +10,7 @@ if (length(args) == 0) {
     version <- args[1]
 }
 
-version <- "code-pilot-v23"
-
+# version <- "code-pilot-v23"
 versions <- c(version)
 
 FIGS_PATH <- glue("figs/codes/{version}/")
@@ -19,7 +18,9 @@ FIGS_PATH <- glue("figs/codes/{version}/")
 participants <- read_csvs(versions, "participants") %>% 
     select(-c(useragent, wid, active_minutes))
 
-df <- read_csvs(versions, "trials")
+df <- read_csvs(versions, "trials") %>% 
+    mutate(is_main = !is_catch & !is_practice) %>% 
+    left_join(select(participants, pid, workerid, excluded))
 
 DPI <- 300
 RED <- "#E86623"
@@ -54,12 +55,8 @@ pass_rate %>%
 fig()
 
 
-# %% --------
-
 main_trials <- df %>% 
-    filter(!is_catch, !is_practice) %>% 
-    left_join(pass_rate, by="pid") %>% 
-    filter(n_fail <= 1) %>% 
+    filter(is_main, !excluded) %>% 
     # filter(pass_rate == 1) %>% 
     mutate(
         bespoke = factor(
@@ -77,6 +74,41 @@ n_initial <- df %>% with(length(unique(pid)))
 n_drop <- n_initial - n_final
 
 print(glue("Dropped {n_drop}/{n_initial} ({round(n_drop / n_initial * 100)}%) participants; {n_final} participants remain"))
+
+# %% --------
+
+participants %>% 
+    left_join(pass_rate) %>% 
+    with(stopifnot(all(failed_catch == (n_fail > 1))))
+
+
+participants %>% 
+    filter(!excluded) %>% 
+    count(repetition) %>% 
+    with(stopifnot(all(n == 50)))
+
+participants %>% 
+    filter(!excluded) %>% 
+    count(config) %>% 
+    with(stopifnot(all(n == 1)))
+
+participants %>% 
+    count(workerid) %>% 
+    with(stopifnot(all(n == 1)))
+
+main_trials %>% 
+    count(chain_id) %>% 
+    with(stopifnot(all(n == 50) && length(chain_id) == 18))
+
+main_trials %>% 
+    count(trial_id, sort=T) %>% 
+    with(stopifnot(all(n == 1)))
+
+# %% --------
+
+participants %>% 
+    filter(!excluded) %>% 
+    count(config, sort=T)
 
 # %% ===== compositionality rate ==============================================
 
@@ -179,12 +211,18 @@ fig("solution-time", w=6, h=2.5)
 
 times <- read_csvs(versions, "times")
 
+
+
 times %>% summarise(across(-c(pid, version), median))
+
+participants %>% with(start_time)
 
 
 # %% --------
 
 instruct_times <- read_csvs(versions, "instruct_times")
+
+instruct_times %>% arrange(-time)
 
 instruct_times %>% 
     agg(time, stage, median)
@@ -323,11 +361,20 @@ events %>%
     mutate(rt = time - lag(time)) %>% 
     summarise(rt = median(rt, na.rm=TRUE)) %>% 
     left_join(select(participants, pid, workerid)) %>% 
-    ggplot(aes(trial_number, rt, group=pid, color=workerid == "67f24dddcc783cdf7a1ea017")) +
+    ggplot(aes(trial_number, rt, group=pid, color=workerid == "6647c6138ad0a72e618533d0")) +
     geom_line(linewidth=.1) +
     scale_color_manual(values = c(`TRUE`="red", `FALSE`="black")) + no_legend
 
 fig()
+
+# %% --------
+
+events %>% 
+    left_join(select(participants, pid, workerid)) %>% 
+    filter(workerid == "6647c6138ad0a72e618533d0") %>% 
+    select(dial, pos, rt, val, correct) %>% print(n=100)
+
+
 
 # %% --------
 
@@ -469,6 +516,7 @@ events %>%
 # %% --------
 
 feedback %>% 
+    left_join(select(participants, pid, workerid)) %>% 
     left_join(pass_rate) %>% 
     select(pid, pass_rate, description)
 
@@ -520,5 +568,19 @@ df %>%
     grid_y + ybreaks(30)
 
 fig(w=2.5, h=5)
+
+
+# %% ===== mousetracking ======================================================
+
+mt <- read_csvs(versions, "mousetracking")
+
+mt %>% 
+    filter(trial_number == 3) %>% 
+    filter(pid == 8) %>% 
+    mutate(time = time - min(time)) %>% 
+    ggplot(aes(x, y, color=time)) +
+    geom_point()
+
+fig()
 
 # %% --------
