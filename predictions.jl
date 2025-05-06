@@ -45,6 +45,43 @@ make_predictions(human_policy) |> CSV.write("tmp/predictions-$version.csv")
 
 # %% --------
 
+function epsilon_policy(ε=0.5)
+    X = [
+        0 1 1 1;
+        0 0 0 0
+    ]
+    TabularPolicy(@. X * (1 - ε) + (1 - X) * ε)
+end
+
+
+using Optim
+res = optimize(0, 1) do ε
+    abs.(epsilon_policy(ε).table .- human_policy.table) |> sum
+end
+res.minimizer
+
+make_predictions(epsilon_policy(res.minimizer)) |> CSV.write("tmp/predictions-epsilon-$version.csv")
+
+
+# %% --------
+
+flatmap([2, 8, 32]) do D
+    agent_policy = TabularPolicy(ones(2,4)/2)
+    env = RedBlackEnv(;S=4, D, K=1, N=50, agent_policy, replace_demos=false)
+    pop = simulate(env, 5)[end]
+    println(red_rate(pop))
+    map(pop[:]) do x
+        (;D, task = string(x.a, x.b), kind = x.red ? "bespoke" : "compositional")
+    end
+end |> json |> write("../machine-task/stimuli/simulated_solutions.json")
+
+
+# %% --------
+
+imap(red_rate.(simulate(env, 10))[2:end]) do gen, compositionality
+    (;gen, compositionality)
+end
+
 
 logistic(x) = 1 / (1 + exp(-x))
 lapse(p, ε) = (1 - ε) * p + ε / 2
@@ -92,45 +129,3 @@ human_policy.table
 cost_table()
 
 diff(cost_table(), dims=3)[:, :]
-
-
-# %% --------
-
-function epsilon_policy(ε=0.5)
-    X = [
-        0 1 1 1;
-        0 0 0 0
-    ]
-    TabularPolicy(@. X * (1 - ε) + (1 - X) * ε)
-end
-
-
-using Optim
-res = optimize(0, 1) do ε
-    abs.(epsilon_policy(ε).table .- human_policy.table) |> sum
-end
-res.minimizer
-# %% --------
-
-make_predictions(epsilon_policy(0.135)) |> CSV.write("tmp/predictions-epsilon-$version.csv")
-
-# %% --------
-
-# %% --------
-
-flatmap([2, 8, 32]) do D
-    agent_policy = TabularPolicy(ones(2,4)/2)
-    env = RedBlackEnv(;S=4, D, K=1, N=50, agent_policy, replace_demos=false)
-    pop = simulate(env, 5)[end]
-    println(red_rate(pop))
-    map(pop[:]) do x
-        (;D, task = string(x.a, x.b), kind = x.red ? "bespoke" : "compositional")
-    end
-end |> json |> write("../machine-task/stimuli/simulated_solutions.json")
-
-
-# %% --------
-
-imap(red_rate.(simulate(env, 10))[2:end]) do gen, compositionality
-    (;gen, compositionality)
-end

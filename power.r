@@ -66,6 +66,43 @@ pvalue(test)
 
 # %% --------
 
+get_power_by_gen <- function(data, n_gen, comparison) {
+    groups <- human_predictions %>% 
+        filter(D %in% c(comparison, 8)) %>% 
+        filter(gen %in% c(8,9,10)) %>% 
+        summarise( compositionality = mean(compositionality), .by=c(D, pop)) %>% 
+        make_groups(pop)
+    
+    # N <- c(3,6,9)
+    N <- c(6)
+    n_sim <- 1000
+
+    p1 <- power_analysis(groups, N, n_sim, . %>% 
+        wilcox.test(compositionality ~ I(D == 8), data=., alternative="less", correct=F) %>% 
+        with(p.value)
+    )
+    calculate_power(p1, alpha=0.01) %>% 
+        rename(populations = N) %>% 
+        mutate(comparison=comparison, n_gen=n_gen)
+}
+
+result <- expand.grid(
+        D = c(2, 32),
+        n_gen = 1:5
+    ) %>% 
+    rowwise() %>% 
+    reframe(get_power_by_gen(human_predictions, n_gen, D))
+
+result %>% 
+    mutate(comparison = glue("8 vs. {comparison}")) %>% 
+    ggplot(aes(n_gen, power, color=comparison)) +
+        geom_point() +
+        geom_line(aes(group=comparison)) +
+        geom_errorbar(aes(ymin=power_lower, ymax=power_upper), width=0.2)
+
+fig(w=5)
+
+
 get_power <- function(data, prm_N, comparison) {
     groups <- human_predictions %>% 
         filter(N == prm_N) %>% 
@@ -108,44 +145,6 @@ result %>%
         facet_wrap(~N)
 
 fig(w=4)    
-
-# %% --------
-
-get_power_by_gen <- function(data, n_gen, comparison) {
-    groups <- human_predictions %>% 
-        filter(D %in% c(comparison, 8)) %>% 
-        filter(gen %in% c(8,9,10)) %>% 
-        summarise( compositionality = mean(compositionality), .by=c(D, pop)) %>% 
-        make_groups(pop)
-    
-    # N <- c(3,6,9)
-    N <- c(6)
-    n_sim <- 1000
-
-    p1 <- power_analysis(groups, N, n_sim, . %>% 
-        wilcox.test(compositionality ~ I(D == 8), data=., alternative="less", correct=F) %>% 
-        with(p.value)
-    )
-    calculate_power(p1) %>% 
-        rename(populations = N) %>% 
-        mutate(comparison=comparison, n_gen=n_gen)
-}
-
-result <- expand.grid(
-        D = c(2, 32),
-        n_gen = 1:5
-    ) %>% 
-    rowwise() %>% 
-    reframe(get_power_by_gen(human_predictions, n_gen, D))
-
-result %>% 
-    mutate(comparison = glue("8 vs. {comparison}")) %>% 
-    ggplot(aes(n_gen, power, color=comparison)) +
-        geom_point() +
-        geom_line(aes(group=comparison)) +
-        geom_errorbar(aes(ymin=power_lower, ymax=power_upper), width=0.2)
-
-fig(w=5)
 
 
 # %% --------
