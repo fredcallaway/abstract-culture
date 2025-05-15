@@ -4,7 +4,6 @@ include("utils.jl")
 include("data.jl")
 
 using DataFrames
-using TOML
 
 empty!(ARGS)
 # push!(ARGS, "code-pilot-v21")
@@ -16,7 +15,6 @@ if length(ARGS) == 0
 else
     version = ARGS[1]
 end
-# version = "reg-v2-g2"
 
 println("Processing version: $version")
 outdir = "data/$(version)/"
@@ -59,7 +57,6 @@ end
 
 @rtransform! participants :excluded = !(:pid in valid_pids)
 
-
 # %% --------
 
 uid2pid = Dict(participants.uid .=> participants.pid)
@@ -68,7 +65,6 @@ pid2uid = Dict(participants.pid .=> participants.uid)
 trials = mapreduce(load_trials, vcat, participants.uid)
 participants |> CSV.write(outdir * "participants.csv")
 @assert participants.pid == 1:nrow(participants)
-
 
 # %% ===== trials.csv =========================================================
 
@@ -132,7 +128,7 @@ df = map(trials) do t
     sol = try
         filtermatch(t.events, "machine.solution")[end]
     catch
-        @warn "no solution for $uid"
+        @warn "no solution for $t"
         return missing
     end
     choice = sol["position"] + 1

@@ -142,7 +142,7 @@ glue = glue::glue
 
 read_csvs <- function(versions, name, dir="data") {
     map(versions, ~ 
-        read_csv(glue("{dir}/{.x}/{name}.csv")) |> 
+        read_csv(glue("{dir}/{.x}/{name}.csv"), lazy=TRUE, show_col_types=FALSE, progress=FALSE) |> 
         mutate(version = .x)
     ) |> 
     bind_rows()
