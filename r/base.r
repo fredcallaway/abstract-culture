@@ -381,11 +381,13 @@ geom_ydensity = function(breaks=NULL, labels="") list(
     scale_ysidex_continuous(breaks = breaks, labels = labels)
 )
 
-robust = function(f, min_n=2) {
+ROBUST_MIN_N = 2
+robust = function(f, min_n=ROBUST_MIN_N) {
     function(x) {
         if (length(x) >= min_n) {
             f(x)
         } else {
+            warning("robust: excluding data with less than ", min_n, " observations")
             NaN
         }
     }
@@ -751,6 +753,8 @@ MAKE_PDF = maybe(MAKE_PDF, FALSE)
 WIDTH = maybe(WIDTH, 3.5)
 HEIGHT = maybe(HEIGHT, 2.5)
 DPI = maybe(DPI, 160)
+
+dir.create(".fighist", showWarnings=FALSE)
 
 fig = function(name="tmp", w=WIDTH, h=HEIGHT, path=FIGS_PATH, dpi=DPI, pdf=MAKE_PDF, ...) {
     if (isTRUE(getOption('knitr.in.progress'))) {

@@ -17,26 +17,12 @@ Knowledge(S::Int) = Knowledge(falses(S, S), falses(S), falses(S), 0)
 
 abstract type AgentPolicy end
 
-struct TabularPolicy <: AgentPolicy
-    table::SMatrix{2, 4, Float64} # p(compositional) for bespoke (no/yes) × compositional (none, partial, full, exact)
-    TabularPolicy(table::AbstractMatrix{Float64}) = begin
-        X = if size(table) == (2, 3)
-            # treat full and exact the same
-            hcat(table, table[:, end])
-        else
-            table
-        end
-        new(X)
-    end
-end
-
-
 @kwdef struct BinaryCompositionEnv
     S::Int = 5  # number of starts and goals
     D::Int = 5  # number of demonstrations
     K::Int = 1  # number of tasks per agent
     N::Real = Inf # population size
-    agent_policy::TabularPolicy = classic_policy()
+    agent_policy::AgentPolicy = classic_policy()
 
     replace_tasks::Bool = true  # sample tasks with replacement?
     replace_demos::Bool = true  # sample demonstrations with replacement?
@@ -51,18 +37,16 @@ all_tasks(env::BinaryCompositionEnv) = env._all_tasks
 sample_tasks(env::BinaryCompositionEnv) = sample!(env._all_tasks, env._sampled_tasks)
 
 
-function classic_policy(;p_0=0.0, p_r=0.0, p_brr=0.0, ε=0.0)
-    TabularPolicy([
-        p_0 p_r 1-ε 1-ε
-        ε ε p_brr p_brr
-    ])
+struct Info
+    bespoke::Int  # 0: none, 1: full
+    comp::Int  # 0: none, 1: partial, 2: full
 end
 
 struct Behavior
     a::Int
     b::Int
     compositional::Bool
-    learning::Int  # number of parts learned
+    info::Info  # not actually behavior, but kept for later tracking
 end
 
 Population = Matrix{<:Behavior}
@@ -72,7 +56,7 @@ function compositional_rate(pop::Population)
 end
 
 function initial_population(env::BinaryCompositionEnv, ::Nothing=nothing)
-    [Behavior(0, 0, false, 1) for _ in 1:env.K, _ in 1:env.N]
+    [Behavior(0, 0, false, Info(0, 0)) for _ in 1:env.K, _ in 1:env.N]
 end
 
 function initial_population(env::BinaryCompositionEnv, init::Float64)
@@ -82,7 +66,7 @@ function initial_population(env::BinaryCompositionEnv, init::Float64)
         compositional[i] = true
     end
     X = map(compositional) do compositional
-        Behavior(rand(1:S), rand(1:S), compositional, compositional ? 2 : 1)
+        Behavior(rand(1:S), rand(1:S), compositional, Info(0, 0))
     end
     reshape(X, (K, N))
 end
@@ -104,7 +88,6 @@ function fresh_knowledge(env::BinaryCompositionEnv)
 end
 
 function learn!(env::BinaryCompositionEnv, knowledge::Knowledge, demo::Behavior)
-    @assert env.agent_policy isa TabularPolicy  # see old_compositional_black.jl
     (;compositional_a, compositional_b, bespoke) = knowledge
     (;a, b, compositional) = demo
     (a == 0 || b == 0) && return  # dummy observation
@@ -126,14 +109,69 @@ end
 
 # %% ==================== acting ====================
 
+
+struct TabularPolicy <: AgentPolicy
+    table::SMatrix{2, 4, Float64} # p(compositional) for bespoke (no/yes) × compositional (none, partial, full, exact)
+    TabularPolicy(table::AbstractMatrix{Float64}) = begin
+        X = if size(table) == (2, 3)
+            # treat full and exact the same
+            hcat(table, table[:, end])
+        else
+            table
+        end
+        new(X)
+    end
+end
+
+function classic_policy(;p_0=0.0, p_r=0.0, p_brr=0.0, ε=0.0)
+    TabularPolicy([
+        p_0 p_r 1-ε 1-ε
+        ε ε p_brr p_brr
+    ])
+end
+
+function prob_compositional(policy::TabularPolicy, info::Info)
+    return policy.table[info.bespoke+1, info.comp+1]
+end
+
+@kwdef struct Costs
+    comp_full::Float64  # cost of compositional solution when you observed both parts
+    comp_partial::Float64
+    comp_none::Float64
+    bespoke_full::Float64
+    bespoke_none::Float64
+end
+
+function cost(C::Costs, info::Info, compositional::Bool)
+    if compositional
+        [C.comp_none, C.comp_partial, C.comp_full][info.comp + 1]
+    else
+        [C.bespoke_none, C.bespoke_full][info.bespoke + 1]
+    end
+end
+
+cost(C::Costs, beh::Behavior) = cost(C, beh.info, beh.compositional)
+
+function rational_policy(C::Costs; β=100., ε=0.)
+    map(product(0:1, 0:2)) do (bespoke_known, comp_known)
+        info = Info(bespoke_known, comp_known)
+        rel_cost = cost(C, info, true) - cost(C, info, false)
+        p = logistic(β * -rel_cost)
+        lapse(p, ε)
+    end |> TabularPolicy
+end
+
+relevant_info(knowledge::Knowledge, a, b) = Info(
+    knowledge.bespoke[a,b], 
+    knowledge.compositional_a[a] + knowledge.compositional_b[b]
+)
+
 function behave(env::BinaryCompositionEnv, knowledge::Knowledge, a, b)
     # NOTE: this ignores long-run benefits of learning compositional stuff; see old_red_black.jl
-    compositional_known = knowledge.compositional_a[a] + knowledge.compositional_b[b]
-    black_known = knowledge.bespoke[a,b]
-    p_compositional = env.agent_policy.table[black_known+1, compositional_known+1]
-    use_compositional = rand(Bernoulli(p_compositional))
-    learning = use_compositional ? 2 - compositional_known : 1 - black_known
-    Behavior(a, b, use_compositional, learning)
+    info = relevant_info(knowledge, a, b)
+    p_comp = prob_compositional(env.agent_policy, info)
+    use_comp = rand(Bernoulli(p_comp))
+    Behavior(a, b, use_comp, info)
 end
 
 # %% ==================== evolution ====================
