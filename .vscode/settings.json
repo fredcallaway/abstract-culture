@@ -1,5 +1,7 @@
 {
     "files.exclude": {
-        "web/": true,
+        "web": true,
+        "tmp": true,
+        "data": true,
     }
 }
