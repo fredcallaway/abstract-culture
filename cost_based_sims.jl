@@ -38,42 +38,18 @@ end
 
 # %% ===== hand select ========================================================
 
-figure() do
-    costs = Costs(
-        comp_full = 3,
-        comp_partial = 4,
-        comp_none = 8,
-        bespoke_full = 1,
-        bespoke_none = 5,
-    )
-    
-    env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false,
-        agent_policy=rational_policy(costs; ε=.01, β=100.)
-    )
-    
-    sim = simulate_many(env, costs, n_gen=50)
-    @chain sim begin
-        @groupby :gen
-        @combine :cost = mean(:cost)
-        @df plot!(:gen, :cost, label="rational")
-    end
+costs = Costs(
+    comp_full = 3,
+    comp_partial = 4,
+    comp_none = 8,
+    bespoke_full = 1,
+    bespoke_none = 5,
+)
 
-    @chain sim begin
-        @groupby :gen
-        @combine :compositionality = mean(:compositionality)
-        @df plot!(:gen, :compositionality, label="compositionality")
-    end
-
-    env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false,
-        agent_policy=FixedPolicy(0.0)
-    )
+env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false,
+    agent_policy=rational_policy(costs; ε=.01, β=100.)
+)
     
-    @chain simulate_many(env, costs, n_gen=50) begin
-        @groupby :gen
-        @combine :cost = mean(:cost)
-        @df plot!(:gen, :cost, label="fixed")
-    end
-end
 
 # %% ===== empirical costs + rational policy ====================================
 
@@ -142,7 +118,8 @@ let
     estimate_compositionality_advantage(env, costs, policy, n_gen=50)
 end
 
-# %% --------
+# %% ===== fitting dial cost ==================================================
+
 
 using Optim
 function fitted_dial_costs()
@@ -160,7 +137,6 @@ end
 
 # %% --------
 
-
 let 
     env = BinaryCompositionEnv(;S=4, D=32, K=1, N=32, replace_demos=false)
     costs = fitted_dial_costs().costs
@@ -168,18 +144,68 @@ let
     estimate_compositionality_advantage(env, costs, policy)
 end
 
-# %% --------
+# %% ===== heatmaps by action and search cost =================================
 
-env = BinaryCompositionEnv(;S=4, D=32, K=1, N=32, replace_demos=false)
+X = map(product(1:10, 1:10)) do (action_cost, search_cost)
+    costs = dial_costs(; action_cost, search_cost)
+    policy = rational_policy(costs; ε=.01, β=100.)
+    estimate_compositionality_advantage(env, costs, policy; n_gen=50)
+end
+
+Y = map(product(1:10, 1:10)) do (action_cost, search_cost)
+    costs = dial_costs(; action_cost, search_cost)
+    policy = rational_policy(costs; ε=.15, β=100.)
+    estimate_compositionality_advantage(env, costs, policy; n_gen=15)
+end
+
+figure() do
+    plot(
+        heatmap(getfield.(X, :free_comp), clim=(0,1)),
+        heatmap(getfield.(Y, :free_comp), clim=(0,1)),
+        size=(600, 200)
+    )
+end
+
+# %% ===== change n_dials =====================================================
+
 (;action_cost, search_cost) = fitted_dial_costs()
 
-costs = dial_costs(; action_cost, search_cost)
-costs = costs ./ costs.bespoke_full
+g = grid(;
+    search_cost=1:.2:5,
+    n_compositional=2:2:8,
+    n_bespoke=2:7
+)
 
-policy = rational_policy(costs; ε=.01, β=100.)
-estimate_compositionality_advantage(env, costs, policy)
+params = filter(collect(g)) do x
+    x.n_compositional > x.n_bespoke
+end
 
-# TODO tweak costs to better match the ideal costs identified at the top
+results = @showprogress map(params) do (;search_cost, n_compositional, n_bespoke)
+    env = BinaryCompositionEnv(;S=4, D=32, K=1, N=32, replace_demos=false)
+    costs = dial_costs(; search_cost, n_compositional, n_bespoke)
+
+    policy = rational_policy(costs; ε=.01, β=100.)
+    model = estimate_compositionality_advantage(env, costs, policy; n_gen=50)
+    
+    policy = rational_policy(costs; ε=.15, β=100.)
+    human = estimate_compositionality_advantage(env, costs, policy; n_gen=15)
+
+    (;search_cost, n_compositional, n_bespoke, model, human)
+end
+
+# %% --------
+
+good = filter(results) do r
+    all((
+        # r.model.free_comp > 0.5,
+        r.human.free_comp > 0.5,
+        # r.model.free_cost / r.model.bespoke_cost > 1.1,
+        r.human.free_cost / r.human.bespoke_cost > 1.1,
+    ))
+end
+
+dump(good[1])
+
 
 # %% ===== simulation for plotting ============================================
 function simulate_many(env, costs; init=0., n_pop=100, n_gen=15)
