@@ -6,7 +6,7 @@ suppressPackageStartupMessages({
     library(purrr)
     # library(rmdformats)
     library(patchwork)
-    # library(jsonlite)
+    library(jsonlite)
     # library(tidyjson)
     library(ggbeeswarm)
     library(stickylabeller)

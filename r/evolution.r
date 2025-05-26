@@ -2,7 +2,7 @@
 source("base.r")
 
 FIGS_PATH <- "figs/codes/reg-v2/"
-
+version <- "reg-v2"
 participants <- read_csvs("../data/reg-v2-g*/participants.csv") %>% 
     select(-c(useragent, active_minutes))
 
@@ -49,6 +49,9 @@ main_trials <- df %>%
 n_final <- main_trials %>% with(length(unique(pid)))
 n_initial <- df %>% with(length(unique(pid)))
 n_drop <- n_initial - n_final
+
+main_trials |> 
+    write_csv(glue("tmp/main_trials-{version}.csv"))
 
 print(glue("Dropped {n_drop}/{n_initial} ({round(n_drop / n_initial * 100)}%) participants; {n_final} participants remain"))
 
@@ -100,3 +103,30 @@ figure("compositionality-curve", model_predictions |>
     geom_line(data=human, mapping=aes(group=chain_id), linewidth=1, color=BLACK) +
     facet_wrap(~D) + ylim(0, 1)
 )
+
+# %% ===== completion time =================================================
+
+
+figure("solution-time", main_trials |> 
+    filter(duration < quantile(duration, .95)) %>% 
+    group_by(chain_id, generation) %>% 
+    summarise(duration = mean(duration)) %>% 
+    mutate(D=as.numeric(sub(".*-D", "", chain_id))) %>% 
+    ggplot(aes(generation, duration/1000)) +
+    point_line() +
+    facet_wrap(~D)
+)
+
+# %% --------
+
+figure("solution-time", main_trials |> 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) |> 
+    ungroup() %>% 
+    ggplot(aes(compositional, duration/1000, color=solution_type)) +
+    # geom_quasirandom(size=.2) + cpal +
+    points() +
+    cpal +
+    facet_wrap(~bespoke)
+)
+

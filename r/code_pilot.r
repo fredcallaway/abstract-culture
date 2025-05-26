@@ -1,40 +1,16 @@
 # %% --------
 source("base.r")
 
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) == 0) {
-    # Pull from experiment config
-    config <- readLines("../machine-task/config.txt")
-    version <- gsub("experiment_code_version = (.*)", "\\1", config[grep("experiment_code_version", config)])
-} else {
-    version <- args[1]
-}
+FIGS_PATH <- "figs/codes/pilot-v23/"
+version <- "pilot-v23"
 
-# version <- "code-pilot-v23"
-versions <- c(version)
-
-FIGS_PATH <- glue("figs/codes/{version}/")
-
-participants <- read_csvs(versions, "participants") %>% 
-    select(-c(useragent, wid, active_minutes))
-
-df <- read_csvs(versions, "trials") %>% 
+df <- read_csvs("../data/code-pilot-v23/trials.csv") %>% 
     mutate(is_main = !is_catch & !is_practice) %>% 
-    left_join(select(participants, pid, workerid, excluded))
+    select(-data_file)
 
-DPI <- 300
-RED <- "#E86623"
-TEAL <- "#07A9C0"
 
-cpal <- scale_colour_manual(values = c(
-    bespoke = TEAL,
-    compositional = RED,
-    `-1` = TEAL,
-    `1` = RED
-), aesthetics = c("fill", "colour"), name = "")
-
-print(glue("----- ANALYZING VERSION {version} -----"))
 print(glue("{length(unique(df$pid))} participants and {nrow(df)} trials"))
+
 
 
 # %% ===== exclusions =========================================================
@@ -47,15 +23,13 @@ pass_rate <- df %>%
         .by=pid
     )
 
-
 pass_rate %>% 
     ggplot(aes(factor(pass_rate))) +
     geom_bar()
 
-fig()
-
 
 main_trials <- df %>% 
+    left_join(pass_rate %>% transmute(pid, excluded=n_fail>1)) %>% 
     filter(is_main, !excluded) %>% 
     # filter(pass_rate == 1) %>% 
     mutate(
@@ -73,58 +47,21 @@ n_final <- main_trials %>% with(length(unique(pid)))
 n_initial <- df %>% with(length(unique(pid)))
 n_drop <- n_initial - n_final
 
+main_trials |> 
+    write_csv(glue("tmp/main_trials-{version}.csv"))
+
 print(glue("Dropped {n_drop}/{n_initial} ({round(n_drop / n_initial * 100)}%) participants; {n_final} participants remain"))
-
-# %% --------
-
-participants %>% 
-    left_join(pass_rate) %>% 
-    with(stopifnot(all(failed_catch == (n_fail > 1))))
-
-
-participants %>% 
-    filter(!excluded) %>% 
-    count(repetition) %>% 
-    with(stopifnot(all(n == 50)))
-
-participants %>% 
-    filter(!excluded) %>% 
-    count(config) %>% 
-    with(stopifnot(all(n == 1)))
-
-participants %>% 
-    count(workerid) %>% 
-    with(stopifnot(all(n == 1)))
-
-main_trials %>% 
-    count(chain_id) %>% 
-    with(stopifnot(all(n == 50) && length(chain_id) == 18))
-
-main_trials %>% 
-    count(trial_id, sort=T) %>% 
-    with(stopifnot(all(n == 1)))
-
-# %% --------
-
-participants %>% 
-    filter(!excluded) %>% 
-    count(config, sort=T)
 
 # %% ===== compositionality rate ==============================================
 
-main_trials %>% 
-    group_by(bespoke, compositional) %>%
-    summarise(p_compositional=mean(choose_compositional)) %>% 
-    write_csv(glue("tmp/compositional-rates-{version}.csv"))
-
 main_trials |>
     ggplot(aes(compositional, 1 * choose_compositional)) +
-    bars(fill=RED) +
+    bars(fill=C_COMP) +
     facet_grid(~bespoke) +
     ylim(0, 1) +
     labs(x="Compositional in Manual?", y="Compositional Rate")
 
-fig("compositional-rate", w=5)
+fig("compositional-rate", w=2)
 
 # %% --------
 
@@ -201,11 +138,14 @@ main_trials |>
     filter(duration < quantile(duration, .95)) |> 
     ungroup() %>% 
     ggplot(aes(compositional, duration/1000, color=solution_type)) +
-    geom_quasirandom(size=.2) + cpal +
+    # geom_quasirandom(size=.2) +
     points() +
+    cpal +
     facet_wrap(~bespoke)
 
-fig("solution-time", w=6, h=2.5)
+fig("solution-time", w=2)
+
+
 
 # %% --------
 
