@@ -1,45 +1,18 @@
 # %% --------
 source("base.r")
 
+FIGS_PATH <- "figs/codes/reg-v2/"
 
-# version <- "code-pilot-v23"
-versions <- c(
-    "reg-v2-g1",
-    "reg-v2-g2C",
-    "reg-v2-g3",
-    "reg-v2-g4",
-    "reg-v2-g5",
-    "reg-v2-g6",
-    "reg-v2-g7",
-    "reg-v2-g8",
-    "reg-v2-g9",
-    "reg-v2-g10"
-)
+participants <- read_csvs("../data/reg-v2-g*/participants.csv") %>% 
+    select(-c(useragent, active_minutes))
 
-FIGS_PATH <- glue("figs/codes/reg-v2/")
-
-participants <- read_csvs(versions, "participants") %>% 
-    select(-c(useragent, wid, active_minutes))
-
-
-df <- read_csvs(versions, "trials") %>% 
+df <- read_csvs("../data/reg-v2-g*/trials.csv") %>% 
     mutate(is_main = !is_catch & !is_practice) %>% 
-    left_join(select(participants, version, generation, pid, workerid, excluded)) %>% 
+    right_join(select(participants, uid, generation, excluded), by="uid") %>% 
     mutate(pid = glue("{generation}.{pid}"))
 
 participants <- participants %>% 
     mutate(pid = glue("{generation}.{pid}"))
-
-DPI <- 300
-RED <- "#E86623"
-TEAL <- "#07A9C0"
-
-cpal <- scale_colour_manual(values = c(
-    bespoke = TEAL,
-    compositional = RED,
-    `-1` = TEAL,
-    `1` = RED
-), aesthetics = c("fill", "colour"), name = "")
 
 print(glue("{length(unique(df$pid))} participants and {nrow(df)} trials"))
 
@@ -85,7 +58,6 @@ participants %>%
     left_join(pass_rate) %>% 
     with(sum(failed_catch != (n_fail > 1)))  # why is this 1?
 
-
 participants %>% 
     filter(!excluded) %>% 
     count(repetition) %>% 
@@ -116,15 +88,15 @@ human <- main_trials %>%
     summarise(compositionality = mean(choose_compositional)) %>%
     mutate(D=as.numeric(sub(".*-D", "", chain_id)))
 
-model_predictions <- read_csv(glue("tmp/predictions-v23.csv")) %>% 
+model_predictions <- read_csv(glue("../results/predictions-epsilon-v23.csv")) %>% 
     filter(N==50, gen<11) %>% 
     rename(generation = gen)
 
-model_predictions |> 
+
+figure("compositionality-curve", model_predictions |> 
     ggplot(aes(generation, compositionality)) +
-    geom_line(mapping=aes(group=pop), linewidth=.2, color=RED, alpha=.1) +
+    geom_line(mapping=aes(group=pop), linewidth=.2, color=C_COMP, alpha=.1) +
     # stat_mean_and_quantiles(color=RED) +
     geom_line(data=human, mapping=aes(group=chain_id), linewidth=1, color=BLACK) +
     facet_wrap(~D) + ylim(0, 1)
-
-fig("compositionality-curve", w=5)
+)

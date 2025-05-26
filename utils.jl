@@ -412,20 +412,3 @@ one_index(x::Int) = x + 1
 one_index(x::AbstractArray) = map(one_index, x)
 one_index(x::Tuple) = map(one_index, x)
 one_index(x::NamedTuple) = map(one_index, x)
-
-
-
-# using AxisKeys
-
-# keymax(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmax(X).I))...)
-# keymax(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmax(x)]
-# keymin(X::KeyedArray) = (; (d=>x[i] for (d, x, i) in zip(dimnames(X), axiskeys(X), argmin(X).I))...)
-# keymin(x::KeyedArray{<:Real, 1}) = axiskeys(x, 1)[argmin(x)]
-
-# function Base.diff(K::KeyedArray; dims, removefirst::Bool=true)
-#     range = removefirst ? (2:size(K, dims)) : (1:size(K,dims)-1)
-#     out = similar(selectdim(K, dims, range) )
-#     out[:] = Base.diff(parent(parent(K)); dims=AxisKeys.dim(parent(K),dims))
-#     return out
-# end
-

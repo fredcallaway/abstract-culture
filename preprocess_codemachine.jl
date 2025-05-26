@@ -5,7 +5,7 @@ include("data.jl")
 
 using DataFrames
 
-empty!(ARGS)
+# empty!(ARGS)
 # push!(ARGS, "code-pilot-v21")
 
 if length(ARGS) == 0
@@ -39,7 +39,6 @@ end
 participants = load_participants(version)
 @show nrow(participants)
 
-
 # %% --------
 
 valid_pids = @chain participants begin
@@ -51,7 +50,6 @@ valid_pids = @chain participants begin
     @with :pid
 end
 
-@assert length(valid_pids) == 100
 @assert issorted(valid_pids)
 @assert issorted(participants.start_time)
 
@@ -137,6 +135,7 @@ df = map(trials) do t
     n_click = length(filtermatch(t.events, "machine.select"))
 
     (;
+        t.uid,
         pid = uid2pid[t.uid],
         t.trial_number, 
         trial_type,
