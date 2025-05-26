@@ -12,7 +12,9 @@ data_means <- data %>%
     summarise(across(c(cost,compositionality), mean))
 
 data_means
+
 # %% --------
+
 ROBUST_MIN_N = 0
 
 data_means |> 
