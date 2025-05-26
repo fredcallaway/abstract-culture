@@ -18,6 +18,16 @@ Knowledge(S::Int) = Knowledge(falses(S, S), falses(S), falses(S), 0)
 
 abstract type AgentPolicy end
 
+
+@kwdef struct Costs <: FieldVector{5, Float64}  # allows `2 .* costs
+    comp_full::Float64  # cost of compositional solution when you observed both parts
+    comp_partial::Float64
+    comp_none::Float64
+    bespoke_full::Float64
+    bespoke_none::Float64
+end
+
+
 @kwdef struct BinaryCompositionEnv
     S::Int = 5  # number of starts and goals
     D::Int = 5  # number of demonstrations
@@ -133,14 +143,6 @@ end
 
 function prob_compositional(policy::TabularPolicy, info::Info)
     return policy.table[info.bespoke+1, info.comp+1]
-end
-
-@kwdef struct Costs <: FieldVector{5, Float64}  # allows `2 .* costs
-    comp_full::Float64  # cost of compositional solution when you observed both parts
-    comp_partial::Float64
-    comp_none::Float64
-    bespoke_full::Float64
-    bespoke_none::Float64
 end
 
 function Base.show(io::IO, ::MIME"text/plain", costs::Costs)

@@ -50,7 +50,7 @@ n_final <- main_trials %>% with(length(unique(pid)))
 n_initial <- df %>% with(length(unique(pid)))
 n_drop <- n_initial - n_final
 
-main_trials |> 
+main_trials %>% 
     write_csv(glue("tmp/main_trials-{version}.csv"))
 
 print(glue("Dropped {n_drop}/{n_initial} ({round(n_drop / n_initial * 100)}%) participants; {n_final} participants remain"))
@@ -91,12 +91,13 @@ human <- main_trials %>%
     summarise(compositionality = mean(choose_compositional)) %>%
     mutate(D=as.numeric(sub(".*-D", "", chain_id)))
 
+
 model_predictions <- read_csv(glue("../results/predictions-epsilon-v23.csv")) %>% 
     filter(N==50, gen<11) %>% 
     rename(generation = gen)
 
 
-figure("compositionality-curve", model_predictions |> 
+figure("compositionality-curve", model_predictions %>% 
     ggplot(aes(generation, compositionality)) +
     geom_line(mapping=aes(group=pop), linewidth=.2, color=C_COMP, alpha=.1) +
     # stat_mean_and_quantiles(color=RED) +
@@ -104,10 +105,18 @@ figure("compositionality-curve", model_predictions |>
     facet_wrap(~D) + ylim(0, 1)
 )
 
+# %% --------
+
+main_trials %>% 
+    group_by(bespoke, compositional) %>% 
+    summarise(p_compositional = mean(choose_compositional)) %>% 
+    write_csv("tmp/compositional-rates-reg-v2.csv")
+
+
 # %% ===== completion time =================================================
 
 
-figure("solution-time", main_trials |> 
+figure("solution-time", main_trials %>% 
     filter(duration < quantile(duration, .95)) %>% 
     group_by(chain_id, generation) %>% 
     summarise(duration = mean(duration)) %>% 
@@ -119,9 +128,9 @@ figure("solution-time", main_trials |>
 
 # %% --------
 
-figure("solution-time", main_trials |> 
+figure("solution-time-by-type", main_trials %>% 
     group_by(bespoke, compositional, solution_type) %>% 
-    filter(duration < quantile(duration, .95)) |> 
+    filter(duration < quantile(duration, .95)) %>% 
     ungroup() %>% 
     ggplot(aes(compositional, duration/1000, color=solution_type)) +
     # geom_quasirandom(size=.2) + cpal +
@@ -130,3 +139,61 @@ figure("solution-time", main_trials |>
     facet_wrap(~bespoke)
 )
 
+# %% --------
+
+figure("policy", main_trials %>% 
+    group_by(bespoke, compositional) %>% 
+    ggplot(aes(compositional, 1*choose_compositional)) +
+    # geom_quasirandom(size=.2) + cpal +
+    points() +
+    cpal +
+    facet_wrap(~bespoke)
+)
+
+# %% --------
+
+figure("relative-cost", main_trials %>% 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration)) %>% 
+    pivot_wider(names_from=solution_type, values_from=duration, names_prefix="duration_") %>% 
+    mutate(relative_cost = duration_bespoke - duration_compositional) %>% 
+    ggplot(aes(compositional, relative_cost)) +
+    geom_point() +
+    cpal +
+    facet_wrap(~bespoke)
+)
+
+# %% ===== scatter ============================================================
+
+p_comp <- main_trials %>% 
+    group_by(bespoke, compositional) %>% 
+    summarise(p_compositional = mean(choose_compositional))
+
+rel_cost <- main_trials %>% 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration / 1000)) %>% 
+    pivot_wider(names_from=solution_type, values_from=duration, names_prefix="duration_") %>% 
+    transmute(relative_cost = duration_bespoke - duration_compositional)
+
+
+inner_join(p_comp, rel_cost) %>% 
+    ungroup() %>% 
+    mutate(trial_type = glue("{substr(bespoke, 1, 1)}-{substr(compositional, 1, 1)}")) %>% 
+    ggplot(aes(relative_cost, p_compositional)) +
+    geom_point() +
+    geom_text(aes(label = trial_type), vjust = -0.5, hjust = 0.5, size = 3) +
+    ylim(0, 1) +
+    geom_vline(xintercept=0)
+
+fig()
+
+# %% --------
+
+main_trials %>% 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration / 1000)) %>% 
+    pivot_wider(names_from=solution_type, values_from=duration, names_prefix="duration_") %>% 
+    transmute(relative_cost = duration_bespoke - duration_compositional)

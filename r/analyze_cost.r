@@ -2,14 +2,14 @@
 
 source("base.r")
 
-df <- read_csvs("tmp/main_trials-{version}.csv") %>% 
+main_trials <- read_csvs("tmp/main_trials-{version}.csv") %>% 
     select(-data_file)
 
-
-avg_duration <- df |> 
+avg_duration <- main_trials %>% 
     group_by(bespoke, compositional, solution_type) %>% 
     summarise(duration = mean(duration/1000))
 
+main_trials %>% distinct(version)
 # %% --------
 
 # chosen costs
@@ -27,23 +27,62 @@ comp_none = 7.5
 
 # %% --------
 
-df %>% 
+empirical_costs <- main_trials %>% 
     mutate(
-        solution_type = if_else(solution_type == "compositional", 
+        full_solution_type = if_else(solution_type == "compositional", 
             glue("comp_{compositional}"), 
             glue("bespoke_{bespoke}")
-        )
+        ) %>% 
+            str_replace(., "exact", "full") %>% 
+            str_replace(., "zilch", "none")
     ) %>% 
-    mutate(solution_type = str_replace(solution_type, "exact", "full")) %>% 
-    mutate(solution_type = str_replace(solution_type, "zilch", "none")) %>% 
-    group_by(solution_type) %>% 
-    summarise(duration = mean(duration/1000)) %>% 
-    mutate(duration = duration / min(duration)) %>% 
-    write_json("tmp/empirical_costs.json")
+    group_by(full_solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration/1000))
+
+print(empirical_costs)
+write_json(empirical_costs, "tmp/empirical_costs.json")
+
+# cost_based_sims.jl 
+    
+# %% --------
+actual_durations <- main_trials %>% 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration/1000))
+
+# %% --------
+
+both_durations <- actual_durations %>% 
+    mutate(
+        full_solution_type = if_else(solution_type == "compositional", 
+            glue("comp_{compositional}"), 
+            glue("bespoke_{bespoke}")
+        ) %>% 
+            str_replace(., "exact", "full") %>% 
+            str_replace(., "zilch", "none")
+    ) %>% left_join(rename(empirical_costs, prediction=duration))
+    
     
 # %% --------
 
-df %>% 
+both_durations %>% 
+    ggplot(aes(prediction, duration, color=solution_type)) +
+    geom_point() +
+    cpal +
+    geom_abline()
+
+
+fig()
+
+# %% --------
+
+both_durations
+
+
+# %% --------
+
+main_trials %>% 
     mutate(
         solution_type = if_else(solution_type == "compositional", 
             glue("comp_{compositional}"), 
@@ -68,10 +107,10 @@ data_means <- data %>%
 
 ROBUST_MIN_N = 0
 
-data_means |> 
+data_means %>% 
     ggplot(aes(gen, cost, color=agent)) +
     geom_line(linewidth=1) +
-data_means |> 
+data_means %>% 
     ggplot(aes(gen, compositionality, color=agent)) +
     geom_line(linewidth=1) +
 plot_layout(guides = "collect")
