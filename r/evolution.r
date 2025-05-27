@@ -91,13 +91,35 @@ human <- main_trials %>%
     summarise(compositionality = mean(choose_compositional)) %>%
     mutate(D=as.numeric(sub(".*-D", "", chain_id)))
 
+plot_compositionality <- function(pred_file="../results/predictions-epsilon-v23.csv") {
+    model_predictions <- read_csv(pred_file) %>% 
+        filter(N==50, gen<11) %>% 
+        rename(generation = gen)
 
-model_predictions <- read_csv(glue("../results/predictions-epsilon-v23.csv")) %>% 
+    model_predictions %>% 
+        ggplot(aes(generation, compositionality)) +
+        geom_line(mapping=aes(group=pop), linewidth=.2, color=C_COMP, alpha=.1) +
+        # stat_mean_and_quantiles(color=RED) +
+        geom_line(data=human, mapping=aes(group=chain_id), linewidth=1, color=BLACK) +
+        facet_wrap(~D, labeller=label_glue("D = {D}")) + ylim(0, 1)
+}
+
+figure("compositionality-curve", plot_compositionality())
+
+# %% --------
+
+figure("compositionality-curve-partial0.5", plot_compositionality(glue("../results/predictions-epsilon-partial0.5-v23.csv")))
+
+figure("compositionality-curve-partial0", plot_compositionality(glue("../results/predictions-epsilon-partial0-v23.csv")))
+
+# %% --------
+
+model_predictions <- read_csv(glue("../results/predictions-epsilon-partial0.5-v23.csv")) %>% 
     filter(N==50, gen<11) %>% 
     rename(generation = gen)
 
 
-figure("compositionality-curve", model_predictions %>% 
+figure("compositionality-curve-partial0.5", model_predictions %>% 
     ggplot(aes(generation, compositionality)) +
     geom_line(mapping=aes(group=pop), linewidth=.2, color=C_COMP, alpha=.1) +
     # stat_mean_and_quantiles(color=RED) +

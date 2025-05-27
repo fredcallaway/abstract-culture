@@ -571,6 +571,9 @@ fancy_word_replacements <- c(
 
 fancy_name <- function(lab) {
     words <- fancy_word_replacements
+    if (is.na(lab)) {
+        return("NA LABEL")
+    }
     names(words) <- map_chr(names(words), ~ glue("\\b{.x}\\b"))
     if (lab %in% names(fancy_names)) {
         return(fancy_names[[lab]])
@@ -584,7 +587,7 @@ fancy_name <- function(lab) {
     lab %>%
         str_replace_all(fancy_replacements) %>%
         str_replace_all(words) %>%
-        str_to_lower() %>%
+        # str_to_lower() %>%
         gsub("Rt", "RT", .) %>%
         gsub("(?!^)\\b(Of|In|On|The|Up|To|Vs|Per|A)\\b", "\\L\\1", ., perl = TRUE)
 }

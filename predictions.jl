@@ -24,6 +24,8 @@ end
 
 human_policy = parse_policy("tmp/compositional-rates-code-pilot-$version.csv")
 
+# %% --------
+
 N = [32, 50, 100]
 D = [2, 8, 32]
 n_gen = 15
@@ -43,18 +45,26 @@ make_predictions(human_policy) |> CSV.write("results/predictions-empirical-$vers
 
 # %% --------
 
-function epsilon_policy(ε=0.5)
+function epsilon_policy(ε=0.5; partial_none=1)
     X = [
-        0 1 1 1;
+        0 partial_none 1 1;
         0 0 0 0
     ]
     TabularPolicy(@. X * (1 - ε) + (1 - X) * ε)
 end
 
-using Optim
-res = optimize(0, 1) do ε
-    abs.(epsilon_policy(ε).table .- human_policy.table) |> sum
+function fit_epsilon_policy(;kws...)
+    res = optimize(0, 1) do ε
+        abs.(epsilon_policy(ε; kws...).table .- human_policy.table) |> sum
+    end
+    ε = res.minimizer
+    println("found ε = $ε with loss $(res.minimum)")
+    epsilon_policy(ε; kws...)
 end
 
-make_predictions(epsilon_policy(res.minimizer)) |> CSV.write("results/predictions-epsilon-$version.csv")
+# %% --------
+
+make_predictions(fit_epsilon_policy()) |> CSV.write("results/predictions-epsilon-$version.csv")
+make_predictions(fit_epsilon_policy(partial_none=0.5)) |> CSV.write("results/predictions-epsilon-partial0.5-$version.csv")
+make_predictions(fit_epsilon_policy(partial_none=0)) |> CSV.write("results/predictions-epsilon-partial0-$version.csv")
 

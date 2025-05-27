@@ -12,7 +12,6 @@ df <- read_csvs("../data/code-pilot-v23/trials.csv") %>%
 print(glue("{length(unique(df$pid))} participants and {nrow(df)} trials"))
 
 
-
 # %% ===== exclusions =========================================================
 
 pass_rate <- df %>% 
