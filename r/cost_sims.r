@@ -3,13 +3,12 @@ source("base.r")
 
 FIGS_PATH <- "figs/cost_sims/"
 
-search <- read_csvs("../results/costs-flexible-{agent}-init{init}.csv") %>% 
+search <- read_csvs("../results/costs-flexible-{agent}.csv") %>% 
     mutate(
         rel_cost = free_cost / bespoke_cost,
-        init = as.numeric(init) / 10
     ) %>% 
     select(-data_file) %>% 
-    group_by(agent, init)
+    group_by(agent)
 
 controlled <- c(
     "comp_full",
@@ -34,8 +33,6 @@ figure("comp_cost", search %>%
 
 # %% --------
 
-# DOES NOT ACCOUNT FOR INIT
-
 marginal_max <- map_dfr(controlled, function(var) {
     search %>%
         group_by(!!sym(var), .add=TRUE) %>%
@@ -57,34 +54,31 @@ figure("marginal_max", marginal_max %>%
 
 # %% --------
 
-figure("cost_full_partial", w=2.5,h=2,
+figure("cost_full_partial", w=2.5,h=1,
     search %>% 
-        group_by(agent, init, comp_full, comp_partial) %>% 
+        group_by(agent, comp_full, comp_partial) %>% 
         slice_max(rel_cost) %>% 
-        group_by(agent, init) %>% 
+        group_by(agent) %>% 
         group_map(function(data, grp) {
             ggplot(data, aes(comp_full, comp_partial, color=rel_cost)) +
             geom_point() +
             scale_color_continuous_diverging(mid=1) +
-            ggtitle(glue("{grp$agent} ({grp$init})"))
+            ggtitle(glue("{grp$agent}"))
         }) %>% 
         reduce(`+`)
 )
 
 # %% --------
 
-sim <- read_csvs("../results/sim-flexible-{agent}-init{init}.csv")
-
-# %% --------
-
+sim <- read_csvs("../results/sim-flexible-{mode}.csv") %>% 
+    mutate(agent = glue("{agent}-{mode}"))
 
 data_means <- sim %>% 
     # group_by(across(-c(cost,compositionality))) %>% 
     group_by(agent, gen) %>% 
     summarise(across(c(cost,compositionality), mean))
 
-
-ROBUST_MIN_N <- 0
+sim %>% distinct(agent)
 
 figure("sim_best", w=2.5,
     data_means %>% 
@@ -92,8 +86,16 @@ figure("sim_best", w=2.5,
         geom_line(linewidth=1) +
     data_means %>% 
         ggplot(aes(gen, compositionality, color=agent)) +
-        geom_line(linewidth=1) +
-    plot_layout(guides = "collect")
+        geom_line(linewidth=1)  +
+    plot_layout(guides = "collect") &
+    scale_color_manual(
+        values = c(
+            "rational-pure" = "red",
+            "rational-noisy" = "pink",
+            "bespoke-pure" = "blue",
+            "bespoke-noisy" = "lightblue"
+        )
+    )
        
 )
 

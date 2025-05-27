@@ -78,7 +78,7 @@ estimate_compositionality_advantage(env, hand_costs, rational_policy(hand_costs;
 
 # %% ===== search =============================================================
 
-env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false)
+env = BinaryCompositionEnv(;S=4, D=64, N=64, replace_demos=false)
 
 box = Box(
     comp_full = (1, 5),
@@ -92,23 +92,15 @@ params = filter(grid(10, box)[:]) do x
     x.comp_full < x.comp_partial < x.comp_none
 end
 
-results = dataframe(params, pbar=true) do x
-    costs = Costs(;x...)
-    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.13, β=100.), 0.13; n_gen=15, init=0.5)
-end
-results |> CSV.write("results/costs-flexible-noisy-init5.csv")
-
 # %% --------
 
 results = dataframe(params, pbar=true) do x
     costs = Costs(;x...)
-    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.01, β=100.), 0.01; n_gen=100, init=0.5)
+    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.13, β=100.), 0.13; n_gen=15)
 end
-results |> CSV.write("results/costs-flexible-pure-init5.csv")
+results |> CSV.write("results/costs-flexible-noisy.csv")
 
-# %% --------
-
-best = @chain CSV.read("results/costs-flexible-noisy-init5.csv", DataFrame) begin
+best = @chain CSV.read("results/costs-flexible-noisy.csv", DataFrame) begin
     @rtransform :rel_cost = :free_cost / :bespoke_cost
     @subset :rel_cost .== maximum(:rel_cost)
     select(1:5)
@@ -116,8 +108,27 @@ best = @chain CSV.read("results/costs-flexible-noisy-init5.csv", DataFrame) begi
     NamedTuple
 end
 
-x = simulate_free_vs_fixed(env, Costs(;best...); ε=0.13, β=100., n_gen=30, init=0.5)
-x |> CSV.write("results/sim-flexible-noisy-init5.csv")
+x = simulate_free_vs_fixed(env, Costs(;best...); ε=0.13, β=100., n_gen=30)
+x |> CSV.write("results/sim-flexible-noisy.csv")
+
+# %% --------
+
+results = dataframe(params, pbar=true) do x
+    costs = Costs(;x...)
+    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.01, β=100.), 0.01; n_gen=100)
+end
+results |> CSV.write("results/costs-flexible-pure.csv")
+
+best = @chain CSV.read("results/costs-flexible-pure.csv", DataFrame) begin
+    @rtransform :rel_cost = :free_cost / :bespoke_cost
+    @subset :rel_cost .== maximum(:rel_cost)
+    select(1:5)
+    first
+    NamedTuple
+end
+
+x = simulate_free_vs_fixed(env, Costs(;best...); ε=0.01, β=100., n_gen=100)
+x |> CSV.write("results/sim-flexible-pure.csv")
 
 
 # %% ===== empirical costs + rational policy ====================================
@@ -134,11 +145,13 @@ function empirical_costs()
     )
 end
 
+# %% --------
+
 let 
     env = BinaryCompositionEnv(;S=4, D=32, K=1, N=32, replace_demos=false)
     costs = empirical_costs()
-    policy = rational_policy(costs; ε=.01, β=100.)
-    estimate_compositionality_advantage(env, costs, policy; n_gen=10)
+    policy = rational_policy(costs; ε=.13, β=100.)
+    estimate_compositionality_advantage(env, costs, policy, .01; n_gen=10)
 end
 
 
