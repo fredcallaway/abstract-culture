@@ -1,7 +1,7 @@
 # %% --------
 source("base.r")
 
-FIGS_PATH <- "figs/codes/reg-v2/"
+FIGS_PATH <- "figs/reg-v2/"
 version <- "reg-v2"
 participants <- read_csvs("../data/reg-v2-g*/participants.csv") %>% 
     select(-c(useragent, active_minutes))

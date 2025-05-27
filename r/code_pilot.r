@@ -1,7 +1,7 @@
 # %% --------
 source("base.r")
 
-FIGS_PATH <- "figs/codes/pilot-v23/"
+FIGS_PATH <- "figs/pilot-v23/"
 version <- "pilot-v23"
 
 df <- read_csvs("../data/code-pilot-v23/trials.csv") %>% 
