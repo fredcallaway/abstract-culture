@@ -43,7 +43,8 @@ main_trials <- df %>%
         compositional = factor(
             substr(trial_type, 16, 30), 
             levels = c("zilch", "partial", "full", "exact")),
-        solution_type = if_else(choose_compositional, "compositional", "bespoke")
+        solution_type = if_else(choose_compositional, "compositional", "bespoke"),
+        D=as.numeric(sub(".*-D", "", chain_id))
     )
 
 n_final <- main_trials %>% with(length(unique(pid)))
@@ -87,9 +88,9 @@ main_trials %>%
 # %% ===== compositionality rate ==============================================
 
 human <- main_trials %>% 
-    group_by(generation, chain_id) %>% 
-    summarise(compositionality = mean(choose_compositional)) %>%
-    mutate(D=as.numeric(sub(".*-D", "", chain_id)))
+    group_by(generation, D, chain_id) %>% 
+    summarise(compositionality = mean(choose_compositional))
+
 
 plot_compositionality <- function(pred_file="../results/predictions-epsilon-v23.csv") {
     model_predictions <- read_csv(pred_file) %>% 
@@ -112,20 +113,6 @@ figure("compositionality-curve-partial0.5", plot_compositionality(glue("../resul
 
 figure("compositionality-curve-partial0", plot_compositionality(glue("../results/predictions-epsilon-partial0-v23.csv")))
 
-# %% --------
-
-model_predictions <- read_csv(glue("../results/predictions-epsilon-partial0.5-v23.csv")) %>% 
-    filter(N==50, gen<11) %>% 
-    rename(generation = gen)
-
-
-figure("compositionality-curve-partial0.5", model_predictions %>% 
-    ggplot(aes(generation, compositionality)) +
-    geom_line(mapping=aes(group=pop), linewidth=.2, color=C_COMP, alpha=.1) +
-    # stat_mean_and_quantiles(color=RED) +
-    geom_line(data=human, mapping=aes(group=chain_id), linewidth=1, color=BLACK) +
-    facet_wrap(~D) + ylim(0, 1)
-)
 
 # %% --------
 
@@ -147,6 +134,11 @@ figure("solution-time", main_trials %>%
     point_line() +
     facet_wrap(~D)
 )
+
+main_trials %>% 
+    filter(duration < quantile(duration, .95), generation > 7) %>% 
+    group_by(D) %>% 
+    summarise(duration = mean(duration))
 
 # %% --------
 

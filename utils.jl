@@ -301,8 +301,8 @@ function splatify(f::Function)
     foo
 end
 
-
-function dataframe(f, params; parallel=false, pbar=parallel, splat=false)
+DEFAULT_PARALLEL::Bool = false
+function dataframe(f, params; parallel=DEFAULT_PARALLEL, pbar=parallel, splat=false)
 
     map_fun = if pbar
         parallel ? progress_pmap : progress_map

@@ -99,3 +99,54 @@ figure("sim_best", w=2.5,
        
 )
 
+# %% ===== empirical ==========================================================
+
+empirical_search <- read_csv("../results/costs-empirical.csv") %>% 
+    mutate(rel_cost = free_cost / bespoke_cost)
+
+figure("empirical_SDN", w=2.5, h=.9,
+    empirical_search %>% 
+        ggplot(aes(N, D, fill=rel_cost)) +
+        geom_tile() +
+        scale_fill_continuous() +
+        geom_point(x=32, y=32, color="red", size=3, shape="O") +
+    empirical_search %>% 
+        ggplot(aes(N, D, fill=free_comp)) +
+        geom_tile() + 
+        scale_fill_continuous() +
+        geom_point(x=32, y=32, color="red", size=3, shape="O") +
+        labs(fill="predicted p(comp)")
+)
+
+# %% --------
+
+figure("empirical_cost_comp", 
+    empirical_search %>% 
+        ggplot(aes(rel_cost, free_comp, color=D)) +
+        geom_point() +
+        scale_color_viridis_c() +
+        geom_point(data=filter(empirical_search, N==32, D==32), color="red", size=3, shape="O") +
+        labs(y="predicted p(comp)")
+)
+
+# %% --------
+
+sim_empirical <- read_csv("../results/sim-empirical.csv")
+
+data_means <- sim_empirical %>% 
+    # group_by(across(-c(cost,compositionality))) %>% 
+    group_by(agent, gen) %>% 
+    summarise(across(c(cost,compositionality), mean))
+
+
+figure("sim_empirical", w=2.5,
+    data_means %>% 
+        ggplot(aes(gen, cost, color=agent)) +
+        geom_line(linewidth=1) +
+        expand_limits(y=0) +
+    data_means %>% 
+        ggplot(aes(gen, compositionality, color=agent)) +
+        geom_line(linewidth=1) +
+        expand_limits(y=c(0, 1)) +
+    plot_layout(guides = "collect")       
+)
