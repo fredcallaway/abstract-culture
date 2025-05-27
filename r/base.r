@@ -154,6 +154,9 @@ read_csvs <- function(spec, base_dir = DATA_DIR) {
     # Quickly find candidate matches with a simple glob
     glob_pattern <- spec %>% str_replace_all("\\{[^{}]+\\}", "*")
     all_files <- Sys.glob(file.path(base_dir, glob_pattern))
+    if (length(all_files) == 0) {
+        stop("No files found for pattern: ", spec)
+    }
 
     # Pull out the slot names
     slot_names <- str_extract_all(spec, "\\{(\\w+)(?::[^}]+)?\\}")[[1]] %>%
@@ -164,6 +167,7 @@ read_csvs <- function(spec, base_dir = DATA_DIR) {
     regex_pattern <- spec %>%
         str_replace_all("\\{(\\w+):([^}]+)\\}", "(\\2)") %>% # {name:\\d+}
         str_replace_all("\\{(\\w+)\\}", "([^/]+)") # {name}
+    
     annotated_files <- tibble(data_file = all_files) %>%
         extract(data_file, into = slot_names, regex = regex_pattern, remove = F) %>%
         drop_na()

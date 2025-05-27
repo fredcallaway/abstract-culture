@@ -199,17 +199,15 @@ rel_cost <- main_trials %>%
     pivot_wider(names_from=solution_type, values_from=duration, names_prefix="duration_") %>% 
     transmute(relative_cost = duration_bespoke - duration_compositional)
 
-
-inner_join(p_comp, rel_cost) %>% 
+figure("cost-compositionality", inner_join(p_comp, rel_cost) %>% 
     ungroup() %>% 
     mutate(trial_type = glue("{substr(bespoke, 1, 1)}-{substr(compositional, 1, 1)}")) %>% 
     ggplot(aes(relative_cost, p_compositional)) +
-    geom_point() +
-    geom_text(aes(label = trial_type), vjust = -0.5, hjust = 0.5, size = 3) +
+    geom_point(color=GRAY) +
+    geom_text_repel(aes(label = trial_type), direction="y", size = 3, seed=2) +
     ylim(0, 1) +
     geom_vline(xintercept=0)
-
-fig()
+)
 
 # %% --------
 

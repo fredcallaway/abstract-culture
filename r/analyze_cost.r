@@ -10,6 +10,7 @@ avg_duration <- main_trials %>%
     summarise(duration = mean(duration/1000))
 
 main_trials %>% distinct(version)
+
 # %% --------
 
 # chosen costs

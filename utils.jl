@@ -30,6 +30,11 @@ end
 
 # %% ==================== General Purpose ====================
 
+function clear_methods!(f)
+    res = Base.delete_method.(methods(f))
+    println("deleted $(length(res)) methods")
+end
+
 Base.write(fp::String) = Base.Fix1(write, fp)
 
 function ensure_keys(d::Dict{K,V}, keys) where {K,V}

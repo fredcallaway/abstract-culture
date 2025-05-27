@@ -1,6 +1,7 @@
 include("binary_env.jl")
 include("utils.jl")
 include("figures.jl")
+include("box.jl")
 using DataFrames, CSV, JSON
 
 # %% ===== select good cost parameters ========================================
@@ -22,11 +23,11 @@ struct FixedPolicy <: AgentPolicy
 end
 prob_compositional(pol::FixedPolicy, ::Info) = pol.p_compositional
 
-function estimate_compositionality_advantage(env, costs, agent_policy;  kws...)
+function estimate_compositionality_advantage(env, costs, agent_policy, fixed_ε;  kws...)
     env1 = mutate(env; agent_policy)
     free = estimate_final_state(env1, costs; kws...)
 
-    env2 = mutate(env; agent_policy=FixedPolicy(0.0))
+    env2 = mutate(env; agent_policy=FixedPolicy(fixed_ε))
     bespoke_only = estimate_final_state(env2, costs; kws...)
 
     (;
@@ -36,20 +37,71 @@ function estimate_compositionality_advantage(env, costs, agent_policy;  kws...)
     )
 end
 
+function simulate_many(env, costs; init=0., n_pop=100, n_gen=15)
+    dataframe(grid(;pop=1:n_pop)) do (;pop)
+        sim = simulate(env, n_gen; init)
+        imap(sim) do gen, pop
+            (;gen, 
+             cost=mean(beh -> cost(costs, beh), pop), 
+             compositionality=compositional_rate(pop)
+            )
+        end
+    end
+end
+
+function simulate_free_vs_fixed(env, costs; ε=0.01, β=100., kws...)
+    free = simulate_many(env, costs; agent_policy=rational_policy(costs; ε, β), kws...)
+    free.agent .= "rational"
+
+    fixed = simulate_many(env, costs; agent_policy=FixedPolicy(ε), kws...)
+    fixed.agent .= "bespoke"
+
+    vcat(free, fixed)
+end
+
 # %% ===== hand select ========================================================
 
-costs = Costs(
-    comp_full = 3,
-    comp_partial = 4,
-    comp_none = 8,
+
+
+hand_costs = Costs(
+    comp_full = 1,
+    comp_partial = 2,
+    comp_none = 3.,
+    bespoke_full = 0,
+    bespoke_none = 3,
+)
+
+env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false)
+estimate_compositionality_advantage(env, hand_costs, rational_policy(hand_costs; ε=0.01, β=100.), 0.01; n_gen=50)
+
+# %% ===== search =============================================================
+
+box = Box(
+    comp_full = (1, 5),
+    comp_partial = (1, 5),
+    comp_none = (5, 10),
     bespoke_full = 1,
     bespoke_none = 5,
 )
 
-env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false,
-    agent_policy=rational_policy(costs; ε=.01, β=100.)
-)
-    
+params = filter(grid(10, box)[:]) do x
+    x.comp_full < x.comp_partial < x.comp_none
+end
+
+results = dataframe(params, pbar=true) do x
+    costs = Costs(;x...)
+    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.13, β=100.), 0.13; n_gen=15)
+end
+results |> CSV.write("results/costs-flexible-noisy.csv")
+
+# %% --------
+
+results = dataframe(params, pbar=true) do x
+    costs = Costs(;x...)
+    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.01, β=100.), 0.01; n_gen=100)
+end
+results |> CSV.write("results/costs-flexible-pure.csv")
+
 
 # %% ===== empirical costs + rational policy ====================================
 
@@ -168,8 +220,6 @@ end
 
 # %% ===== change n_dials =====================================================
 
-(;action_cost, search_cost) = fitted_dial_costs()
-
 g = grid(;
     search_cost=1:.2:5,
     n_compositional=2:2:8,
@@ -208,23 +258,6 @@ dump(good[1])
 
 
 # %% ===== simulation for plotting ============================================
-function simulate_many(env, costs; init=0., n_pop=100, n_gen=15)
-    dataframe(grid(;pop=1:n_pop)) do (;pop)
-        sim = simulate(env, n_gen; init)
-        imap(sim) do gen, pop
-            (;gen, 
-             cost=mean(beh -> cost(costs, beh), pop), 
-             compositionality=compositional_rate(pop)
-            )
-        end
-    end
-end
+
     
 
-# df = simulate_many(mutate(env; agent_policy=rational_policy(costs; ε=0.1)))
-# df.agent .= "rational"
-
-# df2 = simulate_many(mutate(env; agent_policy=FixedPolicy(0.1)))
-# df2.agent .= "bespoke"
-
-# vcat(df, df2) |> CSV.write("data/cost_sim.csv")
