@@ -3,20 +3,29 @@ source("base.r")
 
 FIGS_PATH <- "figs/cost_sims/"
 
-search <- read_csvs("../results/costs-flexible-{agent}.csv") %>% 
-    mutate(rel_cost = free_cost / bespoke_cost) %>% 
-    select(-data_file)
+search <- read_csvs("../results/costs-flexible-{agent}-init{init}.csv") %>% 
+    mutate(
+        rel_cost = free_cost / bespoke_cost,
+        init = as.numeric(init) / 10
+    ) %>% 
+    select(-data_file) %>% 
+    group_by(agent, init)
 
+controlled <- c(
+    "comp_full",
+    "comp_partial",
+    "comp_none"
+)
 # %% --------
 
 search %>% 
-    group_by(agent) %>% 
     filter(comp_none > bespoke_none) %>% 
-    slice_max(rel_cost)
+    slice_max(rel_cost) %>% 
+    select(all_of(controlled), rel_cost)
 
 # %% --------
 
-figure("tmp", search %>% 
+figure("comp_cost", search %>% 
     ggplot(aes(rel_cost, free_comp, color=comp_partial)) +
     geom_point() + 
     facet_wrap(~agent) +
@@ -25,15 +34,11 @@ figure("tmp", search %>%
 
 # %% --------
 
-controlled <- c(
-    "comp_full",
-    "comp_partial",
-    "comp_none"
-)
+# DOES NOT ACCOUNT FOR INIT
 
 marginal_max <- map_dfr(controlled, function(var) {
     search %>%
-        group_by(agent, !!sym(var)) %>%
+        group_by(!!sym(var), .add=TRUE) %>%
         summarise(
             max_rel_cost = max(rel_cost, na.rm = TRUE),
             .groups = "drop"
@@ -52,16 +57,43 @@ figure("marginal_max", marginal_max %>%
 
 # %% --------
 
-figure("cost_full_partial", w=2.5,
+figure("cost_full_partial", w=2.5,h=2,
     search %>% 
-        group_by(agent, comp_full, comp_partial) %>% 
+        group_by(agent, init, comp_full, comp_partial) %>% 
         slice_max(rel_cost) %>% 
-        group_by(agent) %>% 
+        group_by(agent, init) %>% 
         group_map(function(data, grp) {
             ggplot(data, aes(comp_full, comp_partial, color=rel_cost)) +
             geom_point() +
             scale_color_continuous_diverging(mid=1) +
-            ggtitle(grp$agent)
+            ggtitle(glue("{grp$agent} ({grp$init})"))
         }) %>% 
         reduce(`+`)
 )
+
+# %% --------
+
+sim <- read_csvs("../results/sim-flexible-{agent}-init{init}.csv")
+
+# %% --------
+
+
+data_means <- sim %>% 
+    # group_by(across(-c(cost,compositionality))) %>% 
+    group_by(agent, gen) %>% 
+    summarise(across(c(cost,compositionality), mean))
+
+
+ROBUST_MIN_N <- 0
+
+figure("sim_best", w=2.5,
+    data_means %>% 
+        ggplot(aes(gen, cost, color=agent)) +
+        geom_line(linewidth=1) +
+    data_means %>% 
+        ggplot(aes(gen, compositionality, color=agent)) +
+        geom_line(linewidth=1) +
+    plot_layout(guides = "collect")
+       
+)
+

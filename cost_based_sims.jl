@@ -50,10 +50,12 @@ function simulate_many(env, costs; init=0., n_pop=100, n_gen=15)
 end
 
 function simulate_free_vs_fixed(env, costs; ε=0.01, β=100., kws...)
-    free = simulate_many(env, costs; agent_policy=rational_policy(costs; ε, β), kws...)
+    env = mutate(env; agent_policy=rational_policy(costs; ε, β))
+    free = simulate_many(env, costs; kws...)
     free.agent .= "rational"
 
-    fixed = simulate_many(env, costs; agent_policy=FixedPolicy(ε), kws...)
+    env = mutate(env; agent_policy=FixedPolicy(ε))
+    fixed = simulate_many(env, costs; kws...)
     fixed.agent .= "bespoke"
 
     vcat(free, fixed)
@@ -76,6 +78,8 @@ estimate_compositionality_advantage(env, hand_costs, rational_policy(hand_costs;
 
 # %% ===== search =============================================================
 
+env = BinaryCompositionEnv(;S=4, D=32, N=32, replace_demos=false)
+
 box = Box(
     comp_full = (1, 5),
     comp_partial = (1, 5),
@@ -90,17 +94,30 @@ end
 
 results = dataframe(params, pbar=true) do x
     costs = Costs(;x...)
-    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.13, β=100.), 0.13; n_gen=15)
+    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.13, β=100.), 0.13; n_gen=15, init=0.5)
 end
-results |> CSV.write("results/costs-flexible-noisy.csv")
+results |> CSV.write("results/costs-flexible-noisy-init5.csv")
 
 # %% --------
 
 results = dataframe(params, pbar=true) do x
     costs = Costs(;x...)
-    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.01, β=100.), 0.01; n_gen=100)
+    estimate_compositionality_advantage(env, costs, rational_policy(costs; ε=0.01, β=100.), 0.01; n_gen=100, init=0.5)
 end
-results |> CSV.write("results/costs-flexible-pure.csv")
+results |> CSV.write("results/costs-flexible-pure-init5.csv")
+
+# %% --------
+
+best = @chain CSV.read("results/costs-flexible-noisy-init5.csv", DataFrame) begin
+    @rtransform :rel_cost = :free_cost / :bespoke_cost
+    @subset :rel_cost .== maximum(:rel_cost)
+    select(1:5)
+    first
+    NamedTuple
+end
+
+x = simulate_free_vs_fixed(env, Costs(;best...); ε=0.13, β=100., n_gen=30, init=0.5)
+x |> CSV.write("results/sim-flexible-noisy-init5.csv")
 
 
 # %% ===== empirical costs + rational policy ====================================
