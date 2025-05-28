@@ -2,6 +2,9 @@
 
 source("base.r")
 
+FIGS_PATH <- "figs/cost_empirical/"
+
+
 main_trials <- read_csvs("tmp/main_trials-{version}.csv") %>% 
     select(-data_file)
 
@@ -10,21 +13,6 @@ avg_duration <- main_trials %>%
     summarise(duration = mean(duration/1000))
 
 main_trials %>% distinct(version)
-
-# %% --------
-
-# chosen costs
-bespoke_full = 1.0
-bespoke_none = 4.0
-comp_full = 2.0
-comp_partial = 3.0
-comp_none = 4.0
-
-bespoke_full = 1.0
-bespoke_none = 5.0
-comp_full = 1.5
-comp_partial = 4.5
-comp_none = 7.5
 
 # %% --------
 
@@ -38,15 +26,83 @@ empirical_costs <- main_trials %>%
             str_replace(., "zilch", "none")
     ) %>% 
     group_by(full_solution_type) %>% 
-    filter(duration < quantile(duration, .95)) %>% 
+    # filter(duration < quantile(duration, .95)) %>% 
     summarise(duration = mean(duration/1000))
 
 print(empirical_costs)
 write_json(empirical_costs, "tmp/empirical_costs.json")
 
-# cost_based_sims.jl 
-    
 # %% --------
+
+for some data file, compute actual completion time
+
+
+# %% --------
+
+# how does solution time depend on the other available option?
+
+figure("duration_context", w=2, main_trials %>% 
+    mutate(
+        full_solution_type = if_else(solution_type == "compositional", 
+            glue("comp_{compositional}"), 
+            glue("bespoke_{bespoke}")
+        ) %>% 
+            str_replace(., "zilch", "none"),
+    ) %>% 
+    mutate(trial_type = glue("{substr(bespoke, 1, 1)}-{substr(compositional, 1, 1)}")) %>% 
+    group_by(trial_type, full_solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration / 1000)) %>% 
+    ggplot(aes(full_solution_type, duration)) +
+    geom_text_repel(aes(label = trial_type), size = 2, seed=2) +
+    geom_point() +
+    coord_flip()
+)
+
+# %% --------
+
+main_trials %>% 
+    mutate(
+        full_solution_type = if_else(solution_type == "compositional", 
+            glue("comp_{compositional}"), 
+            glue("bespoke_{bespoke}")
+        ) %>% 
+            str_replace(., "zilch", "none"),
+    ) %>% 
+    mutate(duration = duration / 1000) %>% 
+    regress(duration ~ full_solution_type + (1|uid), mixed=T, add_random=F)
+
+
+# %% ===== scatter ============================================================
+
+
+
+
+library(ggrepel)
+
+p_comp <- main_trials %>% 
+    group_by(bespoke, compositional) %>% 
+    summarise(p_compositional = mean(choose_compositional))
+
+rel_cost <- main_trials %>% 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration / 1000)) %>% 
+    pivot_wider(names_from=solution_type, values_from=duration, names_prefix="duration_") %>% 
+    transmute(relative_cost = duration_bespoke - duration_compositional)
+
+figure("cost-compositionality", inner_join(p_comp, rel_cost) %>% 
+    ungroup() %>% 
+    mutate(trial_type = glue("{substr(bespoke, 1, 1)}-{substr(compositional, 1, 1)}")) %>% 
+    ggplot(aes(relative_cost, p_compositional)) +
+    geom_point(color=GRAY) +
+    geom_text_repel(aes(label = trial_type), direction="y", size = 3, seed=2) +
+    ylim(0, 1) +
+    geom_vline(xintercept=0)
+)
+    
+# %% ===== OLD ================================================================
+
 actual_durations <- main_trials %>% 
     group_by(bespoke, compositional, solution_type) %>% 
     filter(duration < quantile(duration, .95)) %>% 
@@ -66,20 +122,13 @@ both_durations <- actual_durations %>%
     
     
 # %% --------
-
-both_durations %>% 
-    ggplot(aes(prediction, duration, color=solution_type)) +
-    geom_point() +
-    cpal +
-    geom_abline()
-
-
-fig()
-
-# %% --------
-
-both_durations
-
+figure("duration-prediction", 
+    both_durations %>% 
+        ggplot(aes(prediction, duration, color=solution_type)) +
+        geom_point() +
+        cpal +
+        geom_abline()
+)
 
 # %% --------
 

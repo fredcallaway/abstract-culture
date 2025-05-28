@@ -126,6 +126,7 @@ run_cost_search("noisy", params; ε=.13, n_gen=15)
     )
 end
 
+
 @everywhere function empirical_policy(file="tmp/compositional-rates-code-pilot-v23.csv")
     df = CSV.read(file, DataFrame)
     B = ["zilch", "exact"]
@@ -171,6 +172,7 @@ env = BinaryCompositionEnv(;best_prm..., replace_demos=false)
 sim = let
     agents = (
         rational = rational_policy(empirical_costs(); ε=.01),
+        classic = classic_policy(p_0=0.01, p_r=0.5),
         empirical = empirical_policy(),
         fixed = FixedPolicy(0.),
     )
@@ -182,4 +184,47 @@ sim = let
 end
 
 write_csv("sim-empirical.csv", sim)
+
+# %% ===== empirical simulation of exp1 (D32 N50) =============================
+
+
+
+env = BinaryCompositionEnv(S=4, N=50, D=32, replace_demos=false)
+
+sim = let
+    agents = (
+        rational = rational_policy(empirical_costs(); ε=.01),
+        classic = classic_policy(p_0=0.01, p_r=0.5),
+        empirical = empirical_policy(),
+        fixed = FixedPolicy(0.),
+    )
+    mapreduce(vcat, pairs(agents)) do (name, pol)
+        x = simulate_many(mutate(env, agent_policy=pol), empirical_costs(); n_pop=500, n_gen=30)
+        x.agent .= name
+        x
+    end
+end
+
+write_csv("sim-empirical-N50.csv", sim)
+
+# %% ===== estimate probability of observing bespoke ==========================
+
+costs = Costs(
+    comp_full = NaN,
+    comp_partial = NaN,
+    comp_none = NaN,
+    bespoke_full = 0,
+    bespoke_none = 1,
+)
+env = BinaryCompositionEnv(S=4, N=50, D=32, replace_demos=false)
+
+
+sim = simulate_many(mutate(env, agent_policy=FixedPolicy(0.)), costs; n_pop=500, n_gen=30)
+
+p_observe = @chain sim begin
+    @rsubset :gen > 1
+    @with 1 - mean(:cost)
+end
+
+prob_observe(1 / (env.S^2), env.D)
 

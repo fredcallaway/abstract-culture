@@ -112,8 +112,8 @@ best <- empirical_search %>%
 
 run <- tibble(N=50, D=32)
 
-circle <- function(color="red", size=3, stroke=1.2, ...) {
-    geom_point(color=color, size=size, stroke=stroke, shape=21, ...)
+circle <- function(color="red", size=4, stroke=1, ...) {
+    geom_point(color=color, size=size, stroke=stroke, fill=NA, shape=21, ...)
 }
 
 figure("empirical_SDN", w=2.5, h=.9,
@@ -147,7 +147,6 @@ figure("empirical_cost_comp",
 )
 
 # %% --------
-
 sim_empirical <- read_csvs("sim-empirical.csv")
 
 data_means <- sim_empirical %>% 
@@ -156,6 +155,27 @@ data_means <- sim_empirical %>%
     summarise(across(c(cost,compositionality), mean))
 
 figure("sim_empirical", w=2.5,
+    data_means %>% 
+        ggplot(aes(gen, cost, color=agent)) +
+        geom_line(linewidth=1) +
+        expand_limits(y=0) +
+    data_means %>% 
+        ggplot(aes(gen, compositionality, color=agent)) +
+        geom_line(linewidth=1) +
+        expand_limits(y=c(0, 1)) +
+    plot_layout(guides = "collect")       
+)
+
+# %% --------
+
+sim_empirical <- read_csvs("sim-empirical-N50.csv")
+
+data_means <- sim_empirical %>% 
+    # group_by(across(-c(cost,compositionality))) %>% 
+    group_by(agent, gen) %>% 
+    summarise(across(c(cost,compositionality), mean))
+
+figure("sim_empirical_N50", w=2.5,
     data_means %>% 
         ggplot(aes(gen, cost, color=agent)) +
         geom_line(linewidth=1) +
