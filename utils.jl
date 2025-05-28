@@ -295,7 +295,7 @@ macro require(ex)
     end |> esc
 end
 
-function splatify(f::Function)
+function splatify(f::Union{Function,DataType})
     foo(x::Tuple) = f(x...)
     foo(x::NamedTuple) = f(;x...)
     foo

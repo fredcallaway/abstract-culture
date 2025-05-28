@@ -152,10 +152,14 @@ maybe <- function(sym, .default = NULL) {
 DATA_DIR <- maybe(DATA_DIR, ".")
 read_csvs <- function(spec, base_dir = DATA_DIR) {
     # Quickly find candidate matches with a simple glob
+    if (!dir.exists(base_dir)) {
+        stop("Directory does not exist: ", base_dir)
+    }
+
     glob_pattern <- spec %>% str_replace_all("\\{[^{}]+\\}", "*")
     all_files <- Sys.glob(file.path(base_dir, glob_pattern))
     if (length(all_files) == 0) {
-        stop("No files found for pattern: ", spec)
+        stop("No files found for pattern ", glob_pattern, " in directory ", base_dir)
     }
 
     # Pull out the slot names
