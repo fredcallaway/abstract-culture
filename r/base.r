@@ -97,6 +97,23 @@ str_clip <- function(x, hi) {
     if_else(x >= hi, s_hi, as.character(x))
 }
 
+clip <- function(x, lo, hi) {
+    pmin(pmax(x, lo), hi)
+}
+qclip <- function(x, q1, q2=1-q1) {
+    clip(x, quantile(x, q1), quantile(x, q2))
+}
+zclip <- function(x, z1, z2) {
+    if (missing(z2)) {
+        stopifnot(z1 >= 0)
+        z2 = z1
+        z1 = -z1
+    }
+    lo <- mean(x) + z1*sd(x)
+    hi <- mean(x) + z2*sd(x)
+    clip(x, lo, hi)
+}
+
 numerize <- function(data, var) mutate(data, "{{var}}" := as.numeric({{ var }}))
 orderize <- function(data, x, y, .fun = mean) mutate(data, "{{x}}" := fct_reorder({{ x }}, {{ y }}, .fun))
 fctrize <- function(data, var, ...) mutate(data, "{{var}}" := factor({{ var }}, ...))
