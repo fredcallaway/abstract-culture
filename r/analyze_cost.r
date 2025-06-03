@@ -5,14 +5,8 @@ source("base.r")
 FIGS_PATH <- "figs/cost_empirical/"
 
 
-main_trials <- read_csvs("tmp/main_trials-{version}.csv") %>% 
+main_trials <- read_csvs("tmp/main_trials-reg-v2.csv") %>% 
     select(-data_file)
-
-avg_duration <- main_trials %>% 
-    group_by(bespoke, compositional, solution_type) %>% 
-    summarise(duration = mean(duration/1000))
-
-main_trials %>% distinct(version)
 
 # %% --------
 
@@ -26,15 +20,52 @@ empirical_costs <- main_trials %>%
             str_replace(., "zilch", "none")
     ) %>% 
     group_by(full_solution_type) %>% 
-    # filter(duration < quantile(duration, .95)) %>% 
+    mutate(duration = zclip(duration, 3)) %>%  
     summarise(duration = mean(duration/1000))
 
 print(empirical_costs)
 write_json(empirical_costs, "tmp/empirical_costs.json")
+ 
+# %% --------
+
+figure("rt-hists", w=2, main_trials %>% 
+    mutate(trial_type = glue("{bespoke}-{compositional}")) %>% 
+    group_by(trial_type) %>%
+    mutate(outlier = duration > mean(duration) + 3*sd(duration)) %>% 
+    ggplot(aes(trial_type, y=duration/1000, color=outlier)) +
+    # geom_boxplot() +
+    geom_quasirandom(size=.1) +
+    # stat_mean_and_quantiles(color=RED, rng=.95) +
+    coord_flip()
+)
+
 
 # %% --------
 
-for some data file, compute actual completion time
+# Bootstrap analysis
+set.seed(123)  # for reproducibility
+n_bootstrap <- 1000
+
+bootstrap_results <- modelr::bootstrap(tds, n_bootstrap)$strap %>% 
+    map_dbl(~ do_analysis(as_tibble(.x)))
+
+
+# Summary statistics
+bootstrap_summary <- tibble(
+    mean = mean(bootstrap_results),
+    sd = sd(bootstrap_results),
+    q025 = quantile(bootstrap_results, 0.025),
+    q975 = quantile(bootstrap_results, 0.975),
+    median = median(bootstrap_results)
+)
+
+
+
+# %% --------
+
+main_trials %>% 
+    filter(D == 32, generation > 1) %>% 
+    group_by(D, generation) %>% summarise(mean(duration))
 
 
 # %% --------

@@ -78,3 +78,5 @@ bootstrap_summary <- tibble(
 
 bootstrap_summary %>% 
     with(write_tex("{mean:.2}, 95% CI [{q025:.2}, {q975:.2}]", "hypothetical_nocomp"))
+
+
