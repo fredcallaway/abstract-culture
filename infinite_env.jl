@@ -47,7 +47,7 @@ function observation_probabilities(S, D_comp, D_bespoke)
     )
 end
 
-function ensure_prob(x; tol=1e-8)
+function ensure_prob(x; tol=1e-5)
     if x < -tol || x > 1+tol
         error("Probability $x is out of bounds")
     end

@@ -20,16 +20,20 @@ df_normalized <- df %>%
         # Calculate normalized endpoints
         indiv_end = indiv + ifelse(magnitude > 0, arrow_scale * d_indiv / magnitude, 0),
         bespoke_end = bespoke + ifelse(magnitude > 0, arrow_scale * d_bespoke / magnitude, 0),
-        comp_end = comp + ifelse(magnitude > 0, arrow_scale * d_comp / magnitude, 0)
+        comp_end = comp + ifelse(magnitude > 0, arrow_scale * d_comp / magnitude, 0),
     )
 
-# %% --------
 
-figure("simplex_field_single", df_normalized %>% 
-    filter(S == 5, D == 3) %>% 
+# %% --------
+data <- df_normalized
+
+figure("simplex_field", data %>% 
+    filter(!is_fixed) %>% 
+
     ggtern(aes(indiv,bespoke,comp)) + 
     geom_segment(aes(xend=indiv_end, yend=bespoke_end, zend=comp_end, color=magnitude),
                  arrow=arrow(length=unit(0.02, "npc"))) +
+    geom_point(data=filter(data, is_fixed), color="red") +
     limit_tern(T = 1.05, L = 1.05, R = 1.05) +
     theme(
       tern.axis.text.T = element_blank(),  # Top axis
@@ -42,7 +46,8 @@ figure("simplex_field_single", df_normalized %>%
     theme_nogrid() +
     theme_noticks() +
     no_legend +
-    scale_color_gradient(low = "gray80", high = "black")
+    scale_color_gradient(low = "gray80", high = "black") +
+    facet_grid(S~D)
 )
 
 # %% --------
