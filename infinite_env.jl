@@ -1,11 +1,8 @@
-using Memoize
 using StaticArrays
 
 include("utils.jl")
 include("probability.jl")
 
-¬(p::Real) = 1 - p
-prob_observe(p, k) = ¬((¬p) ^ k)
 
 @kwdef struct InfiniteEnv
     S::Int = 5  # number of starts and goals
@@ -36,18 +33,8 @@ function initial_population(::InfiniteEnv, init::Float64)
 end
 initial_population(::InfiniteEnv, init::FreqPop) = init
 
-# behavior given observation probabilities
-function prob_learn_red(env, b, r)
-    (;ε, p_brr, p_r, p_0) = env
-    p =
-        b *  r * r * p_brr +
-        ¬b * (
-            r * r +
-            r * ¬r * 2p_r +  # two ways for this to happen
-            ¬r * ¬r * p_0
-        )
-    ε * .5 + (1-ε) * p
-end
+¬(p::Real) = 1 - p
+prob_observe(p, k) = ¬((¬p) ^ k)
 
 function observation_probabilities(S, D_comp, D_bespoke)
     bespoke = prob_observe(1 / S^2, D_bespoke)
@@ -95,6 +82,7 @@ function simulate(env::InfiniteEnv, n_gen; init=0.)
     end
     x
 end
+
 
 function find_stable_points(env::InfiniteEnv)
     stable = find_zeros(0, 1) do x
