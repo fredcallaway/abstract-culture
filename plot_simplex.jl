@@ -27,7 +27,7 @@ end
 collapse(pop::FreqPop) = (;
     bespoke_zilch = pop.bespoke_zilch,
     bespoke_full = pop.bespoke_full,
-    comp = compositional_rate(pop)
+    comp = pop.comp_full + pop.comp_partial,
 )
 
 expand(x, y, z) = FreqPop(
@@ -40,9 +40,9 @@ expand(x, y, z) = FreqPop(
 
 g = grid(
     S = [5, 10],
-    D = 1 .* 3 .^ (1:5),
+    D = 1 .* 3 .^ (1:4),
     p_r = 1,
-    p_0 = 0.01
+    p_0 = 0.0
 )
 
 dataframe(g) do prm
@@ -51,6 +51,7 @@ dataframe(g) do prm
         pop = expand(x, y, z)
         p0 = collapse(pop)
         p1 = collapse(transition(env, pop))
+        @assert sum(p1) ≈ 1 "$p1"
         (;
             bespoke_zilch = p0.bespoke_zilch,
             bespoke_full = p0.bespoke_full,
@@ -62,15 +63,8 @@ dataframe(g) do prm
     end
 end |> CSV.write("results/simplex.csv")
 
-# %% --------
+# run(`cd r $&$& Rscript simplex.r`)
 
-sim = imap(simulate(env, 10, init=.01)) do gen, pop
-    (;
-        gen,
-        pop.bespoke_zilch,
-        pop.bespoke_full,
-        comp = compositional_rate(pop)
-    )
+cd("r") do
+    run(`Rscript simplex.r`)
 end
-
-DataFrame(sim) |> CSV.write("results/chains.csv")

@@ -57,6 +57,17 @@ default_palettes <- list(
 )
 
 
+facet_grid = function(form, labeller=purrr::partial(label_both, sep = " = "), ...) {
+    ggplot2::facet_grid(form, labeller=labeller, ...)
+}
+
+facet_wrap = function(form, labeller=purrr::partial(label_both, sep = " = "), ...) {
+    ggplot2::facet_wrap(form, labeller=labeller, ...)
+}
+
+
+
+
 yesno_pal <- scale_colour_manual(values = c(
     `FALSE` = "gray50",
     `TRUE` = BLUE
