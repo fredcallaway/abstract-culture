@@ -765,10 +765,16 @@ version = "2.11.1"
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 
 [[deps.RCall]]
-deps = ["CategoricalArrays", "Conda", "DataFrames", "DataStructures", "Dates", "Libdl", "Preferences", "REPL", "Random", "Requires", "StatsModels", "WinReg"]
-git-tree-sha1 = "db17ec90d9f904b79e7877a764fdf95ff5c5f315"
+deps = ["CategoricalArrays", "Conda", "DataFrames", "DataStructures", "Dates", "Libdl", "Preferences", "REPL", "Random", "StatsModels", "WinReg"]
+git-tree-sha1 = "815f2e4b52e377eb7ae21c8235bd3e2e3e0bfd9e"
 uuid = "6f49c342-dc21-5d91-9882-a32aef131414"
-version = "0.14.6"
+version = "0.14.8"
+
+    [deps.RCall.extensions]
+    RCallAxisArraysExt = ["AxisArrays"]
+
+    [deps.RCall.weakdeps]
+    AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
