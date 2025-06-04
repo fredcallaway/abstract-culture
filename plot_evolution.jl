@@ -1,9 +1,9 @@
-using RCall
 include("utils.jl")
 include("infinite_env.jl")
 
-R_DIR = joinpath(@__DIR__, "r")
 
+using RCall
+R_DIR = joinpath(@__DIR__, "r")
 R"""
 setwd($R_DIR)
 source("base.r")
@@ -23,7 +23,7 @@ df = dataframe(g) do prm
     env = InfiniteEnv(;prm...)
     sim = simulate(env, 30)
     map(enumerate(sim)) do (gen, pop)
-        (;gen=gen-1, compositionality=compositionality_rate(pop))
+        (;gen=gen-1, compositionality=compositional_rate(pop))
     end
 end
 

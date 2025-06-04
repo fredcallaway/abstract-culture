@@ -26,7 +26,7 @@ end
     comp_full::Float64 = 0.
 end
 
-compositionality_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
+compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
 
 function initial_population(::InfiniteEnv, init::Float64)
     FreqPop(
@@ -70,7 +70,7 @@ end
 
 function transition(env::InfiniteEnv, pop::FreqPop)
     (;S, D, p_0, p_r) = env
-    c = ensure_prob(compositionality_rate(pop))
+    c = ensure_prob(compositional_rate(pop))
 
     pop2 = expectation(Binomial(D, c)) do D_comp
         D_bespoke = D - D_comp
