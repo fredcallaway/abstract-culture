@@ -9,7 +9,7 @@ function expectation(f::Function, d::Distribution; lo=quantile(d, EXPECTATION_TO
     end
 end
 
-function expectation(f::Function, d::DiscreteDistribution; lo=minimum(d), hi=maximum(d))
+function expectation(f::Function, d::DiscreteDistribution)
     sum(support(d)) do x
         pdf(d, x) * f(x)
     end
