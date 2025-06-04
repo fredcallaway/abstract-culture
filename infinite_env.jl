@@ -28,12 +28,13 @@ end
 
 compositionality_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
 
-function initial_population(env::InfiniteEnv, init::Float64)
+function initial_population(::InfiniteEnv, init::Float64)
     FreqPop(
         bespoke_zilch = 1 - init,
         comp_zilch = init,
     )
 end
+initial_population(::InfiniteEnv, init::FreqPop) = init
 
 # behavior given observation probabilities
 function prob_learn_red(env, b, r)
@@ -87,7 +88,7 @@ function transition(env::InfiniteEnv, pop::FreqPop)
 end
 
 function simulate(env::InfiniteEnv, n_gen; init=0.)
-    pop = init
+    pop = initial_population(env, init)
     x = fill(pop, n_gen+1)
     for i in 1:n_gen
         x[i+1] = transition(env, x[i])
