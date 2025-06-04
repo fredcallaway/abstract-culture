@@ -24,17 +24,55 @@ function simplex_grid(n::Int)
     return points
 end
 
-collapse(pop::FreqPop) = (;
-    bespoke_zilch = pop.bespoke_zilch,
-    bespoke_full = pop.bespoke_full,
-    comp = pop.comp_full + pop.comp_partial,
-)
 
-expand(x, y, z) = FreqPop(
-    bespoke_zilch = x,
-    bespoke_full = y,
-    comp_full = z
-)
+
+# %% --------
+using Roots
+function find_stable_points(env::InfiniteEnv; atol=1e-5)
+    stable = find_zeros(0, 1) do comp
+        comp2 = transition(env, CompPop(comp)).comp
+        comp2 - comp
+    end
+    @show stable
+
+    i = findfirst(stable) do x
+        x ≈ 1 && return false
+        x += 1e-8
+        transition(env, CompPop(x)).comp > x
+    end
+
+    start = if isnothing(i)
+        if transition(env, CompPop(0.)).comp > 0
+            0.
+        else
+            NaN
+        end
+    else
+        stable[i]
+    end
+
+    i = findlast(stable) do x
+        x ≈ 0 && return false
+        transition(env, CompPop(x - atol)).comp > x - atol && transition(env, CompPop(x + atol)).comp < x + atol
+    end
+
+    stop = if isnothing(i)
+        NaN
+    else
+        stable[i]
+    end
+
+    (;start, stop)
+end
+
+find_stable_points(;params...) = find_stable_points(InfiniteEnv(;params...))
+
+# %% --------
+
+env = InfiniteEnv(;S=5, D=15, p_0=1e-5, p_r=0.5)
+find_stable_points(env)
+p = transition(env, CompPop(0.))
+transition(env, p)
 
 # %% --------
 
@@ -47,18 +85,21 @@ g = grid(
 
 dataframe(g) do prm
     env = InfiniteEnv(;prm...)
-    map(simplex_grid(10)) do (x, y, z)
-        pop = expand(x, y, z)
-        p0 = collapse(pop)
-        p1 = collapse(transition(env, pop))
-        @assert sum(p1) ≈ 1 "$p1"
+    map(simplex_grid(10)) do (indiv, bespoke, comp)
+        pop = FreqPop(
+            bespoke_full = bespoke,
+            comp_full = comp,
+            comp_zilch = indiv * env.p_0,
+            bespoke_zilch = indiv * (1 - env.p_0),
+            # note: comp_partial doesn't affect evolution
+        )
+        pop1 = transition(env, pop)
+        
         (;
-            bespoke_zilch = p0.bespoke_zilch,
-            bespoke_full = p0.bespoke_full,
-            comp = p0.comp,
-            bespoke_zilch_end = p1.bespoke_zilch,
-            bespoke_full_end = p1.bespoke_full,
-            comp_end = p1.comp
+            indiv, bespoke, comp,
+            indiv_end = pop1.bespoke_zilch + pop1.comp_zilch,
+            bespoke_end = pop1.bespoke_full,
+            comp_end = pop1.comp_full + pop1.comp_partial
         )
     end
 end |> CSV.write("results/simplex.csv")
