@@ -16,10 +16,6 @@ using Distributed
 using NamedTupleTools: delete
 
 
-const TOL = 1e-5
-
-# %% ==================== Project-specific ====================
-
 logistic(x) = 1 / (1 + exp(-x))
 lapse(p, ε) = (1 - ε) * p + ε / 2
 
@@ -27,8 +23,6 @@ function Base.NamedTuple(d::Dict{String})
     NamedTuple(Dict(Symbol(k) => v for (k, v) in d))
 end
 
-
-# %% ==================== General Purpose ====================
 
 function clear_methods!(f)
     res = Base.delete_method.(methods(f))
