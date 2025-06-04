@@ -5,15 +5,13 @@ include("test_utils.jl")
 
 # %% --------
 
-
-@time test_envs = create_test_objects(splatify(InfiniteEnv), (
+test_envs = create_test_objects(splatify(InfiniteEnv), (
     S = (1, 50), 
     D = (0, 100), 
     p_0 = (0., 1.), 
     p_r = (0., 1.)
 ))
 length(test_envs)
-
 
 @testset "observation_probabilities" begin
     foreach(test_envs) do env
@@ -34,8 +32,6 @@ test_pops = create_test_objects(x->normalize(FreqPop(;x...)), (
     comp_partial = (0., 1.), 
     comp_full = (0., 1.)
 ); n_rand=1) |> pops->filter(p->!any(isnan, p), pops)
-
-
 
 @testset "transition" begin
     foreach(product(test_envs, test_pops)) do (env, pop)
