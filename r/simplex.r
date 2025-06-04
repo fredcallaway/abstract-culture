@@ -1,27 +1,21 @@
 source("base.r")
 library(ggtern)
 
-df <- read_csv("../results/chains.csv")
-
-# %% --------
-
-df %>% 
-    ggtern(aes(bespoke_zilch,bespoke_full,comp)) + 
-    geom_line(aes(color=gen)) +
-    limit_tern(T = 1.05, L = 1.05, R = 1.05)
-
-fig(w=3, h=2)
-
-
 # %% --------
 
 df <- read_csv("../results/simplex.csv")
-nrow(df)
-df %>% 
-    ggtern(aes(bespoke_zilch,bespoke_full,comp)) + 
+
+figure("simplex_field", df %>% 
+    rename(Z = bespoke_zilch, F = bespoke_full, C = comp) %>%
+    ggtern(aes(Z,F,C)) + 
     geom_segment(aes(xend=bespoke_zilch_end, yend=bespoke_full_end, zend=comp_end),
                  arrow=arrow(length=unit(0.02, "npc")), color=RED) +
-    limit_tern(T = 1.05, L = 1.05, R = 1.05)
-
-fig(w=3, h=2)
+    limit_tern(T = 1.05, L = 1.05, R = 1.05) +
+    facet_grid(S~D) +
+    theme(
+      tern.axis.text.T = element_blank(),  # Top axis
+      tern.axis.text.L = element_blank(),  # Left axis
+      tern.axis.text.R = element_blank()   # Right axis
+    )
+)
 

@@ -36,24 +36,31 @@ expand(x, y, z) = FreqPop(
     comp_full = z
 )
 
-env = InfiniteEnv(S=5, D=15, p_0 = 0.0, p_r = 1.0)
+# %% --------
 
-# Generate arrow data for vector field
-arrow_data = map(simplex_grid(10)) do (x, y, z)
-    pop = expand(x, y, z)
-    p0 = collapse(pop)
-    p1 = collapse(transition(env, pop))
-    (;
-        bespoke_zilch = p0.bespoke_zilch,
-        bespoke_full = p0.bespoke_full,
-        comp = p0.comp,
-        bespoke_zilch_end = p1.bespoke_zilch,
-        bespoke_full_end = p1.bespoke_full,
-        comp_end = p1.comp
-    )
-end
+g = grid(
+    S = [5, 10],
+    D = 1 .* 3 .^ (1:5),
+    p_r = 1,
+    p_0 = 0.01
+)
 
-DataFrame(arrow_data) |> CSV.write("results/simplex.csv")
+dataframe(g) do prm
+    env = InfiniteEnv(;prm...)
+    map(simplex_grid(10)) do (x, y, z)
+        pop = expand(x, y, z)
+        p0 = collapse(pop)
+        p1 = collapse(transition(env, pop))
+        (;
+            bespoke_zilch = p0.bespoke_zilch,
+            bespoke_full = p0.bespoke_full,
+            comp = p0.comp,
+            bespoke_zilch_end = p1.bespoke_zilch,
+            bespoke_full_end = p1.bespoke_full,
+            comp_end = p1.comp
+        )
+    end
+end |> CSV.write("results/simplex.csv")
 
 # %% --------
 
