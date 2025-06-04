@@ -83,40 +83,43 @@ function simulate(env::InfiniteEnv, n_gen; init=0.)
     x
 end
 
+# %% ===== reduced form populations ===========================================
 
-function find_stable_points(env::InfiniteEnv)
-    stable = find_zeros(0, 1) do x
-        transition(env, x) - x
-    end
-
-    i = findfirst(stable) do x
-        x ≈ 1 && return false
-        x += 1e-8
-        transition(env, x) > x
-    end
-
-    start = if isnothing(i)
-        if transition(env, 0.) > 0
-            0.
-        else
-            NaN
-        end
-    else
-        stable[i]
-    end
-
-    i = findlast(stable) do x
-        x ≈ 0 && return false
-        transition(env, x - 1e-8) > x - 1e-8 && transition(env, x + 1e-8)  < x + 1e-8
-    end
-
-    stop = if isnothing(i)
-        NaN
-    else
-        stable[i]
-    end
-
-    (;start, stop)
+struct CompPop <: FieldVector{1, Float64}
+    comp::Float64
 end
 
-find_stable_points(;params...) = find_stable_points(InfiniteEnv(;params...))
+CompPop(pop::FreqPop) = CompPop(
+    compositional_rate(pop)
+)
+
+FreqPop(pop::CompPop) = FreqPop(
+    comp_full = pop.comp,
+    bespoke_full = 1 - pop.comp,
+)
+initial_population(::InfiniteEnv, init::CompPop) = init
+transition(env::InfiniteEnv, pop::CompPop) = transition(env, FreqPop(pop)) |> CompPop
+compositional_rate(pop::CompPop) = pop.comp
+
+@kwdef struct Pop3 <: FieldVector{3, Float64}
+    indiv::Float64
+    bespoke::Float64
+    comp::Float64
+end
+
+Pop3(pop::FreqPop) = Pop3(
+    pop.bespoke_zilch + pop.comp_zilch,
+    pop.bespoke_full,
+    pop.comp_full + pop.comp_partial,
+)
+
+FreqPop(pop::Pop3, p_0::Float64) = FreqPop(
+    bespoke_full = pop.bespoke,
+    comp_full = pop.comp,
+    comp_zilch = pop.indiv * p_0,
+    bespoke_zilch = pop.indiv * (1 - p_0),
+)
+
+initial_population(::InfiniteEnv, init::Pop3) = init
+transition(env::InfiniteEnv, pop::Pop3) = transition(env, FreqPop(pop, env.p_0)) |> Pop3
+compositional_rate(pop::Pop3) = pop.comp

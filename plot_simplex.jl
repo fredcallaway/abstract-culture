@@ -33,7 +33,6 @@ function find_stable_points(env::InfiniteEnv; atol=1e-5)
         comp2 = transition(env, CompPop(comp)).comp
         comp2 - comp
     end
-    @show stable
 
     i = findfirst(stable) do x
         x ≈ 1 && return false
@@ -70,9 +69,10 @@ find_stable_points(;params...) = find_stable_points(InfiniteEnv(;params...))
 # %% --------
 
 env = InfiniteEnv(;S=5, D=15, p_0=1e-5, p_r=0.5)
-find_stable_points(env)
-p = transition(env, CompPop(0.))
-transition(env, p)
+stable = find_stable_points(env)
+
+pop = transition(env, FreqPop(CompPop(stable.stop)))
+@assert transition(env, pop) ≈ pop
 
 # %% --------
 
@@ -86,20 +86,13 @@ g = grid(
 dataframe(g) do prm
     env = InfiniteEnv(;prm...)
     map(simplex_grid(10)) do (indiv, bespoke, comp)
-        pop = FreqPop(
-            bespoke_full = bespoke,
-            comp_full = comp,
-            comp_zilch = indiv * env.p_0,
-            bespoke_zilch = indiv * (1 - env.p_0),
-            # note: comp_partial doesn't affect evolution
-        )
+        pop = Pop3(;indiv, bespoke, comp)
         pop1 = transition(env, pop)
-        
         (;
             indiv, bespoke, comp,
-            indiv_end = pop1.bespoke_zilch + pop1.comp_zilch,
-            bespoke_end = pop1.bespoke_full,
-            comp_end = pop1.comp_full + pop1.comp_partial
+            indiv_end = pop1.indiv,
+            bespoke_end = pop1.bespoke,
+            comp_end = pop1.comp
         )
     end
 end |> CSV.write("results/simplex.csv")
