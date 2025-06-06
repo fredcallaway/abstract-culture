@@ -29,10 +29,19 @@ end
 # %% --------
 using Roots
 function find_stable_points(env::InfiniteEnv; atol=1e-5)
-    stable = find_zeros(0, 1) do comp
+    fixed = find_zeros(0, 1) do comp
         comp2 = transition(env, CompPop(comp)).comp
         comp2 - comp
     end
+
+    filter(fixed) do comp
+        δ = 1e-5
+        more = CompPop(comp + δ)
+        less = CompPop(comp - δ)
+        (more.comp > 1. || transition(env, more) < more) && 
+        (less.comp < 0. || transition(env, less) > less)
+    end
+
 
     # i = findfirst(stable) do x
     #     x ≈ 1 && return false
@@ -81,12 +90,27 @@ end
 # %% --------
 
 
-g = grid(
-    S = [5, 10],
-    D = 1 .* 3 .^ (1:4),
-    p_r = 0.,
-    p_0 = 1e-5
-)
+# g = grid(
+#     S = 10,
+#     D = [5, 30, 150, 500],
+#     p_r = 1e-5,
+#     p_0 = 1e-5,
+# )
+
+# g = grid(
+#     S = 10,
+#     D = [5, 50, 150, 500],
+#     p_r = 1.,
+#     p_0 = 0.,
+# )
+
+# g = grid(
+#     S = [5, 10],
+#     D = 2 .^ (2:5),
+#     p_r = 1.,
+#     p_0 = 0.01
+# )
+
 
 dataframe(g) do prm
     env = InfiniteEnv(;prm...)
@@ -115,6 +139,8 @@ end |> CSV.write("results/simplex.csv")
 
 # run(`cd r $&$& Rscript simplex.r`)
 
+using RCall
 cd("r") do
-    run(`Rscript simplex.r`)
+    R"""source("simplex.r")"""
+    # run(`Rscript simplex.r`)
 end

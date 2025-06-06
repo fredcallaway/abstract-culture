@@ -30,18 +30,19 @@ data <- df_normalized
 figure("simplex_field", data %>% 
     filter(!is_fixed) %>% 
 
-    ggtern(aes(indiv,bespoke,comp)) + 
-    geom_segment(aes(xend=indiv_end, yend=bespoke_end, zend=comp_end, color=magnitude),
+    ggtern(aes(bespoke,indiv,comp)) + 
+    geom_segment(aes(yend=indiv_end, xend=bespoke_end, zend=comp_end, color=magnitude),
                  arrow=arrow(length=unit(0.02, "npc"))) +
     geom_point(data=filter(data, is_fixed), color="red") +
     limit_tern(T = 1.05, L = 1.05, R = 1.05) +
+    labs(T = "I", L = "B", R = "C") +
     theme(
       tern.axis.text.T = element_blank(),  # Top axis
       tern.axis.text.L = element_blank(),  # Left axis
       tern.axis.text.R = element_blank(),   # Right axis
       # tern.axis.title.T = element_text(hjust = 0.5, vjust = -1),
-      tern.axis.title.L = element_text(hjust = 0, vjust = 1.2),
-      tern.axis.title.R = element_text(hjust = 1, vjust = 1.2)
+    #   tern.axis.title.L = element_text(hjust = 0, vjust = 1.2),
+    #   tern.axis.title.R = element_text(hjust = 1, vjust = 1.2)
     ) + 
     theme_nogrid() +
     theme_noticks() +

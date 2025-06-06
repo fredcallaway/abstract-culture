@@ -23,6 +23,12 @@ function Base.NamedTuple(d::Dict{String})
     NamedTuple(Dict(Symbol(k) => v for (k, v) in d))
 end
 
+named_tuple(x::NamedTuple) = x
+function named_tuple(x)
+    n = Tuple(propertynames(x))
+    NamedTuple{n}(getproperty.(Ref(x), n))
+end
+
 
 function clear_methods!(f)
     res = Base.delete_method.(methods(f))
