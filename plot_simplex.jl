@@ -80,13 +80,13 @@ end
 
 # %% --------
 
+
 g = grid(
     S = [5, 10],
     D = 1 .* 3 .^ (1:4),
-    p_r = 0.5,
+    p_r = 0.,
     p_0 = 1e-5
 )
-
 
 dataframe(g) do prm
     env = InfiniteEnv(;prm...)
