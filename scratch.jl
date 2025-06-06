@@ -55,3 +55,38 @@ for c in 0:.1:1
 
     @assert sum(pop1.C) ≈ transition(env, CompPop(c)).comp
 end
+
+# %% --------
+c = .3
+S = env.S
+pop = FullPop{S}(
+    (c/S^2) * ones(S, S), 
+    ((1-c)/S^2) * ones(S, S)
+)
+pop1 = transition(env, pop)
+
+pop1.C
+
+
+# %% --------
+
+function new_transition(env::InfiniteEnv, pop::CompPop)
+    (;S, D, p_0, p_r) = env
+
+    c = pop.comp
+    b = 1 - c
+    c_ij = c / S^2
+    b_ij = b / S^2
+
+    term2 = (1 - b / S^2)^D
+    term3_inner = (2 * c/S - c/S^2) / (1 - b_ij)
+    term3 = 1 - (1 - term3_inner)^D
+    c1 = term2 * term3
+    CompPop(c1)
+end
+
+for c in 0:.1:1
+    old = transition(env, CompPop(c)).comp
+    new = new_transition(env, CompPop(c)).comp
+    @assert old ≈ new
+end
