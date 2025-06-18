@@ -78,8 +78,8 @@ function new_transition(env::InfiniteEnv, pop::CompPop)
     c_ij = c / S^2
     b_ij = b / S^2
 
-    term2 = (1 - b / S^2)^D
-    term3_inner = (2 * c/S - c/S^2) / (1 - b_ij)
+    term2 = (1 - (1-c) / S^2)^D
+    term3_inner = (2 * c/S - c/S^2) / (1 - ((1-c) / S^2))
     term3 = 1 - (1 - term3_inner)^D
     c1 = term2 * term3
     CompPop(c1)
