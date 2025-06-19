@@ -15,24 +15,6 @@ include("probability.jl")
     ε::Float64 = 0. # lapse rate applied at end
 end
 
-@kwdef struct FreqPop <: FieldVector{5, Float64}
-    bespoke_zilch::Float64 = 0.
-    bespoke_full::Float64 = 0.
-    comp_zilch::Float64 = 0.
-    comp_partial::Float64 = 0.
-    comp_full::Float64 = 0.
-end
-
-compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
-
-function initial_population(::InfiniteEnv, init::Float64)
-    FreqPop(
-        bespoke_zilch = 1 - init,
-        comp_zilch = init,
-    )
-end
-initial_population(::InfiniteEnv, init::FreqPop) = init
-
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
 
@@ -47,13 +29,91 @@ function observation_probabilities(S, D_comp, D_bespoke)
     )
 end
 
-function ensure_prob(x; tol=1e-5)
-    if x < -tol || x > 1+tol
-        error("Probability $x is out of bounds")
-    end
-    clip(x, 0., 1.)
+abstract type InfinitePop end
+
+struct CompPop <: InfinitePop
+    comp::Float64
 end
 
+compositional_rate(pop::CompPop) = pop.comp
+
+function transition(env::InfiniteEnv, pop::CompPop)
+    (;S, D, p_0, p_r) = env
+    c = ensure_prob(compositional_rate(pop))
+
+    expectation(Binomial(D, c)) do D_comp
+        D_bespoke = D - D_comp
+        P = observation_probabilities(S, D_comp, D_bespoke)
+        let
+            P.zilch * p_0 +
+            P.partial_only * p_r +
+            P.full_only
+        end
+    end |> CompPop
+end
+
+initialize(::InfiniteEnv, init::InfinitePop) = init
+initialize(::InfiniteEnv, init::Real) = CompPop(init)
+
+function simulate(env::InfiniteEnv, n_gen; init=0.)
+    gen0 = initialize(env, init)
+
+    x = fill(gen0, n_gen+1)
+    for i in 1:n_gen
+        x[i+1] = transition(env, x[i])
+    end
+    x
+end
+
+# %% ===== expanded form populations ===========================================
+
+CompPop(pop::InfinitePop) = CompPop(compositional_rate(pop))
+
+
+struct FullPop{S} <: InfinitePop
+    C::SMatrix{S,S,Float64}
+    B::SMatrix{S,S,Float64}
+end
+
+compositional_rate(pop::FullPop) = sum(pop.C)
+
+FullPop{S}(c::Float64) = FullPop{S}(
+    c .* ones(S, S) ./ S^2,
+    (1 - c) .* ones(S, S) ./ S^2,
+)
+FullPop(S::Int, c::Float64) = FullPop{S}(c)
+
+function transition(env::InfiniteEnv, pop::FullPop)
+    (;S, D, p_0, p_r) = env
+
+    (;B, C) = pop
+    
+    B1 = similar(pop.B); C1 = similar(pop.C)
+    for i in 1:S, j in 1:S
+        term1 = 1/S^2
+        term2 = (1 - B[i,j])^D
+        term3_inner = (sum(C[i, :]) + sum(C[:, j]) - C[i,j]) / (1 - B[i,j])
+        term3 = 1 - (1 - term3_inner)^D
+        C1[i,j] = term1 * term2 * term3
+        B1[i, j] = term1 - C1[i,j]
+    end
+    FullPop{S}(C1, B1)
+end
+
+
+@kwdef struct FreqPop <: InfinitePop
+    bespoke_zilch::Float64 = 0.
+    bespoke_full::Float64 = 0.
+    comp_zilch::Float64 = 0.
+    comp_partial::Float64 = 0.
+    comp_full::Float64 = 0.
+end
+
+FreqPop(pop::CompPop) = FreqPop(
+    comp_full = pop.comp,
+    bespoke_full = 1 - pop.comp,
+)
+compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
 
 function transition(env::InfiniteEnv, pop::FreqPop)
     (;S, D, p_0, p_r) = env
@@ -62,7 +122,7 @@ function transition(env::InfiniteEnv, pop::FreqPop)
     pop2 = expectation(Binomial(D, c)) do D_comp
         D_bespoke = D - D_comp
         P = observation_probabilities(S, D_comp, D_bespoke)
-        FreqPop(
+        (;
             bespoke_zilch = P.zilch * ¬p_0 + P.partial_only * ¬p_r,
             bespoke_full = P.bespoke,
             comp_zilch = P.zilch * p_0,
@@ -71,37 +131,10 @@ function transition(env::InfiniteEnv, pop::FreqPop)
         )
     end
     @assert sum(pop2) ≈ 1
-    pop2
+    FreqPop(pop2...)
 end
 
-function simulate(env::InfiniteEnv, n_gen; init=0.)
-    pop = initial_population(env, init)
-    x = fill(pop, n_gen+1)
-    for i in 1:n_gen
-        x[i+1] = transition(env, x[i])
-    end
-    x
-end
-
-# %% ===== reduced form populations ===========================================
-
-struct CompPop <: FieldVector{1, Float64}
-    comp::Float64
-end
-
-CompPop(pop::FreqPop) = CompPop(
-    compositional_rate(pop)
-)
-
-FreqPop(pop::CompPop) = FreqPop(
-    comp_full = pop.comp,
-    bespoke_full = 1 - pop.comp,
-)
-initial_population(::InfiniteEnv, init::CompPop) = init
-transition(env::InfiniteEnv, pop::CompPop) = transition(env, FreqPop(pop)) |> CompPop
-compositional_rate(pop::CompPop) = pop.comp
-
-@kwdef struct Pop3 <: FieldVector{3, Float64}
+@kwdef struct Pop3 <: InfinitePop
     indiv::Float64
     bespoke::Float64
     comp::Float64
@@ -120,6 +153,6 @@ FreqPop(pop::Pop3, p_0::Float64) = FreqPop(
     bespoke_zilch = pop.indiv * (1 - p_0),
 )
 
-initial_population(::InfiniteEnv, init::Pop3) = init
+initialize(::InfiniteEnv, init::Pop3) = init
 transition(env::InfiniteEnv, pop::Pop3) = transition(env, FreqPop(pop, env.p_0)) |> Pop3
 compositional_rate(pop::Pop3) = pop.comp
