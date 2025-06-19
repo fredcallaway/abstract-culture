@@ -85,6 +85,7 @@ FullPop(S::Int, c::Float64) = FullPop{S}(c)
 
 function transition(env::InfiniteEnv, pop::FullPop)
     (;S, D, p_0, p_r) = env
+    @assert p_r == 1.  # TODO: handle other cases
 
     (;B, C) = pop
     
@@ -100,6 +101,8 @@ function transition(env::InfiniteEnv, pop::FullPop)
     FullPop{S}(C1, B1)
 end
 
+# %% ===== FreqPop ============================================================
+
 
 @kwdef struct FreqPop <: InfinitePop
     bespoke_zilch::Float64 = 0.
@@ -111,8 +114,10 @@ end
 
 FreqPop(pop::CompPop) = FreqPop(
     comp_full = pop.comp,
-    bespoke_full = 1 - pop.comp,
+    bespoke_full = 1 - pop.comp
 )
+FreqPop(pop::FullPop) = FreqPop(CompPop(pop))
+
 compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
 
 function transition(env::InfiniteEnv, pop::FreqPop)
@@ -122,17 +127,21 @@ function transition(env::InfiniteEnv, pop::FreqPop)
     pop2 = expectation(Binomial(D, c)) do D_comp
         D_bespoke = D - D_comp
         P = observation_probabilities(S, D_comp, D_bespoke)
-        (;
-            bespoke_zilch = P.zilch * ¬p_0 + P.partial_only * ¬p_r,
-            bespoke_full = P.bespoke,
-            comp_zilch = P.zilch * p_0,
-            comp_partial = P.partial_only * p_r,
-            comp_full = P.full_only,
-        )
+        [
+            P.zilch * ¬p_0 + P.partial_only * ¬p_r,
+            P.bespoke,
+            P.zilch * p_0,
+            P.partial_only * p_r,
+            P.full_only,
+        ]
     end
     @assert sum(pop2) ≈ 1
     FreqPop(pop2...)
 end
+transition(env::InfiniteEnv, c::Float64) = transition(env, CompPop(c)).comp
+
+# %% ===== Pop3 ===============================================================
+
 
 @kwdef struct Pop3 <: InfinitePop
     indiv::Float64

@@ -15,6 +15,12 @@ using Dates
 using Distributed
 using NamedTupleTools: delete
 
+function ensure_prob(x; tol=1e-5)
+    if x < -tol || x > 1+tol
+        error("Probability $x is out of bounds")
+    end
+    clip(x, 0., 1.)
+end
 
 logistic(x) = 1 / (1 + exp(-x))
 lapse(p, ε) = (1 - ε) * p + ε / 2
