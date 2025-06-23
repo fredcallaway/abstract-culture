@@ -12,6 +12,10 @@ ev_points <- tibble(S=10, D = Ds)
 
 # %% --------
 
+plot_line <- function(fun) {
+    stat_function(fun = fun, color = "black", linetype = "dashed", inherit.aes = FALSE)
+}
+
 asymptote_plot <- fixed_points %>% 
     filter(D > 0) %>% 
     # mutate(S = factor(S^2)) %>% 
@@ -22,6 +26,9 @@ asymptote_plot <- fixed_points %>%
     scale_x_continuous(trans="log2", breaks=Ds) +
     scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
     geom_point(data=ev_points, mapping=aes(fill=NULL), color=BLACK, size=2) +
+    # plot_line(function(x) x) +
+    # plot_line(function(x) x^2) +
+    # coord_cartesian(ylim=extrema(fixed_points$S)^2) +
     no_gridlines +
     labs(x="observations (D)", y="possible tasks (S^2)", fill="asymptotic compositionality")
 
@@ -36,6 +43,7 @@ evolution_plot <- evolution %>%
     no_legend +
     # geom_point(data=filter(df, gen == 0), color=RED) +
     facet_wrap(~D, nrow=1) +
+    labs(x="generation") +
     no_gridlines +
     theme()
 
@@ -81,6 +89,6 @@ fig("phase")
 
 # %% --------
 
-(phase_plot + asymptote_plot) / evolution_plot + plot_layout(heights=c(1.2, 1)) + plot_annotation(tag_levels="A")
+(phase_plot + asymptote_plot) / evolution_plot + plot_layout(heights=c(1.8, 1)) + plot_annotation(tag_levels="A")
 
 fig("model_combined", w=3.5, h=2)

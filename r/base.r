@@ -103,6 +103,8 @@ extract <- tidyr::extract
 
 # %% ==================== Miscellany ====================
 
+extrema <- function(x) c(min(x), max(x))
+
 quantize <- function(x, q) q * round(x / q)
 
 str_clip <- function(x, hi) {
