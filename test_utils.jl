@@ -16,7 +16,7 @@ Base.rand(f::FixedValue) = f.value
 
 function create_test_objects(constructor, ranges::NamedTuple; n_rand::Int=3)
     # Create parameter value generators for each field
-    @time param_generators = map(ranges) do range
+    param_generators = map(ranges) do range
         if range isa Tuple && length(range) == 2
             low, high = range
             if low isa Integer && high isa Integer
@@ -34,13 +34,13 @@ function create_test_objects(constructor, ranges::NamedTuple; n_rand::Int=3)
     end
     
     # Create all combinations using the existing grid function
-    @time generator_grid = grid(; zip(keys(ranges), param_generators)...)
+    generator_grid = grid(; zip(keys(ranges), param_generators)...)
     
     # Apply each generator combination to create actual parameter values
-    @time parameter_combinations = map(generator_grid) do generators
+    parameter_combinations = map(generator_grid) do generators
         map(rand, generators)
     end
     
     # Apply constructor to each combination
-    @time map(constructor, parameter_combinations)
+    map(constructor, parameter_combinations)
 end 

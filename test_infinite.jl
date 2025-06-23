@@ -11,9 +11,9 @@ test_envs = create_test_objects(splatify(InfiniteEnv), (
     p_0 = (0., 1.), 
     p_r = (0., 1.)
 ))
-length(test_envs)
 
-@testset "observation_probabilities" begin
+
+@testset "observation_probabilities sum to 1" begin
     foreach(test_envs) do env
         foreach([0., rand(), 1.]) do c
             P = observation_probabilities(env.S, env.D, c)
@@ -22,20 +22,27 @@ length(test_envs)
     end
 end
 
-# %% --------
 
-# Example usage of create_test_objects function with FreqPop
-test_pops = create_test_objects(x->normalize(FreqPop(;x...)), (
-    bespoke_zilch = (0., 1.), 
-    bespoke_full = (0., 1.), 
-    comp_zilch = (0., 1.), 
-    comp_partial = (0., 1.), 
-    comp_full = (0., 1.)
-); n_rand=1) |> pops->filter(p->!any(isnan, p), pops)
+@testset "FreqPop matches CompPop" begin
+    
+    for env in test_envs
+        S = env.S
+        # C = normalize(rand(S, S))
+        # B = normalize(rand(S, S))
+        c = rand()
 
-@testset "transition" begin
-    foreach(product(test_envs, test_pops)) do (env, pop)
-        pop2 = transition(env, pop)
-        @test sum(pop2) ≈ 1
+        # full = FullPop{S}(c)
+        comp = CompPop(c)
+        freq = FreqPop(CompPop(c))
+
+        # @test compositional_rate(full) ≈ c
+        @test compositional_rate(comp) ≈ c
+        @test compositional_rate(freq) ≈ c
+
+
+        # @test transition(env, full) |> compositional_rate ≈ transition(env, c)
+        @test transition(env, comp) |> compositional_rate ≈ transition(env, c)
+        @test transition(env, freq) |> compositional_rate ≈ transition(env, c)
     end
 end
+
