@@ -33,8 +33,8 @@ end
 
 abstract type InfinitePop end
 
-@broadcastable struct CompPop <: InfinitePop
-    comp::Float64
+@broadcastable @kwdef struct CompPop{T<:Real} <: InfinitePop
+    comp::T
 end
 
 compositional_rate(pop::CompPop) = pop.comp
@@ -67,17 +67,32 @@ function simulate(env::InfiniteEnv, n_gen; init=0.)
     x
 end
 
-function fixed_points(env::InfiniteEnv)
-    find_zeros(0, 1) do c
+function fixed_points(env::InfiniteEnv; raw=false)
+    fixed = find_zeros(0, 1) do c
         c2 = transition(env, c)
         c2 - c
     end
+    raw && return fixed
+
+    # handle edge cases with numerical problems
+    if fixed[end] == 0.
+        c = 1 - 1e-10
+        if transition(env, c) > c
+            push!(fixed, 1.)
+        end
+    elseif fixed[end] == 1.
+        c = 1 - 1e-10
+        if transition(env, c) < c
+            pop!(fixed)
+        end
+    end
+    fixed
 end
 
 # %% ===== expanded form populations ===========================================
 
 CompPop(pop::InfinitePop) = CompPop(compositional_rate(pop))
-transition(env::InfiniteEnv, c::Float64) = transition(env, CompPop(c)).comp
+transition(env::InfiniteEnv, c::Real) = transition(env, CompPop(c)).comp
 
 
 struct FullPop{S} <: InfinitePop
