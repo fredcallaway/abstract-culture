@@ -25,6 +25,8 @@ suppressPackageStartupMessages({
     # library(kableExtra)
 })
 
+MAKE_PDF <- TRUE
+
 
 # %% ==================== Options ====================
 

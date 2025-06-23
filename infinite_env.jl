@@ -1,4 +1,5 @@
 using StaticArrays
+using Roots
 
 include("utils.jl")
 include("probability.jl")
@@ -64,6 +65,13 @@ function simulate(env::InfiniteEnv, n_gen; init=0.)
         x[i+1] = transition(env, x[i])
     end
     x
+end
+
+function fixed_points(env::InfiniteEnv)
+    find_zeros(0, 1) do c
+        c2 = transition(env, c)
+        c2 - c
+    end
 end
 
 # %% ===== expanded form populations ===========================================
