@@ -1,5 +1,7 @@
 include("infinite_env.jl")
 include("utils.jl")
+using Accessors
+
 
 # %% --------
 
@@ -17,7 +19,8 @@ end
 c = .5
 transition(env, CompPop(c))
 analytic_transition(env, c)
-nothing
+
+# %% --------
 
 struct FullPop{S}
     C::SMatrix{S,S,Float64}
@@ -43,6 +46,8 @@ function transition(env::InfiniteEnv, pop::FullPop)
     FullPop{S}(C1, B1)
 end
 
+env = InfiniteEnv(p_0 = 0.0, p_r = 1.0)
+
 for c in 0:.1:1
     S = env.S
     pop = FullPop{S}(
@@ -57,15 +62,31 @@ for c in 0:.1:1
 end
 
 # %% --------
-c = .3
+env = InfiniteEnv(p_0 = 0.0, p_r = 1.0, S = 3)
 S = env.S
-pop = FullPop{S}(
-    (c/S^2) * ones(S, S), 
-    ((1-c)/S^2) * ones(S, S)
-)
-pop1 = transition(env, pop)
 
+pop = FullPop{S}(
+    zeros(S, S), 
+    ones(S, S) ./ S^2
+)
+@reset pop.C[1,1] += .02
+@reset pop.B[1,1] -= .02
+
+@assert sum(pop.C) + sum(pop.B) ≈ 1
+
+pop1 = transition(env, pop)
 pop1.C
+pop2 = transition(env, pop1)
+pop2.C
+pop3 = transition(env, pop2)
+sum(pop3.C)
+
+# %% --------
+
+
+
+
+
 
 
 # %% --------
@@ -78,10 +99,16 @@ function new_transition(env::InfiniteEnv, pop::CompPop)
     c_ij = c / S^2
     b_ij = b / S^2
 
-    term2 = (1 - (1-c) / S^2)^D
-    term3_inner = (2 * c/S - c/S^2) / (1 - ((1-c) / S^2))
-    term3 = 1 - (1 - term3_inner)^D
-    c1 = term2 * term3
+    no_bespoke = 1 - prob_observe(b_ij, D)
+
+    # partial = prob_observe((c / S) / (1-b_ij), D)
+    # both = partial ^ 2
+    # either = 2partial - both
+
+    any_comp_one = (c * (2S - 1) / S^2) / (1 - b_ij)
+    any_comp = 1 - (1 - any_comp_one)^D
+    
+    c1 = no_bespoke * any_comp
     CompPop(c1)
 end
 
