@@ -2,15 +2,16 @@ using StaticArrays
 
 include("utils.jl")
 include("probability.jl")
+include("broadcastable.jl")
 
 
-@kwdef struct InfiniteEnv
+@broadcastable @kwdef struct InfiniteEnv
     S::Int = 5  # number of starts and goals
     D::Int = 5  # number of demonstrations
     
     # red frequencies for ambiguous cases
     p_0::Float64 = 0.  # no info
-    p_r::Float64 = 0.  # part red
+    p_r::Float64 = 1.  # part red
     
     ε::Float64 = 0. # lapse rate applied at end
 end
@@ -31,7 +32,7 @@ end
 
 abstract type InfinitePop end
 
-struct CompPop <: InfinitePop
+@broadcastable struct CompPop <: InfinitePop
     comp::Float64
 end
 
@@ -68,6 +69,7 @@ end
 # %% ===== expanded form populations ===========================================
 
 CompPop(pop::InfinitePop) = CompPop(compositional_rate(pop))
+transition(env::InfiniteEnv, c::Float64) = transition(env, CompPop(c)).comp
 
 
 struct FullPop{S} <: InfinitePop
@@ -77,7 +79,7 @@ end
 
 compositional_rate(pop::FullPop) = sum(pop.C)
 
-FullPop{S}(c::Float64) = FullPop{S}(
+FullPop{S}(c::Float64) where S = FullPop{S}(
     c .* ones(S, S) ./ S^2,
     (1 - c) .* ones(S, S) ./ S^2,
 )
@@ -101,10 +103,10 @@ function transition(env::InfiniteEnv, pop::FullPop)
     FullPop{S}(C1, B1)
 end
 
-# %% ===== FreqPop ============================================================
+# # %% ===== FreqPop ============================================================
 
 
-@kwdef struct FreqPop <: InfinitePop
+@broadcastable @kwdef struct FreqPop <: InfinitePop
     bespoke_zilch::Float64 = 0.
     bespoke_full::Float64 = 0.
     comp_zilch::Float64 = 0.
@@ -124,21 +126,18 @@ function transition(env::InfiniteEnv, pop::FreqPop)
     (;S, D, p_0, p_r) = env
     c = ensure_prob(compositional_rate(pop))
 
-    pop2 = expectation(Binomial(D, c)) do D_comp
+    expectation(Binomial(D, c)) do D_comp
         D_bespoke = D - D_comp
         P = observation_probabilities(S, D_comp, D_bespoke)
-        [
+        FreqPop(
             P.zilch * ¬p_0 + P.partial_only * ¬p_r,
             P.bespoke,
             P.zilch * p_0,
             P.partial_only * p_r,
             P.full_only,
-        ]
+        )
     end
-    @assert sum(pop2) ≈ 1
-    FreqPop(pop2...)
 end
-transition(env::InfiniteEnv, c::Float64) = transition(env, CompPop(c)).comp
 
 # %% ===== Pop3 ===============================================================
 
