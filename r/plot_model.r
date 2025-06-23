@@ -17,7 +17,7 @@ asymptote_plot <- fixed_points %>%
     # mutate(S = factor(S^2)) %>% 
     # mutate(D = factor(D)) %>% 
     ggplot(aes(D, S^2, fill=asymptote)) +
-    geom_tile() +
+    geom_raster() +
     scale_fill_gradient(low=C_BESPOKE, high=C_COMP) +
     scale_x_continuous(trans="log2", breaks=Ds) +
     scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +

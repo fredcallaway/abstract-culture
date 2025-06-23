@@ -740,7 +740,7 @@ fig <- function(name = "tmp", w = WIDTH, h = HEIGHT, s = FIG_SCALE, path = FIGS_
     system(glue("mv /tmp/fig.png {p}"))
     if (name != "tmp") {
         if (pdf) {
-            ggsave(glue("{path}{name}.pdf"), width = w, height = h, ...)
+            ggsave(glue("{path}{name}.pdf"), width = w*s, height = h*s, dpi = dpi, ...)
             print(glue("{path}{name}.pdf"))
         } else {
             system(glue("cp {p} {path}{name}.png"))

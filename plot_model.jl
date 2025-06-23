@@ -42,3 +42,4 @@ CSV.write("results/evolution.csv", df)
 # %% --------
 
 run_rscript("plot_model.r")
+# cp("figs/model/model_combined.pdf", "/Users/fred/papers/cultural-abstractions/figures/model_combined.pdf"; force=true)
