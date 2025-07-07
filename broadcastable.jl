@@ -122,6 +122,21 @@ macro broadcastable(struct_def)
             ))
         end
     end
+
+    if where_clause !== nothing
+        push!(method_exprs, :(
+            function Base.sum(x::$type_expr) where {$(type_params...)}
+                sum(getfield(x, f) for f in $(fnames))
+            end
+        ))
+        else
+        push!(method_exprs, :(
+            function Base.sum(x::$type_expr)
+                sum(getfield(x, f) for f in $(fnames))
+            end
+        ))
+    end
+
     
     # Generate isapprox and broadcastable methods
     if where_clause !== nothing
