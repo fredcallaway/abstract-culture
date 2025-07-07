@@ -24,78 +24,26 @@ figure("asympotic-full", h=2,
     # expand_limits(fill=c(-1, 1))
     
     df %>% ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
-    expand_limits(fill=c(0,1)) +
+        geom_tile() +
+        facet_grid(S~D) +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
+        expand_limits(fill=c(0,1)) +
     
     plot_layout(ncol=1)
-
 )
 
 # %% --------
 
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
-    expand_limits(fill=c(0,1))
-)
-
-# %% --------
-
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=asymptotic_advantage)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    # scale_fill_continuous_diverging()
-    scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
-    # expand_limits(fill=c(-1, 1))
-    theme()
-)
-
-# %% --------
-
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
-    expand_limits(fill=c(0,1))
-)
-
-# %% --------
-
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=bespoke_cost > comp_cost)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp better")
-)
-
-# %% --------
-
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality > 0.5)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp used")
-)
-
-# %% --------
-
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=bespoke_cost - comp_cost)) +
-    geom_tile() +
-    facet_grid(S~D) +
-    scale_fill_continuous_diverging()
-)
-
-# %% --------
-
-figure("tmp", df %>% 
-    ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality)) +
-    geom_tile() +
-    facet_grid(S~D)
+figure("asympotic-full-binary", h=2,
+    df %>% ggplot(aes(comp_partial, comp_full, fill=asymptotic_advantage > 0)) +
+        geom_tile() +
+        facet_grid(S~D) +
+        scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp better") +
+    
+    df %>% ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality > 0.5)) +
+        geom_tile() +
+        facet_grid(S~D) +
+        scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp used") +
+    
+    plot_layout(ncol=1)
 )
