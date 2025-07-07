@@ -4,8 +4,6 @@ FIGS_PATH <- "figs/model/"
 # %% --------
 
 fixed_points <- read_csv("../results/fixed_points.csv")
-phase <- read_csv("../results/phase.csv")
-evolution <- read_csv("../results/evolution.csv")
 
 Ds <- 2 ^ (-1 + 2 * 1:5)
 ev_points <- tibble(S=10, D = Ds)
@@ -36,6 +34,8 @@ fig("asymptote", w=1.7)
 
 # %% --------
 
+evolution <- read_csv("../results/evolution.csv")
+
 evolution_plot <- evolution %>% 
     right_join(ev_points) %>% 
     ggplot(aes(gen, compositionality)) +
@@ -50,6 +50,8 @@ evolution_plot <- evolution %>%
 fig("evolution", w=3)
 
 # %% --------
+
+phase <- read_csv("../results/phase.csv")
 
 D <- phase %>%
     filter(S==10, D==8) %>% 

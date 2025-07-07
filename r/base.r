@@ -103,6 +103,10 @@ extract <- tidyr::extract
 
 # %% ==================== Miscellany ====================
 
+relative <- function(x, lo=min(x), hi=max(x)) {
+    (x - lo) / (hi - lo)
+}
+
 extrema <- function(x) c(min(x), max(x))
 
 quantize <- function(x, q) q * round(x / q)
@@ -608,6 +612,7 @@ fancy_word_replacements <- c(
     prop = "proportion",
     rel = "relative"
 )
+
 
 fancy_name <- function(lab) {
     words <- fancy_word_replacements

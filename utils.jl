@@ -15,6 +15,8 @@ using Dates
 using Distributed
 using NamedTupleTools: delete
 
+flatten(xs) = reduce(vcat, xs)
+
 function ensure_prob(x; tol=1e-5)
     if x < -tol || x > 1+tol
         error("Probability $x is out of bounds")

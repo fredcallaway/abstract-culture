@@ -43,6 +43,9 @@ end
 
 make_predictions(human_policy) |> CSV.write("results/predictions-empirical-$version.csv")
 
+parse_policy("tmp/compositional-rates-reg-v2.csv") |> make_predictions |> CSV.write("results/predictions-empirical-reg-v2.csv")
+
+
 # %% --------
 
 function epsilon_policy(ε=0.5; partial_none=1)
@@ -62,9 +65,23 @@ function fit_epsilon_policy(;kws...)
     epsilon_policy(ε; kws...)
 end
 
-# %% --------
-
 make_predictions(fit_epsilon_policy()) |> CSV.write("results/predictions-epsilon-$version.csv")
 make_predictions(fit_epsilon_policy(partial_none=0.5)) |> CSV.write("results/predictions-epsilon-partial0.5-$version.csv")
 make_predictions(fit_epsilon_policy(partial_none=0)) |> CSV.write("results/predictions-epsilon-partial0-$version.csv")
+
+mat = collect(fit_epsilon_policy().table)
+mat[2, 1] = human_policy.table[2, 1]
+TabularPolicy(mat) |> make_predictions |> CSV.write("results/predictions-ez.csv")
+
+mat = collect(fit_epsilon_policy().table)
+mat[1, 2] = human_policy.table[1, 2]
+TabularPolicy(mat) |> make_predictions |> CSV.write("results/predictions-zp.csv")
+
+# %% --------
+
+pp = fit_epsilon_policy().table
+nn = product(["zilch", "exact"], ["zilch", "partial", "full", "exact"])
+map(nn, pp) do (bespoke, compositional), p_compositional
+    (;bespoke, compositional, p_compositional)
+end |> flatten |> CSV.write("results/policy-epsilon-$version.csv")
 

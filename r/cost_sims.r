@@ -17,6 +17,7 @@ controlled <- c(
 )
 # %% --------
 
+search %>% distinct(comp_none)
 search %>% 
     filter(comp_none > bespoke_none) %>% 
     slice_max(rel_cost) %>% 
@@ -50,6 +51,15 @@ figure("marginal_max", marginal_max %>%
     facet_wrap(~variable, scales="free_x")
 )
 
+# %% --------
+
+figure("tmp", search %>% 
+    filter(agent == "pure") %>% 
+    ggplot(aes(comp_none, rel_cost)) +
+    facet_grid(comp_full ~ comp_partial) +
+    geom_point()
+)
+
 # CONCLUDE: comp none doesn't matter much
 
 # %% --------
@@ -73,32 +83,46 @@ figure("cost_full_partial", w=2.5,h=1,
 sim <- read_csvs("sim-flexible-{mode}.csv") %>% 
     mutate(agent = glue("{agent}-{mode}"))
 
+# min_cost <- sim %>% filter(agent == "bespoke-pure") %>% 
+#     filter(gen > 1) %>% 
+#     with(mean(cost))
+
+# max_cost <- sim %>% filter(agent == "bespoke-pure") %>% 
+#     filter(gen == 1) %>% 
+#     with(mean(cost))
+
 data_means <- sim %>% 
+    filter(agent %in% c("rational-pure", "bespoke-pure")) %>% 
+    mutate(score = 1 - relative(cost, lo=1, hi=5)) %>% 
     # group_by(across(-c(cost,compositionality))) %>% 
+    filter(gen <= 50) %>% 
+    # filter(gen > 1) %>% 
+    mutate(agent = str_replace(agent, "-pure", "")) %>% 
+    filter(agent == "rational") %>% 
     group_by(agent, gen) %>% 
-    summarise(across(c(cost,compositionality), mean))
+    summarise(across(c(score,compositionality), mean))
 
-sim %>% distinct(agent)
+bespoke_score <- sim %>% filter(agent == "bespoke-pure") %>% 
+    filter(gen != 1) %>% 
+    with(1 - relative(mean(cost), lo=1, hi=5))
 
-figure("sim_best", w=2.5,
+
+figure("sim_best",
     data_means %>% 
-        ggplot(aes(gen, cost, color=agent)) +
-        geom_line(linewidth=1) +
-        expand_limits(y=1) +
-    data_means %>% 
-        ggplot(aes(gen, compositionality, color=agent)) +
-        geom_line(linewidth=1)  +
-        expand_limits(y=c(0, 1)) +
-    plot_layout(guides = "collect") &
-    scale_color_manual(
-        values = c(
-            "rational-pure" = "red",
-            "rational-noisy" = "pink",
-            "bespoke-pure" = "blue",
-            "bespoke-noisy" = "lightblue"
-        )
-    )
-       
+        ggplot(aes(gen)) +
+        geom_hline(yintercept=bespoke_score, color=GREEN, linetype="dashed") +
+        geom_line(aes(y = score), color=GREEN, linewidth=1) +
+        geom_line(aes(y = compositionality), color = C_COMP, linewidth=1) +
+        scale_y_continuous(
+            name = "compositionality",
+            sec.axis = sec_axis(~. * 1, name = "relative reward")
+        ) +
+        theme(
+            axis.title.y.left = element_text(color = C_COMP),
+            axis.title.y.right = element_text(color = GREEN)
+        ) +
+        expand_limits(y = c(0, 1)) +
+        labs(x = "generation")
 )
 
 # %% ===== empirical ==========================================================

@@ -1,5 +1,6 @@
 # %% --------
 source("base.r")
+library(coin)  # for wilcox_test
 
 FIGS_PATH <- "figs/reg-v2/"
 version <- "reg-v2"
@@ -82,6 +83,10 @@ main_trials %>%
     with(stopifnot(all(n == 500) && length(chain_id) == 18))
 
 main_trials %>% 
+    count(chain_id, generation) %>% 
+    with(stopifnot(all(n == 50)))
+
+main_trials %>% 
     count(trial_id, sort=T) %>% 
     with(stopifnot(all(n == 1)))
 
@@ -107,23 +112,61 @@ plot_compositionality <- function(pred_file="../results/predictions-epsilon-v23.
 
 figure("compositionality-curve", plot_compositionality())
 
-# %% --------
+
+# %% ===== alternate predictions ==============================================
 
 figure("compositionality-curve-partial0.5", plot_compositionality(glue("../results/predictions-epsilon-partial0.5-v23.csv")))
-
 figure("compositionality-curve-partial0", plot_compositionality(glue("../results/predictions-epsilon-partial0-v23.csv")))
+figure("compositionality-curve-empirical", plot_compositionality(glue("../results/predictions-empirical-v23.csv")))
+figure("compositionality-curve-empirical-main", plot_compositionality(glue("../results/predictions-empirical-reg-v2.csv")))
+figure("compositionality-curve-ez", plot_compositionality(glue("../results/predictions-ez.csv")))
+figure("compositionality-curve-zp", plot_compositionality(glue("../results/predictions-zp.csv")))
 
+# %% ===== wilcox test ========================================================
+
+run_wilcox <- function(data, comparison) {
+    subdata <- data %>% 
+        filter(D %in% c(comparison, 8)) %>% 
+        filter(generation == 10) %>% 
+        arrange(D == 8) %>% 
+        mutate(D8 = factor(D == 8, levels=c(TRUE, FALSE)))
+    
+    result <- wilcox_test(compositionality ~ D8, data=subdata, alternative="greater", distribution = "exact")
+        # write_tex()
+    m8 = subdata %>% filter(D == 8) %>% with(median(compositionality)) %>% fmt_percent
+    mx = subdata %>% filter(D != 8) %>% with(median(compositionality)) %>% fmt_percent
+    fmt("{m8} vs. {mx}, Z = {statistic(result):.2}, {pval(pvalue(result))}") %>% 
+        write_tex("wilcox-test/{comparison}")
+    # fmt("$Z = {statistic(result):.2}$, ${pval(pvalue(result))}$")
+    # filter()
+}
+
+run_wilcox(human, 2)
+run_wilcox(human, 32)
+
+human %>% 
+    filter(generation == 10) %>% 
+    ggplot(aes(factor(D), compositionality)) +
+    geom_point()
+
+fig()
 
 # %% --------
 
 main_trials %>% 
     group_by(bespoke, compositional) %>% 
     summarise(p_compositional = mean(choose_compositional)) %>% 
-    write_csv("tmp/compositional-rates-reg-v2.csv")
+    mutate(agent = "human") %>% 
+    bind_rows(mutate(read_csv("../results/policy-epsilon-v23.csv"), agent="model")) %>% 
+    ggplot(aes(compositional, p_compositional, color=agent)) +
+    facet_wrap(~bespoke) +
+    expand_limits(y=c(0,1)) +
+    geom_point()
+
+fig("policy-comparison", w=2)
 
 
 # %% ===== completion time =================================================
-
 
 figure("solution-time", main_trials %>% 
     filter(duration < quantile(duration, .95)) %>% 
@@ -139,3 +182,52 @@ main_trials %>%
     filter(duration < quantile(duration, .95), generation > 7) %>% 
     group_by(D) %>% 
     summarise(duration = mean(duration))
+
+# %% --------
+
+main_trials |> 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) |> 
+    ungroup() %>% 
+    ggplot(aes(compositional, duration/1000, color=solution_type)) +
+    # geom_quasirandom(size=.2) +
+    points() +
+    cpal +
+    facet_wrap(~bespoke)
+
+fig("duration-by-solution-type", w=2)
+
+# %% --------
+
+main_trials %>% 
+    filter(bespoke=="zilch", compositional=="partial", generation > 1) %>% 
+    group_by(solution_type) %>% 
+    summarise(duration = mean(duration)) %>% 
+    rowwise() %>% group_walk(~ with(.x,
+        write_tex("{duration/1000:.1}", "zilch-partial-duration/{solution_type}")
+    ))
+
+# %% --------
+
+main_trials %>% 
+    filter(generation > 1, D == 32) %>% 
+    drop_extreme(duration, q_hi=.99) %>% 
+    group_by(chain_id, generation) %>% 
+    summarise(duration = mean(duration), compositionality = mean(choose_compositional)) %>% 
+    regress(duration ~ compositionality)
+
+# %% --------
+
+main_trials %>% 
+    filter(generation > 1, D == 32) %>% 
+    drop_extreme(duration, q_hi=.99) %>% 
+    group_by(generation) %>% 
+    summarise(duration = mean(duration)) %>% 
+    regress(duration ~ generation)
+
+# %% --------
+
+main_trials %>% 
+    group_by(bespoke, compositional) %>% 
+    summarise(p_compositional = mean(choose_compositional)) %>% 
+    write_csv("../tmp/compositional-rates-reg-v2.csv")
