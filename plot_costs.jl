@@ -56,7 +56,9 @@ filter!(prms) do prm
     # bespoke costs make sense internally
     prm.bespoke_full < prm.bespoke_zilch && 
     # bespoke preferred to comp given equal info
-    prm.bespoke_zilch < prm.comp_zilch && prm.bespoke_full < prm.comp_full
+    prm.bespoke_zilch < prm.comp_zilch && prm.bespoke_full < prm.comp_full &&
+    # copy compositional preferred to learning from scratch
+    prm.comp_full < prm.bespoke_zilch
 end
 
 comp_cost(env, costs, c::Float64) = cost(costs, transition(env, FreqPop(CompPop(c))))
@@ -66,7 +68,7 @@ comp_cost(env, costs, c::Missing) = missing
 df = dataframe(prms) do prm
     env_prm, cost_prm = split(prm, (:S, :D))
     costs = Costs(;cost_prm...)
-    p_r = logistic(costs.bespoke_zilch - costs.comp_partial)
+    p_r = logistic(10 * sign(costs.bespoke_zilch - costs.comp_partial))
     env = InfiniteEnv(;env_prm..., p_0=1e-10, p_r)
     
     asymptotic_compositionality = let
@@ -87,3 +89,34 @@ df = dataframe(prms) do prm
 end
 
 df |> write_csv("cost-asymptote-grid.csv")
+
+# %% --------
+
+df = dataframe(prms) do prm
+    env_prm, cost_prm = split(prm, (:S, :D))
+    costs = Costs(;cost_prm...)
+    p_r = logistic(costs.bespoke_zilch - costs.comp_partial)
+    env = InfiniteEnv(;env_prm..., p_0=1e-10, p_r)
+
+    sim = simulate(env, 100; init=FreqPop(bespoke_zilch=1.))
+    imap(sim) do gen, pop
+        (;
+            gen,
+            cost = cost(costs, pop),
+            compositionality = compositional_rate(pop),
+        )
+    end    
+end
+
+df |> write_csv("evolution.csv")
+
+# %% --------
+
+
+env_prm, cost_prm = split(prm, (:S, :D))
+costs = Costs(;cost_prm...)
+p_r = logistic(costs.bespoke_zilch - costs.comp_partial)
+env = InfiniteEnv(;env_prm..., p_0=1e-10, p_r)
+
+sim = simulate(env, 20; init=FreqPop(bespoke_zilch=1.))
+
