@@ -13,6 +13,8 @@ df %>% summarise(
     min(asymptotic_advantage)
 )
 
+df %>% distinct(comp_partial)
+
 # %% --------
 
 figure("asympotic-full", h=2,
@@ -28,8 +30,12 @@ figure("asympotic-full", h=2,
         facet_grid(S~D) +
         scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
         expand_limits(fill=c(0,1)) +
-    
-    plot_layout(ncol=1)
+
+    plot_layout(ncol=1) &
+    coord_equal(xlim=c(0,12), ylim=c(0,12), expand=F) &
+    scale_x_continuous(breaks = c(0, 4, 8, 12)) &
+    scale_y_continuous(breaks = c(0, 4, 8, 12)) &
+    no_gridlines
 )
 
 # %% --------
@@ -39,11 +45,15 @@ figure("asympotic-full-binary", h=2,
         geom_tile() +
         facet_grid(S~D) +
         scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp better") +
+        scale_x_continuous(breaks = c(0, 4, 8, 12)) +
+        scale_y_continuous(breaks = c(0, 4, 8, 12)) +
     
     df %>% ggplot(aes(comp_partial, comp_full, fill=asymptotic_compositionality > 0.5)) +
         geom_tile() +
         facet_grid(S~D) +
         scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp used") +
+        scale_x_continuous(breaks = c(0, 4, 8, 12)) +
+        scale_y_continuous(breaks = c(0, 4, 8, 12)) +
     
     plot_layout(ncol=1)
 )
@@ -57,7 +67,7 @@ sim %>%
 figure("cost-evolution.csv", sim %>% 
     filter(S==10, D==81, comp_partial==10, comp_full==9) %>% 
     filter(gen > 1) %>% 
-    mutate(score = 1 - relative(cost, lo=1, hi=10)) %>% 
+    mutate(score = 1 - relative(cost, lo=0, hi=10)) %>% 
     ggplot(aes(gen)) +
     # geom_hline(yintercept=10, color=GREEN, linetype="dashed") +
     geom_line(aes(y = score), color=GREEN, linewidth=1) +

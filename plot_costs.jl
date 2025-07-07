@@ -45,18 +45,18 @@ prms = grid(;
     D = 1 .* 3 .^ (1:5),
 
     bespoke_zilch = 10,
-    bespoke_full = 1,
+    bespoke_full = 0,
     comp_zilch = 100,
-    comp_partial = 1:12,
-    comp_full = 1:12,
+    comp_partial = 0:11,
+    comp_full = 0:11,
 )[:]
 filter!(prms) do prm
     # comp costs make sense internally
-    prm.comp_full < prm.comp_partial < prm.comp_zilch &&
+    prm.comp_full ≤ prm.comp_partial < prm.comp_zilch &&
     # bespoke costs make sense internally
     prm.bespoke_full < prm.bespoke_zilch && 
     # bespoke preferred to comp given equal info
-    prm.bespoke_zilch < prm.comp_zilch && prm.bespoke_full < prm.comp_full &&
+    prm.bespoke_zilch < prm.comp_zilch && prm.bespoke_full < prm.comp_full
     # copy compositional preferred to learning from scratch
     prm.comp_full < prm.bespoke_zilch
 end
@@ -76,7 +76,13 @@ df = dataframe(prms) do prm
         if length(fixed) == 1
             only(fixed)
         else
-            missing
+            try
+                first(c for c in fixed if c > 1e-10)
+            catch
+                transition(env, .001) < .001 ? 0. :
+                transition(env, .999) > .999 ? 1. :
+                error("huh")
+            end
         end
     end
     
@@ -109,14 +115,3 @@ df = dataframe(prms) do prm
 end
 
 df |> write_csv("evolution.csv")
-
-# %% --------
-
-
-env_prm, cost_prm = split(prm, (:S, :D))
-costs = Costs(;cost_prm...)
-p_r = logistic(costs.bespoke_zilch - costs.comp_partial)
-env = InfiniteEnv(;env_prm..., p_0=1e-10, p_r)
-
-sim = simulate(env, 20; init=FreqPop(bespoke_zilch=1.))
-
