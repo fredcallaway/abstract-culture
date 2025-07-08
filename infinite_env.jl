@@ -187,3 +187,33 @@ FreqPop(pop::Pop3, p_0::Float64) = FreqPop(
 initialize(::InfiniteEnv, init::Pop3) = init
 transition(env::InfiniteEnv, pop::Pop3) = transition(env, FreqPop(pop, env.p_0)) |> Pop3
 compositional_rate(pop::Pop3) = pop.comp
+
+# %% ===== costs ==============================================================
+
+@broadcastable @kwdef struct Costs
+    bespoke_zilch::Float64
+    bespoke_full::Float64
+    comp_zilch::Float64
+    comp_partial::Float64
+    comp_full::Float64
+end
+
+function cost(costs::Costs, pop::FreqPop)
+    costs.bespoke_zilch * pop.bespoke_zilch +
+    costs.bespoke_full * pop.bespoke_full +
+    costs.comp_zilch * pop.comp_zilch +
+    costs.comp_partial * pop.comp_partial +
+    costs.comp_full * pop.comp_full
+end
+
+function Base.show(io::IO, ::MIME"text/plain", costs::Costs)
+    print(io, "Costs")
+    fields = fieldnames(Costs)
+    for f in fields
+        val = getfield(costs, f)
+        print(io, "\n  ", string(f), " = ", val)
+    end
+end
+
+comp_cost(env, costs, c::Float64) = cost(costs, transition(env, FreqPop(CompPop(c))))
+comp_cost(env, costs, c::Missing) = missing
