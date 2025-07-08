@@ -18,8 +18,13 @@ write_csv(name::String) = df -> write_csv(name, df)
 read_csv(name::String) = CSV.read(RESULTS_PATH * name, DataFrame)
 
 
+
+fieldnames(Costs)
+
+
 @everywhere function get_env_costs(prm)
-    env_prm, cost_prm = split(prm, (:S, :D))
+    env_prm = subset(prm, fieldnames(InfiniteEnv))
+    cost_prm = subset(prm, fieldnames(Costs))
     C = Costs(;cost_prm...)
     pol = rational_policy(C; ε=1e-10)
     env = InfiniteEnv(pol; env_prm...)
@@ -49,6 +54,7 @@ end
 
     (;
         asymptotic_compositionality,
+        max_compositionality,
         asymptotic_cost = cost(C, simulate(env, 2, init=FreqPop(CompPop(asymptotic_compositionality)))[end]),
         comp_cost = cost(C, simulate(env, 2, init=FreqPop(CompPop(max_compositionality)))[end]),
         bespoke_cost = cost(C, simulate(mutate(env, agent_policy=bespoke_policy()), 2, init=FreqPop())[end]),
@@ -145,3 +151,32 @@ df |> write_csv("cost-asymptote-SD.csv")
 
 
 # %% --------
+
+prms = grid(;
+    S = 10,
+    D = 81,
+
+    act_cost = 0:10,
+    search_cost = 0:2:24,
+)
+
+prms = map(prms) do prm
+    (;act_cost, search_cost) = prm
+    (;
+        prm...,
+        bespoke_zilch = 10,
+        bespoke_full = 0,
+        comp_zilch = act_cost + search_cost,
+        comp_partial = act_cost + search_cost/2,
+        comp_full = act_cost,
+    )
+end
+
+prm = prms[8,8]
+env, C = get_env_costs(prm)
+compute_costs(prm)
+# cost(C, simulate(env, 2, init=FreqPop(CompPop(max_compositionality)))[end])
+
+
+
+dataframe(compute_costs, prms) |> write_csv("cost-asymptote-action-search.csv")

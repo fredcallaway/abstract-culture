@@ -253,27 +253,28 @@ figure("D-full", w=3, df %>%
         no_gridlines
 )
 
-# %% --------
 
-figure("tmp", w=3,
-    ggplot(data, aes(D, comp_full)) +
-        geom_raster(data=filter(data, used), fill=C_COMP) +
-        geom_raster(data=filter(data, !used), fill=C_BESPOKE) +
-        geom_raster(data=filter(data, better), fill=BLACK, alpha=0.5) +
-        # geom_raster(data=filter(data, !better), fill=WHITE, alpha=0.2) +
-        scale_x_continuous(trans="log2", breaks=Ds) +
+# %% ===== action search ======================================================
+
+df <- read_csv("../results/cost/cost-asymptote-action-search.csv") %>% 
+    mutate(
+        comp_advantage = (bespoke_cost - comp_cost) / 10,
+        asymptotic_advantage = (bespoke_cost - asymptotic_cost) / 10
+    ) %>% 
+    identity
+
+
+figure("action-search", w=3, df %>% 
+    # filter(comp_partial == 9) %>% 
+    # filter(comp_full == 6) %>% 
+    ggplot(aes(act_cost, search_cost, fill=asymptotic_advantage)) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
         no_gridlines +
 
-    
-    ggplot(data, aes(D, S^2, fill=region)) +
-        geom_tile() +
-        scale_x_continuous(trans="log2", breaks=Ds) +
-        scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
-        no_gridlines +
-        scale_fill_manual(values=c(
-            "TRUE.TRUE" = "#a05e3d",
-            "TRUE.FALSE" = C_COMP,
-            "FALSE.TRUE" = "#565656",
-            "FALSE.FALSE" = "white"
-        ))
+    df %>% 
+        ggplot(aes(act_cost, search_cost, fill=asymptotic_compositionality)) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
+        no_gridlines
 )

@@ -6,17 +6,21 @@ using SplitApplyCombine
 import Base.Iterators: product
 using Statistics
 using StatsBase
-using DataFrames, DataFramesMeta, CSV
 using Printf
 using ProgressMeter
 using Distributions
 using Dates
 using Distributed
-using NamedTupleTools: delete
+using NamedTupleTools
 using StaticArrays
 
 flatten(xs) = reduce(vcat, xs)
+select(x::NamedTuple, args...) = NamedTupleTools.select(x, args...)
+subset(x::NamedTuple, fields) = select(x, intersect(propertynames(x), fields))
 
+
+# DataFrames has annoying imports
+using DataFramesMeta, CSV
 
 function ensure_prob(x; tol=1e-5)
     if x < -tol || x > 1+tol
