@@ -9,16 +9,16 @@ df <- read_csv("../results/cost/cost-asymptote-grid.csv") %>%
     drop_na(asymptotic_compositionality)
 
 df %>% summarise(
-    min(comp_cost),
-    min(asymptotic_advantage)
+    max(comp_cost),
+    max(asymptotic_advantage)
 )
 
-df %>% distinct(comp_partial)
+df %>% filter(comp_cost != asymptotic_cost)
 
-# %% --------
+FIGS_PATH <- "figs/cost/"
 
 figure("asympotic-full", h=2,
-    df %>% ggplot(aes(comp_partial, comp_full, fill=asymptotic_advantage)) +
+    df %>% ggplot(aes(comp_partial, comp_full, fill=comp_advantage)) +
         geom_tile() +
         facet_grid(S~D) +
         # scale_fill_continuous_diverging()
@@ -41,7 +41,7 @@ figure("asympotic-full", h=2,
 # %% --------
 
 figure("asympotic-full-binary", h=2,
-    df %>% ggplot(aes(comp_partial, comp_full, fill=asymptotic_advantage > 0)) +
+    df %>% ggplot(aes(comp_partial, comp_full, fill=comp_advantage > 0)) +
         geom_tile() +
         facet_grid(S~D) +
         scale_fill_manual(values=c(`FALSE`=C_BESPOKE, `TRUE`=C_COMP), name="comp better") +
@@ -62,11 +62,12 @@ figure("asympotic-full-binary", h=2,
 
 sim <- read_csv("../results/cost/evolution.csv")
 sim %>% 
-    summarise( min(cost), max(cost) )
+    summarise( min(cost), max(cost), max(compositionality) )
+
 
 figure("cost-evolution.csv", sim %>% 
     filter(S==10, D==81, comp_partial==9, comp_full==8) %>% 
-    filter(gen > 1) %>% 
+    filter(gen > 1, gen < 30) %>% 
     mutate(score = 1 - relative(cost, lo=0, hi=10)) %>% 
     ggplot(aes(gen)) +
     # geom_hline(yintercept=10, color=GREEN, linetype="dashed") +
@@ -89,17 +90,21 @@ figure("cost-evolution.csv", sim %>%
 # %% ===== SD =================================================================
 
 Ds <- 2 ^ (-1 + 2 * 1:5)
+MAKE_PDF <- F
 
 df <- read_csv("../results/cost/cost-asymptote-SD.csv") %>% 
     mutate(
-        comp_advantage = (bespoke_cost - comp_cost) / 10,
+        asymptotic_advantage = (bespoke_cost - comp_cost) / 10,
         asymptotic_advantage = (bespoke_cost - asymptotic_cost) / 10
     ) %>% 
     drop_na(asymptotic_compositionality)
 
-figure("tmp", df %>% 
+
+df %>% with(max(comp_cost))
+
+figure("SD-advantage", df %>% 
     filter(comp_partial == 9) %>% 
-    ggplot(aes(D, S^2, fill=comp_advantage)) +
+    ggplot(aes(D, S^2, fill=asymptotic_advantage)) +
     geom_raster() +
     scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
     scale_x_continuous(trans="log2", breaks=Ds) +
@@ -110,7 +115,7 @@ figure("tmp", df %>%
 )
 # %% --------
 
-figure("tmp", df %>% 
+figure("SD-compositionality", df %>% 
     filter(comp_partial == 9) %>% 
     ggplot(aes(D, S^2, fill=asymptotic_compositionality)) +
     geom_raster() +
@@ -124,10 +129,10 @@ figure("tmp", df %>%
 
 # %% --------
 
-figure("tmp", w=3, df %>% 
+figure("SD-simple", w=3, df %>% 
     filter(comp_partial == 9) %>% 
-    filter(comp_full == 8) %>% 
-    ggplot(aes(D, S^2, fill=comp_advantage)) +
+    filter(comp_full == 6) %>% 
+    ggplot(aes(D, S^2, fill=asymptotic_advantage)) +
     geom_raster() +
     scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
     
@@ -155,10 +160,10 @@ data <- df %>%
     filter(comp_full == 8)
 
 figure("tmp", data %>% 
-    ggplot(aes(D, S^2, fill=comp_advantage)) +
+    ggplot(aes(D, S^2, fill=asymptotic_advantage)) +
     geom_raster() +
-    geom_raster(data=filter(data, asymptotic_compositionality > 0.5), fill="black") +
-    geom_raster(alpha=0.8) +
+    # geom_raster(data=filter(data, asymptotic_compositionality > 0.5), fill="black") +
+    # geom_raster(alpha=0.8) +
     scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
     scale_x_continuous(trans="log2", breaks=Ds) +
     scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
@@ -170,39 +175,105 @@ figure("tmp", data %>%
 
 data <- df %>% 
     filter(comp_partial == 9) %>% 
-    filter(comp_full == 6)
+    filter(comp_full == 7) %>% 
+    mutate(
+        better = asymptotic_advantage > 0.01,
+        used = asymptotic_compositionality > 0.1,
+        region = interaction(used, better)
+    )
 
-figure("tmp", data %>% 
-    ggplot(aes(D, S^2, fill=comp_advantage)) +
-    geom_raster() +
-    geom_raster(data=filter(data, asymptotic_compositionality > 0.5), fill=C_COMP, alpha=0.5) +
-    geom_raster(alpha=0.2) +
+figure("tmp", w=3,
+    ggplot(data, aes(D, S^2)) +
+        geom_raster(data=filter(data, used), fill=C_COMP) +
+        geom_raster(data=filter(data, !used), fill=C_BESPOKE) +
+        geom_raster(data=filter(data, better), fill=BLACK, alpha=0.5) +
+        # geom_raster(data=filter(data, !better), fill=WHITE, alpha=0.2) +
+        scale_x_continuous(trans="log2", breaks=Ds) +
+        scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
+        no_gridlines +
+        labs(x="observations (D)", y="possible tasks (S^2)") +
+
     
-    scale_fill_gradient2(low="black", high=GREEN, midpoint=0) +
-    scale_x_continuous(trans="log2", breaks=Ds) +
-    scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
-    no_gridlines +
-    labs(x="observations (D)", y="possible tasks (S^2)")
+    ggplot(data, aes(D, S^2, fill=region)) +
+        geom_tile() +
+        scale_x_continuous(trans="log2", breaks=Ds) +
+        scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
+        no_gridlines +
+        labs(x="observations (D)", y="possible tasks (S^2)") + 
+        scale_fill_manual(values=c(
+            "TRUE.TRUE" = "#a05e3d",
+            "TRUE.FALSE" = C_COMP,
+            "FALSE.TRUE" = "#565656",
+            "FALSE.FALSE" = "white"
+        ))
 )
 
 # %% --------
 
 figure("tmp", data %>% 
+    ggplot(aes(D, S^2)) +
+        geom_raster(aes(fill = used)) +
+        geom_tile(data = filter(data, better), color = "black", linewidth = 1, 
+                  fill = NA, alpha = 0) +
+        scale_fill_manual(values = c(`FALSE` = C_BESPOKE, `TRUE` = C_COMP), name = "comp used") +
+        scale_x_continuous(trans="log2", breaks=Ds) +
+        scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
+        no_gridlines +
+        labs(x="observations (D)", y="possible tasks (S^2)")
+)
+
+# %% ===== D-full =============================================================
+
+
+df <- read_csv("../results/cost/cost-asymptote-D-full.csv") %>% 
     mutate(
-        better = comp_advantage > 0,
-        used = asymptotic_compositionality > 0.5,
+        comp_advantage = (bespoke_cost - comp_cost) / 10,
+        asymptotic_advantage = (bespoke_cost - asymptotic_cost) / 10
     ) %>% 
-    mutate(region = interaction(used, better)) %>% 
-    ggplot(aes(D, S^2, fill=region)) +
-    geom_tile() +
+    identity
+    # drop_na(asymptotic_compositionality)
+
+
+
+figure("D-full", w=3, df %>% 
+    # filter(comp_partial == 9) %>% 
+    # filter(comp_full == 6) %>% 
+    ggplot(aes(D, comp_full, fill=comp_advantage)) +
+    geom_raster() +
+    scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
     scale_x_continuous(trans="log2", breaks=Ds) +
-    scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
     no_gridlines +
-    labs(x="observations (D)", y="possible tasks (S^2)") + 
-    scale_fill_manual(values=c(
-        "TRUE.TRUE" = C_COMP,
-        "TRUE.FALSE" = darken(C_COMP, 0.2),
-        "FALSE.TRUE" = darken(C_BESPOKE, 0.2),
-        "FALSE.FALSE" = C_BESPOKE
-    ))
+
+    df %>% 
+        ggplot(aes(D, comp_full, fill=1 * (asymptotic_compositionality > 0.5))) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
+        
+        scale_x_continuous(trans="log2", breaks=Ds) +
+        no_gridlines
+)
+
+# %% --------
+
+figure("tmp", w=3,
+    ggplot(data, aes(D, comp_full)) +
+        geom_raster(data=filter(data, used), fill=C_COMP) +
+        geom_raster(data=filter(data, !used), fill=C_BESPOKE) +
+        geom_raster(data=filter(data, better), fill=BLACK, alpha=0.5) +
+        # geom_raster(data=filter(data, !better), fill=WHITE, alpha=0.2) +
+        scale_x_continuous(trans="log2", breaks=Ds) +
+        no_gridlines +
+
+    
+    ggplot(data, aes(D, S^2, fill=region)) +
+        geom_tile() +
+        scale_x_continuous(trans="log2", breaks=Ds) +
+        scale_y_continuous(trans="sqrt", breaks=seq(2, 20, by=6) ^ 2) +
+        no_gridlines +
+        scale_fill_manual(values=c(
+            "TRUE.TRUE" = "#a05e3d",
+            "TRUE.FALSE" = C_COMP,
+            "FALSE.TRUE" = "#565656",
+            "FALSE.FALSE" = "white"
+        ))
 )

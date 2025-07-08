@@ -5,7 +5,7 @@ using Distributions
 include("utils.jl")
 
 # used for observation and action probabilities
-struct EndowmentProbs <: FieldMatrix{2, 3, Float64}
+@kwdef struct EndowmentProbs <: FieldMatrix{2, 3, Float64}
     b0c0::Float64
     b1c0::Float64
     b0c1::Float64
@@ -63,17 +63,15 @@ function agent_policy(;kws...)
     )
     EndowmentProbs(;default..., kws...)
 end
+bespoke_policy() = zeros(EndowmentProbs)
+comp_policy() = ones(EndowmentProbs)
 
 @kwdef struct Costs
-    bespoke_zilch::Float64
-    bespoke_full::Float64
-    comp_zilch::Float64
-    comp_partial::Float64
-    comp_full::Float64
-end
-
-function cost(costs::Costs, pop::FreqPop)
-    sum(struct2vec(costs) .* struct2vec(pop))
+    bespoke_zilch::Float64 = 0.
+    bespoke_full::Float64 = 0.
+    comp_zilch::Float64 = 0.
+    comp_partial::Float64 = 0.
+    comp_full::Float64 = 0.
 end
 
 function cost(C::Costs, bespoke_known::Int, comp_known::Int, comp_solution::Bool)
@@ -93,7 +91,7 @@ function Base.show(io::IO, ::MIME"text/plain", costs::Costs)
     end
 end
 
-function rational_policy(C::Costs; β=100., ε=0.)
+function rational_policy(C::Costs; β=1e10, ε=0.)
     map(product(0:1, 0:2)) do (bespoke_known, comp_known)
         rel_cost = cost(C, bespoke_known, comp_known, true) - cost(C, bespoke_known, comp_known, false)
         p = logistic(β * -rel_cost)
@@ -200,6 +198,8 @@ FreqPop(pop::CompPop) = FreqPop(
 FreqPop(pop::FullPop) = FreqPop(CompPop(pop))
 
 compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
+
+cost(costs::Costs, pop::FreqPop) = sum(struct2vec(costs) .* struct2vec(pop))
 
 function transition(env::InfiniteEnv, pop::FreqPop)
     p_obs = observation_probabilities(env, pop)

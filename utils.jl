@@ -9,7 +9,6 @@ using StatsBase
 using DataFrames, DataFramesMeta, CSV
 using Printf
 using ProgressMeter
-using DataStructures: DefaultDict
 using Distributions
 using Dates
 using Distributed
@@ -169,14 +168,6 @@ Base.get(x, i::Int) = getindex(x, i)
 
 getfrom(x) = Base.Fix1(get, x)
 
-function integer_labeler(T::DataType)
-    N = 0
-    DefaultDict{T,Int}() do
-        N += 1
-        N
-    end
-end
-
 imap(f, xs...) = map(f, Iterators.countfrom(1), xs...)
 flatmap(f, xs...) = mapreduce(f, vcat, xs...)
 
@@ -262,25 +253,25 @@ function grid(;kws...)
     X
 end
 
-function initialize_keyed(val; keys...)
-    KeyedArray(fill(val, (length(v) for (k, v) in keys)...); keys...)
-end
+# function initialize_keyed(val; keys...)
+#     KeyedArray(fill(val, (length(v) for (k, v) in keys)...); keys...)
+# end
 
-function wrap_counts(df::DataFrame; dims...)
-    @chain df begin
-        groupby(collect(keys(dims)))
-        combine(nrow => :n)
-        AxisKeys.populate!(initialize_keyed(0.; dims...), _, :n)
-    end
-end
+# function wrap_counts(df::DataFrame; dims...)
+#     @chain df begin
+#         groupby(collect(keys(dims)))
+#         combine(nrow => :n)
+#         AxisKeys.populate!(initialize_keyed(0.; dims...), _, :n)
+#     end
+# end
 
-function wrap_pivot(df::DataFrame, val, f; dims...)
-    @chain df begin
-        groupby(collect(keys(dims)))
-        combine(val => f => :_val)
-        AxisKeys.populate!(initialize_keyed(0.; dims...), _, :_val)
-    end
-end
+# function wrap_pivot(df::DataFrame, val, f; dims...)
+#     @chain df begin
+#         groupby(collect(keys(dims)))
+#         combine(val => f => :_val)
+#         AxisKeys.populate!(initialize_keyed(0.; dims...), _, :_val)
+#     end
+# end
 
 # using AxisKeys
 
@@ -322,7 +313,7 @@ function splatify(f::Union{Function,DataType})
     foo
 end
 
-DEFAULT_PARALLEL::Bool = false
+DEFAULT_PARALLEL::Bool = @isdefined(DEFAULT_PARALLEL) ? DEFAULT_PARALLEL : false
 function dataframe(f, params; parallel=DEFAULT_PARALLEL, pbar=parallel, splat=false)
 
     map_fun = if pbar
