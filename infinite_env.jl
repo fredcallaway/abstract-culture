@@ -1,64 +1,120 @@
 using StaticArrays
 using Roots
+using Distributions
 
 include("utils.jl")
-include("probability.jl")
-include("broadcastable.jl")
 
-
-@broadcastable @kwdef struct InfiniteEnv
-    S::Int = 5  # number of starts and goals
-    D::Int = 5  # number of demonstrations
-    
-    # red frequencies for ambiguous cases
-    p_0::Float64 = 0.  # no info
-    p_r::Float64 = 1.  # part red
-    
-    ε::Float64 = 0. # lapse rate applied at end
+# used for observation and action probabilities
+struct EndowmentProbs <: FieldMatrix{2, 3, Float64}
+    b0c0::Float64
+    b1c0::Float64
+    b0c1::Float64
+    b1c1::Float64
+    b0c2::Float64
+    b1c2::Float64
 end
+
+struct InfiniteEnv
+    S::Int  # number of starts and goals
+    D::Int  # number of demonstrations
+    agent_policy::EndowmentProbs
+end
+
+InfiniteEnv(;S, D, kws...) = InfiniteEnv(S, D, agent_policy(;kws...))
+InfiniteEnv(pol::EndowmentProbs; S, D) = InfiniteEnv(S, D, pol)
+
+abstract type InfinitePop end
+
+# %% ===== social observations ================================================
 
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
 
 function observation_probabilities(S, D_comp, D_bespoke)
-    bespoke = prob_observe(1 / S^2, D_bespoke)
-    comp_a = comp_b = prob_observe(1 / S, D_comp)
-    (;
-        bespoke,
-        full_only = ¬bespoke * comp_a * comp_b,
-        partial_only = ¬bespoke * (comp_a * ¬comp_b + ¬comp_a * comp_b),
-        zilch = ¬bespoke * ¬comp_a * ¬comp_b,
-    )
+    d_bespoke = Bernoulli(prob_observe(1 / S^2, D_bespoke))
+    d_comp = Binomial(2, prob_observe(1 / S, D_comp))
+
+    # SVector prevents memory allocation
+    p_bespoke = pdf(d_bespoke, SVector(0,1))
+    p_comp = pdf(d_comp, SVector(0,1,2))
+    
+    EndowmentProbs(p_bespoke * p_comp')
 end
 
-abstract type InfinitePop end
+function observation_probabilities(env::InfiniteEnv, pop::InfinitePop)
+    c = ensure_prob(compositional_rate(pop))
+    expectation(Binomial(env.D, c)) do D_comp
+        D_bespoke = env.D - D_comp
+        observation_probabilities(env.S, D_comp, D_bespoke)
+    end
+end
 
-@broadcastable @kwdef struct CompPop{T<:Real} <: InfinitePop
+
+# %% ===== agent policy =======================================================
+
+function agent_policy(;kws...)
+    default = (
+        b0c0 = 0.,  # no info
+        b1c0 = 0.,
+        b0c1 = 1.,  # no bespoke, half comp
+        b1c1 = 0.,
+        b0c2 = 1.,  # no bespoke, full comp
+        b1c2 = 0.,
+    )
+    EndowmentProbs(;default..., kws...)
+end
+
+@kwdef struct Costs
+    bespoke_zilch::Float64
+    bespoke_full::Float64
+    comp_zilch::Float64
+    comp_partial::Float64
+    comp_full::Float64
+end
+
+function cost(costs::Costs, pop::FreqPop)
+    sum(struct2vec(costs) .* struct2vec(pop))
+end
+
+function cost(C::Costs, bespoke_known::Int, comp_known::Int, comp_solution::Bool)
+    if comp_solution
+        (C.comp_zilch, C.comp_partial, C.comp_full)[comp_known + 1]
+    else
+        (C.bespoke_zilch, C.bespoke_full)[bespoke_known + 1]
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", costs::Costs)
+    print(io, "Costs")
+    fields = fieldnames(Costs)
+    for f in fields
+        val = getfield(costs, f)
+        print(io, "\n  ", string(f), " = ", val)
+    end
+end
+
+function rational_policy(C::Costs; β=100., ε=0.)
+    map(product(0:1, 0:2)) do (bespoke_known, comp_known)
+        rel_cost = cost(C, bespoke_known, comp_known, true) - cost(C, bespoke_known, comp_known, false)
+        p = logistic(β * -rel_cost)
+        lapse(p, ε)
+    end |> EndowmentProbs
+end
+
+# %% ===== population dynamics ================================================
+
+@kwdef struct CompPop{T<:Real} <: InfinitePop
     comp::T
 end
 
 compositional_rate(pop::CompPop) = pop.comp
 
 function transition(env::InfiniteEnv, pop::CompPop)
-    (;S, D, p_0, p_r) = env
-    c = ensure_prob(compositional_rate(pop))
-
-    expectation(Binomial(D, c)) do D_comp
-        D_bespoke = D - D_comp
-        P = observation_probabilities(S, D_comp, D_bespoke)
-        let
-            P.zilch * p_0 +
-            P.partial_only * p_r +
-            P.full_only
-        end
-    end |> CompPop
+    CompPop(sum(observation_probabilities(env, pop) .* env.agent_policy))
 end
 
-initialize(::InfiniteEnv, init::InfinitePop) = init
-initialize(::InfiniteEnv, init::Real) = CompPop(init)
-
 function simulate(env::InfiniteEnv, n_gen; init=0.)
-    gen0 = initialize(env, init)
+    gen0 = init isa Real ? CompPop(init) : init
 
     x = fill(gen0, n_gen+1)
     for i in 1:n_gen
@@ -109,8 +165,10 @@ FullPop{S}(c::Float64) where S = FullPop{S}(
 FullPop(S::Int, c::Float64) = FullPop{S}(c)
 
 function transition(env::InfiniteEnv, pop::FullPop)
-    (;S, D, p_0, p_r) = env
-    @assert p_r == 1.  # TODO: handle other cases
+    error("needs update")
+    (;S, D) = env
+    @assert env.agent_policy.b0c1 == 1.  # TODO: handle other cases
+    @assert env.agent_policy.b0c0 == 0.
 
     (;B, C) = pop
     
@@ -126,10 +184,8 @@ function transition(env::InfiniteEnv, pop::FullPop)
     FullPop{S}(C1, B1)
 end
 
-# # %% ===== FreqPop ============================================================
 
-
-@broadcastable @kwdef struct FreqPop <: InfinitePop
+@kwdef struct FreqPop <: InfinitePop
     bespoke_zilch::Float64 = 0.
     bespoke_full::Float64 = 0.
     comp_zilch::Float64 = 0.
@@ -146,74 +202,24 @@ FreqPop(pop::FullPop) = FreqPop(CompPop(pop))
 compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_zilch
 
 function transition(env::InfiniteEnv, pop::FreqPop)
-    (;S, D, p_0, p_r) = env
-    c = ensure_prob(compositional_rate(pop))
+    p_obs = observation_probabilities(env, pop)
+    p_comp = p_obs .* env.agent_policy
+    p_besp = p_obs .* 1 .- p_comp
 
-    expectation(Binomial(D, c)) do D_comp
-        D_bespoke = D - D_comp
-        P = observation_probabilities(S, D_comp, D_bespoke)
-        FreqPop(
-            P.zilch * ¬p_0 + P.partial_only * ¬p_r,
-            P.bespoke,
-            P.zilch * p_0,
-            P.partial_only * p_r,
-            P.full_only,
-        )
-    end
+    FreqPop(
+        bespoke_zilch = sum(p_besp[1, :]),  # 1 -> b0
+        bespoke_full = sum(p_besp[2, :]),
+        comp_zilch = sum(p_comp[:, 1]),
+        comp_partial = sum(p_comp[:, 2]),
+        comp_full = sum(p_comp[:, 3]),
+    )
 end
 
-# %% ===== Pop3 ===============================================================
-
-
-@kwdef struct Pop3 <: InfinitePop
-    indiv::Float64
-    bespoke::Float64
-    comp::Float64
-end
-
-Pop3(pop::FreqPop) = Pop3(
-    pop.bespoke_zilch + pop.comp_zilch,
-    pop.bespoke_full,
-    pop.comp_full + pop.comp_partial,
-)
-
-FreqPop(pop::Pop3, p_0::Float64) = FreqPop(
-    bespoke_full = pop.bespoke,
-    comp_full = pop.comp,
-    comp_zilch = pop.indiv * p_0,
-    bespoke_zilch = pop.indiv * (1 - p_0),
-)
-
-initialize(::InfiniteEnv, init::Pop3) = init
-transition(env::InfiniteEnv, pop::Pop3) = transition(env, FreqPop(pop, env.p_0)) |> Pop3
-compositional_rate(pop::Pop3) = pop.comp
-
-# %% ===== costs ==============================================================
-
-@broadcastable @kwdef struct Costs
-    bespoke_zilch::Float64
-    bespoke_full::Float64
-    comp_zilch::Float64
-    comp_partial::Float64
-    comp_full::Float64
-end
-
-function cost(costs::Costs, pop::FreqPop)
-    costs.bespoke_zilch * pop.bespoke_zilch +
-    costs.bespoke_full * pop.bespoke_full +
-    costs.comp_zilch * pop.comp_zilch +
-    costs.comp_partial * pop.comp_partial +
-    costs.comp_full * pop.comp_full
-end
-
-function Base.show(io::IO, ::MIME"text/plain", costs::Costs)
-    print(io, "Costs")
-    fields = fieldnames(Costs)
+function Base.show(io::IO, ::MIME"text/plain", pop::FreqPop)
+    print(io, "FreqPop")
+    fields = fieldnames(FreqPop)
     for f in fields
-        val = getfield(costs, f)
+        val = getfield(pop, f)
         print(io, "\n  ", string(f), " = ", val)
     end
 end
-
-comp_cost(env, costs, c::Float64) = cost(costs, transition(env, FreqPop(CompPop(c))))
-comp_cost(env, costs, c::Missing) = missing

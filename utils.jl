@@ -14,8 +14,10 @@ using Distributions
 using Dates
 using Distributed
 using NamedTupleTools: delete
+using StaticArrays
 
 flatten(xs) = reduce(vcat, xs)
+
 
 function ensure_prob(x; tol=1e-5)
     if x < -tol || x > 1+tol
@@ -25,7 +27,13 @@ function ensure_prob(x; tol=1e-5)
 end
 
 logistic(x) = 1 / (1 + exp(-x))
-lapse(p, ε) = (1 - ε) * p + ε / 2
+lapse(p, ε; N=2) = (1 - ε) * p + ε / N
+
+function expectation(f::Function, d::DiscreteDistribution)
+    sum(support(d)) do x
+        pdf(d, x) * f(x)
+    end
+end
 
 function Base.NamedTuple(d::Dict{String})
     NamedTuple(Dict(Symbol(k) => v for (k, v) in d))
@@ -35,6 +43,11 @@ named_tuple(x::NamedTuple) = x
 function named_tuple(x)
     n = Tuple(propertynames(x))
     NamedTuple{n}(getproperty.(Ref(x), n))
+end
+
+function struct2vec(x)
+    names = propertynames(x)
+    SVector{length(names)}(getproperty.(Ref(x), names))
 end
 
 
