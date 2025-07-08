@@ -65,7 +65,7 @@ sim %>%
     summarise( min(cost), max(cost), max(compositionality) )
 
 
-figure("cost-evolution.csv", sim %>% 
+figure("cost-evolution", sim %>% 
     filter(S==10, D==81, comp_partial==9, comp_full==8) %>% 
     filter(gen > 1, gen < 30) %>% 
     mutate(score = 1 - relative(cost, lo=0, hi=10)) %>% 
@@ -233,9 +233,20 @@ df <- read_csv("../results/cost/cost-asymptote-D-full.csv") %>%
     identity
     # drop_na(asymptotic_compositionality)
 
+# %% --------
 
+figure("D-full", df %>% 
+    ggplot(aes(D, comp_full, fill=comp_advantage)) +
+    geom_raster() +
+    scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
+    scale_x_continuous(trans="log2", breaks=Ds) +
+    no_gridlines +
+    labs(x="observations (D)", y="compositional action cost")
+)
 
-figure("D-full", w=3, df %>% 
+# %% --------
+
+figure("D-full-two", w=3, df %>% 
     # filter(comp_partial == 9) %>% 
     # filter(comp_full == 6) %>% 
     ggplot(aes(D, comp_full, fill=comp_advantage)) +
@@ -253,7 +264,6 @@ figure("D-full", w=3, df %>%
         no_gridlines
 )
 
-
 # %% ===== action search ======================================================
 
 df <- read_csv("../results/cost/cost-asymptote-action-search.csv") %>% 
@@ -264,17 +274,106 @@ df <- read_csv("../results/cost/cost-asymptote-action-search.csv") %>%
     identity
 
 
-figure("action-search", w=3, df %>% 
+figure("action-search", w=3, 
+    df %>% 
+        filter(D == 81) %>% 
+        # filter(comp_partial == 9) %>% 
+        # filter(comp_full == 6) %>% 
+        ggplot(aes(act_cost, search_cost, fill=comp_advantage)) +
+            geom_raster() +
+            scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
+            no_gridlines +
+
+    df %>% 
+        filter(D == 81) %>% 
+        ggplot(aes(act_cost, search_cost, fill=asymptotic_compositionality)) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
+        no_gridlines
+)
+
+# %% --------
+
+data <- df %>% filter(search_cost == 2)
+
+
+figure("D-action", data %>% 
     # filter(comp_partial == 9) %>% 
     # filter(comp_full == 6) %>% 
-    ggplot(aes(act_cost, search_cost, fill=asymptotic_advantage)) +
+    ggplot(aes(D, act_cost, fill=comp_advantage)) +
         geom_raster() +
         scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
         no_gridlines +
+        scale_x_continuous(trans="log2", breaks=Ds)
+)
+
+# %% --------
+
+sim <- read_csv("../results/cost/evolution-action-search.csv")
+
+data <- sim %>% 
+    filter(search_cost == 2, act_cost==9, D==27) %>% 
+    filter(gen > 1, gen < 60) %>% 
+    mutate(score = 1 - relative(cost, lo=0, hi=10))
+    
+
+figure("cost-evolution-D-action", data %>% 
+    ggplot(aes(gen)) +
+    # geom_hline(yintercept=10, color=GREEN, linetype="dashed") +
+    geom_line(aes(y = score), color=GREEN, linewidth=1) +
+    geom_line(aes(y = compositionality), color = C_COMP, linewidth=1) +
+    scale_y_continuous(
+        name = "compositionality",
+        sec.axis = sec_axis(~. * 1, name = "relative reward")
+    ) +
+    theme(
+        axis.title.y.left = element_text(color = C_COMP),
+        axis.title.y.right = element_text(color = GREEN),
+        axis.text.y.left = element_text(color = C_COMP),
+        axis.text.y.right = element_text(color = GREEN)
+    ) +
+    expand_limits(y = c(0, 1)) +
+    labs(x = "generation")
+)
+
+# %% --------
+
+
+
+figure("D-action-two", w=3, data %>% 
+    # filter(comp_partial == 9) %>% 
+    # filter(comp_full == 6) %>% 
+    ggplot(aes(D, act_cost, fill=comp_advantage)) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
+        no_gridlines +
+        scale_x_continuous(trans="log2", breaks=Ds) +
+
+
+    data %>% 
+        ggplot(aes(D, act_cost, fill=asymptotic_compositionality)) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
+        no_gridlines +
+        scale_x_continuous(trans="log2", breaks=Ds)
+
+)
+
+# %% --------
+
+figure("action-search-D", w=3, df %>% 
+    # filter(comp_partial == 9) %>% 
+    # filter(comp_full == 6) %>% 
+    ggplot(aes(act_cost, search_cost, fill=comp_advantage)) +
+        geom_raster() +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0) +
+        no_gridlines +
+        facet_wrap(~D) +
 
     df %>% 
         ggplot(aes(act_cost, search_cost, fill=asymptotic_compositionality)) +
         geom_raster() +
         scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=0.5) +
-        no_gridlines
+        no_gridlines +
+        facet_wrap(~D)
 )

@@ -56,8 +56,9 @@ end
         asymptotic_compositionality,
         max_compositionality,
         asymptotic_cost = cost(C, simulate(env, 2, init=FreqPop(CompPop(asymptotic_compositionality)))[end]),
-        comp_cost = cost(C, simulate(env, 2, init=FreqPop(CompPop(max_compositionality)))[end]),
+        max_cost = cost(C, simulate(env, 2, init=FreqPop(CompPop(max_compositionality)))[end]),
         bespoke_cost = cost(C, simulate(mutate(env, agent_policy=bespoke_policy()), 2, init=FreqPop())[end]),
+        comp_cost = cost(C, simulate(mutate(env, agent_policy=comp_policy()), 2, init=FreqPop())[end]),
         # comp_cost = cost(C, simulate(mutate(env, agent_policy=comp_policy()), 2, init=FreqPop())[end]),
     )
 end
@@ -153,8 +154,9 @@ df |> write_csv("cost-asymptote-SD.csv")
 # %% --------
 
 prms = grid(;
-    S = 10,
-    D = 81,
+    S = 5,
+    # D = 81,
+    D = 1 .* 3 .^ (1:5),
 
     act_cost = 0:10,
     search_cost = 0:2:24,
@@ -172,11 +174,22 @@ prms = map(prms) do prm
     )
 end
 
-prm = prms[8,8]
-env, C = get_env_costs(prm)
-compute_costs(prm)
+
 # cost(C, simulate(env, 2, init=FreqPop(CompPop(max_compositionality)))[end])
 
 
 
 dataframe(compute_costs, prms) |> write_csv("cost-asymptote-action-search.csv")
+
+dataframe(prms) do prm
+    env, C = get_env_costs(prm)
+
+    sim = simulate(env, 100; init=FreqPop(CompPop(1e-6)))
+    imap(sim) do gen, pop
+        (;
+            gen,
+            cost = cost(C, pop),
+            compositionality = compositional_rate(pop),
+        )
+    end    
+end |> write_csv("evolution-action-search.csv")
