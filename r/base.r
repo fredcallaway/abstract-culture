@@ -760,7 +760,7 @@ fig <- function(name = "tmp", w = WIDTH, h = HEIGHT, s = FIG_SCALE, path = FIGS_
 }
 
 
-figure <- function(name, gg, w = WIDTH, h = HEIGHT, panel_size = TRUE, no_defaults = FALSE) {
+figure <- function(name, gg, w = WIDTH, h = HEIGHT, panel_size = TRUE) {
     if (!is_ggplot(gg)) {
         cat("'gg' parameter is not a ggplot object:\n")
         print(gg)
@@ -774,6 +774,15 @@ figure <- function(name, gg, w = WIDTH, h = HEIGHT, panel_size = TRUE, no_defaul
     }
 
     fig(name, w = w, h = h)
+}
+
+figure_wrap <- function(name, ..., nrow=1, w = WIDTH, h = HEIGHT, panel_size = TRUE) {
+    ncol = ceiling(length(list(...)) / nrow)
+    figure(name, wrap_plots(..., ncol = ncol), 
+        w = w + HEIGHT * (ncol - 1),
+        h = h + HEIGHT * (nrow - 1),
+        panel_size = panel_size
+    )
 }
 
 get_panel_rows_cols <- function(p) {
