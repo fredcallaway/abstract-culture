@@ -22,8 +22,9 @@ read_csv(name::String) = CSV.read(RESULTS_PATH * name, DataFrame)
 @everywhere function get_env_costs(prm)
     env_prm = subset(prm, fieldnames(InfiniteEnv))
     cost_prm = subset(prm, fieldnames(Costs))
+    pol_prm = subset(prm, (:ε, :β))
     C = Costs(;cost_prm...)
-    pol = rational_policy(C; ε=1e-10)
+    pol = rational_policy(C; pol_prm...)
     env = InfiniteEnv(pol; env_prm...)
     (env, C)
 end
@@ -59,17 +60,21 @@ end
     )
 end
 
+@everywhere function compute_evolution(prm)
+    env, C = get_env_costs(prm)
+    sim = simulate(env, 100; init=FreqPop(CompPop(1e-6)))
+    imap(sim) do gen, pop
+        (;
+            gen,
+            cost = cost(C, pop),
+            compositionality = compositional_rate(pop),
+        )
+    end
+end
+
 # %% --------
 
-prms = grid(;
-    S = 5,
-    D = 1 .* 3 .^ (1:5),
-
-    act_cost = 0:10,
-    search_cost = 0:2:24,
-)
-
-prms = map(prms) do prm
+function reparametrize(prm)
     (;act_cost, search_cost) = prm
     (;
         prm...,
@@ -81,17 +86,29 @@ prms = map(prms) do prm
     )
 end
 
-dataframe(compute_costs, prms) |> write_csv("costs.csv")
 
-dataframe(prms) do prm
-    env, C = get_env_costs(prm)
+prms = reparametrize.(grid(;
+    S = 5,
+    D = 1 .* 3 .^ (1:5),
 
-    sim = simulate(env, 100; init=FreqPop(CompPop(1e-6)))
-    imap(sim) do gen, pop
-        (;
-            gen,
-            cost = cost(C, pop),
-            compositionality = compositional_rate(pop),
-        )
-    end    
-end |> write_csv("evolution.csv")
+    act_cost = 0:10,
+    search_cost = 0:2:24,
+))
+
+dataframe(compute_costs, prms) |> write_csv("costs-idealized.csv")
+@time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized.csv")
+
+# %% --------
+
+prms = reparametrize.(grid(;
+    S = 4,
+    D = 2 .^ (1:6),
+    ε = 0.05,
+    β = 2.0,
+
+    act_cost = 0:10,
+    search_cost = 0:2:24,
+))
+
+dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
+@time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
