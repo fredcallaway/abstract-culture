@@ -1,12 +1,6 @@
 # %% --------
 
 source("base.r")
-FIGS_PATH <- "figs/cost/"
-
-VERSION <- "predicted"
-# VERSION <- "idealized"
-
-# %% --------
 
 plot_evolution <- function(data) {
     data %>% ggplot(aes(gen)) +
@@ -34,8 +28,6 @@ plot_advantage <- function(data, ..., midpoint=0) {
         no_gridlines
 }
 
-# %% ===== action search ======================================================
-
 load_costs <- function(version) {
     read_csv(glue("../results/cost/costs-{version}.csv")) %>% 
     mutate(
@@ -46,8 +38,7 @@ load_costs <- function(version) {
 
 load_evolution <- function(version) {
     read_csv(glue("../results/cost/evolution-{version}.csv")) %>% 
-        mutate(score = 1 - relative(cost, lo=0, hi=10)) %>% 
-        filter(gen > 1)
+        mutate(score = 1 - relative(cost, lo=0, hi=10))
 }
 
 
@@ -61,18 +52,43 @@ FIGS_PATH <- "figs/cost/idealized-"
 
 figure("D-act_cost", 
     costs %>% 
-    filter(search_cost == 2) %>% 
     plot_advantage(factor(D), act_cost, fill=comp_advantage, midpoint=0)
 )
 
 # %% --------
 
+last_gen <- evolution %>% filter(gen == 100) %>% select(1:4, comp100 = compositionality) %>% print
+
+best_prm <- costs %>% 
+    left_join(last_gen) %>% filter(comp100 > .01) %>% 
+    slice_min(asymptotic_advantage) %>% 
+    # select(D, search_cost, act_cost) %>% 
+    print
+
+# best_prm %>% select(comp_advantage, asymptotic_advantage, asymptotic_compositionality, comp100)
+# %% --------
+
+best_prm <- tibble(D=16, search_cost=10, act_cost=5)
+
 figure("evolution", evolution %>% 
-    filter(search_cost == 2, act_cost==9, D==27) %>% 
+    right_join(best_prm) %>% 
     plot_evolution
 )
 
 # %% --------
+
+costs %>% 
+    filter(search_cost >= 10) %>% 
+    left_join(last_gen) %>% 
+    # filter(comp100 > .01) %>% 
+    ggplot(aes(asymptotic_compositionality, comp100)) + 
+    geom_point()
+
+fig()
+
+
+# %% --------
+best_prm <- tibble(D=16, search_cost=10, act_cost=5)
 
 figure("tmp", costs %>% 
     mutate(asymptotic_advantage = pmin(0, asymptotic_advantage)) %>% 
@@ -97,9 +113,22 @@ figure_wrap("costs-full", nrow=3,
 
 # %% ===== predicted ==========================================================
 
-costs <- load_costs('predicted')
-evolution <- load_evolution('predicted')
+costs <- load_costs('predicted') %>% filter(search_cost >= 10)
+evolution <- load_evolution('predicted') %>% filter(search_cost >= 10)
 FIGS_PATH <- "figs/cost/predicted-"
+
+# %% --------
+
+last_gen <- evolution %>% filter(gen == 100) %>% select(1:6, comp100 = compositionality) %>% print
+
+best_prm <- costs %>% 
+    left_join(last_gen) %>% 
+    filter(comp100 > .3) %>% 
+    slice_min(asymptotic_advantage) %>% 
+    # select(D, search_cost, act_cost) %>% 
+    print
+
+best_prm %>% select(comp_advantage, asymptotic_advantage, asymptotic_compositionality, comp100)
 
 # %% --------
 
@@ -107,6 +136,19 @@ figure("tmp", costs %>%
     mutate(asymptotic_advantage = pmin(0, asymptotic_advantage)) %>% 
     plot_advantage(search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
     facet_wrap(~D, nrow=1)
+)
+
+# %% --------
+
+# best_prm <- costs %>% 
+#     filter(search_cost > 0) %>% 
+#     slice_min(asymptotic_advantage) %>% 
+#     select(D, search_cost, act_cost)
+
+figure("evolution", evolution %>% 
+    right_join(best_prm) %>% 
+    filter(gen < 11) %>% 
+    plot_evolution
 )
 
 # %% --------
@@ -133,16 +175,6 @@ figure("D-act_cost",
 
 # %% --------
 
-figure("evolution", evolution %>% 
-    filter(search_cost == 2, act_cost==9, D==32) %>% 
-    plot_evolution
-)
 
 # %% --------
 
-
-# %% --------
-
-
-
-# %% --------

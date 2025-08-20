@@ -201,6 +201,15 @@ compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_z
 
 cost(costs::Costs, pop::FreqPop) = sum(struct2vec(costs) .* struct2vec(pop))
 
+function observation_probabilities(env::InfiniteEnv, pop::FreqPop)
+    total = sum(struct2vec(pop))
+    if total ≈ 0.
+        observation_probabilities(env.S, 0, 0)
+    else @assert total ≈ 1. "FreqPop must sum to 0 or 1"
+        @invoke observation_probabilities(env, pop::InfinitePop)  # like python super()
+    end
+end
+
 function transition(env::InfiniteEnv, pop::FreqPop)
     p_obs = observation_probabilities(env, pop)
     p_comp = p_obs .* env.agent_policy

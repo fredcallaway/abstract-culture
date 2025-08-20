@@ -1,11 +1,13 @@
-include("infinite_env.jl")
 
-env = InfiniteEnv(S=2, D=40)
-fixed = fixed_points(env)
+prm = reparametrize((;S=4, D=16, act_cost=8, search_cost=2, β=2.0, ε=0.05))
+env, C = get_env_costs(prm)
 
-transition(env, fixed[end])
+compute_evolution(prm)
+env.agent_policy
+simulate(env, 1; init=FreqPop())
 
-transition(env, Rational{BigInt}(1))
-transition(env, BigFloat(1))
 
-observation_probabilities(1, 40, 0)
+simulate(env, 10; init=FreqPop())
+observation_probabilities(env, FreqPop())
+
+
