@@ -53,8 +53,7 @@ load_evolution <- function(version) {
 
 costs <- load_costs('idealized') %>% 
     filter(bespoke_zilch < comp_zilch) %>% 
-    # filter(comp_partial < bespoke_zilch)
-    identity
+    filter(comp_partial < bespoke_zilch)
 evolution <- load_evolution('idealized')
 FIGS_PATH <- "figs/cost/idealized-"
 
@@ -62,8 +61,7 @@ last_gen <- evolution %>% filter(gen == 100) %>% select(1:4, comp100 = compositi
 best_prm <- costs %>% 
     left_join(last_gen) %>% filter(comp100 > .01) %>% 
     # filter(asymptotic_compositionality > 0.8) %>% 
-    slice_min(asymptotic_advantage) %>% 
-    head(1)
+    slice_min(asymptotic_advantage)
 
 best_prm %>% pivot_longer(everything())
 
@@ -104,6 +102,7 @@ figure("tmp",
 
 # %% --------
 
+
 figure("cost-evolution", evolution %>% 
     right_join(best_prm) %>% 
     filter(gen > 1) %>% 
@@ -111,35 +110,20 @@ figure("cost-evolution", evolution %>%
     plot_evolution
 )
 
+
 # %% --------
 
 figure_wrap("costs-full", nrow=3,
 
     plot_advantage(costs, search_cost, act_cost, fill=comp_advantage, midpoint=0) +
-        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", lim=c(-.5, .5)) +
         facet_wrap(~D, nrow=1),
     
     plot_advantage(costs, search_cost, act_cost, fill=asymptotic_compositionality, midpoint=0.5) +
         facet_wrap(~D, nrow=1),
 
     plot_advantage(costs, search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
-        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", lim=c(-.5, .5)) +
         facet_wrap(~D, nrow=1)
 )
-
-# %% ===== SD =================================================================
-
-SD_costs <- load_costs("idealized-SD")
-
-figure("tmp", SD_costs %>% 
-    fctrize(S) %>% 
-    fctrize(D) %>% 
-    ungroup() %>% 
-    # right_join(select(best_prm, S, D)) %>% 
-    plot_advantage(D, S, fill=asymptotic_advantage, midpoint=0) +
-    labs(fill="cost savings")
-)
-
 
 
 # %% ===== predicted ==========================================================
