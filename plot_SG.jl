@@ -4,7 +4,7 @@ nprocs() == 1 && addprocs()
 @everywhere include("infinite_env.jl")
 
 # %% --------
-grd = grid(;S=2:2:14, G=2:2:14, D=2 .^ (1:6))
+grd = grid(;S=1:14, G=1:14, D=2 .^ (0:6))
 
 fixed = dataframe(grd, parallel=true) do prm
     env = InfiniteEnv(;prm...)

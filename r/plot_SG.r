@@ -14,7 +14,9 @@ plot_line <- function(fun) {
     stat_function(fun = fun, color = "black", linetype = "dashed", inherit.aes = FALSE)
 }
 
-asymptote_plot <- fixed_points %>% 
+alt_asym <- evolution %>% filter(gen == 100) %>% mutate(asymptote = compositionality) %>% select(-c(gen, compositionality))
+
+asymptote_plot <- alt_asym %>% 
     filter(D > 0) %>% 
     # mutate(S = factor(S^2)) %>% 
     # mutate(D = factor(D)) %>% 
@@ -49,7 +51,7 @@ figure("tmp", fixed_points %>%
 evolution <- read_csv("../results/SG_evolution.csv")
 
 evolution_plot <- evolution %>% 
-    right_join(ev_points) %>% 
+    # right_join(ev_points) %>% 
     ggplot(aes(gen, compositionality)) +
     geom_line(color=C_COMP) + expand_limits(y=c(0, 1)) +
     no_legend +
