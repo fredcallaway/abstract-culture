@@ -71,10 +71,12 @@ facet_wrap = function(form, labeller=purrr::partial(label_both, sep = " = "), ..
 
 
 
-yesno_pal <- scale_colour_manual(values = c(
+yesno_pal <- scale_fill_manual(values = c(
     `FALSE` = "gray50",
     `TRUE` = BLUE
-), labels = c("No", "Yes"))
+), labels = c("No", "Yes"), aesthetics = c("color", "fill"))
+
+
 
 teals_pal <- function(...) {
     scale_color_discrete_sequential(palette = "TealGrn", l1 = 40, l2 = 80, c2 = 40, aesthetics = c("color", "fill"), ...)

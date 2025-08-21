@@ -23,6 +23,13 @@ plot_evolution <- function(data) {
 
 plot_advantage <- function(data, ..., midpoint=0) {
     data %>% ggplot(aes(...)) +
+        rasterize(geom_raster()) +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=midpoint) +
+        no_gridlines
+}
+
+plot_advantage_binary <- function(data, ..., fill, midpoint=0) {
+    data %>% ggplot(aes(...)) +
         geom_raster() +
         scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=midpoint) +
         no_gridlines
@@ -48,53 +55,59 @@ costs <- load_costs('idealized')
 evolution <- load_evolution('idealized')
 FIGS_PATH <- "figs/cost/idealized-"
 
+last_gen <- evolution %>% filter(gen == 100) %>% select(1:4, comp100 = compositionality)
+best_prm <- costs %>% 
+    left_join(last_gen) %>% filter(comp100 > .01) %>% 
+    # filter(asymptotic_compositionality > 0.8) %>% 
+    slice_min(asymptotic_advantage)
+
+best_prm %>% pivot_longer(everything())
+
+
 # %% --------
 
-figure("D-act_cost", 
+FIGS_PATH <- "/Users/fred/papers/cultural-abstractions/figures/src/"
+
+plot_advantage <- function(data, ..., midpoint=0) {
+    data %>% ggplot(aes(...)) +
+        ggrastr::rasterize(geom_raster(), dev = "ragg", dpi=320) +
+        scale_fill_gradient2(low=C_BESPOKE, high=C_COMP, mid="gray", midpoint=midpoint) +
+        no_gridlines
+}
+
+figure("cost-simple", w=1.5,
     costs %>% 
-    plot_advantage(factor(D), act_cost, fill=comp_advantage, midpoint=0)
+    filter(search_cost <= 20) %>% 
+    right_join(select(best_prm, S, D)) %>% 
+    plot_advantage(search_cost, act_cost, fill=asymptotic_compositionality, midpoint=0) +
+    geom_rect(aes(xmin=1, xmax=21, ymin=0.5, ymax=3.5), fill=NA, color=GREEN, linewidth=1) +
+    geom_point(data=best_prm) +
+    expand_limits(fill=c(0, 1))
+    # coord_fixed(ratio=2.5) +
+    # scale_fill_gradient(low=RED, high=GREEN,) +
+    # facet_wrap(~D, nrow=1),
 )
 
 # %% --------
 
-last_gen <- evolution %>% filter(gen == 100) %>% select(1:4, comp100 = compositionality) %>% print
+figure("tmp", 
+    costs %>% 
+    filter(D == 27) %>% 
+    # right_join(select(best_prm, S, D)) %>% 
+    plot_advantage(search_cost, act_cost, fill=comp_advantage, midpoint=0) +
+    labs(fill="cost savings")
+)
 
-best_prm <- costs %>% 
-    left_join(last_gen) %>% filter(comp100 > .01) %>% 
-    slice_min(asymptotic_advantage) %>% 
-    # select(D, search_cost, act_cost) %>% 
-    print
-
-# best_prm %>% select(comp_advantage, asymptotic_advantage, asymptotic_compositionality, comp100)
 # %% --------
 
-best_prm <- tibble(D=16, search_cost=10, act_cost=5)
 
-figure("evolution", evolution %>% 
+figure("cost-evolution", evolution %>% 
     right_join(best_prm) %>% 
+    filter(gen > 1) %>% 
+    filter(gen < 50) %>% 
     plot_evolution
 )
 
-# %% --------
-
-costs %>% 
-    filter(search_cost >= 10) %>% 
-    left_join(last_gen) %>% 
-    # filter(comp100 > .01) %>% 
-    ggplot(aes(asymptotic_compositionality, comp100)) + 
-    geom_point()
-
-fig()
-
-
-# %% --------
-best_prm <- tibble(D=16, search_cost=10, act_cost=5)
-
-figure("tmp", costs %>% 
-    mutate(asymptotic_advantage = pmin(0, asymptotic_advantage)) %>% 
-    plot_advantage(search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
-    facet_wrap(~D, nrow=1)
-)
 
 # %% --------
 
@@ -109,6 +122,13 @@ figure_wrap("costs-full", nrow=3,
     plot_advantage(costs, search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
         facet_wrap(~D, nrow=1)
 )
+
+
+# %% --------
+
+
+
+
 
 
 # %% ===== predicted ==========================================================

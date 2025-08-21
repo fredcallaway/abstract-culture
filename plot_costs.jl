@@ -62,7 +62,7 @@ end
 
 @everywhere function compute_evolution(prm)
     env, C = get_env_costs(prm)
-    sim = simulate(env, 100; init=FreqPop())[2:end]
+    sim = simulate(env, 100; init=FreqPop(CompPop(1e-6)))
     imap(sim) do gen, pop
         (;
             gen,
@@ -88,15 +88,29 @@ end
 
 
 prms = reparametrize.(grid(;
-    S = 4,
-    D = 2 .^ (1:6),
+    S = 5,
+    D = 1 .* 3 .^ (1:5),
 
-    act_cost = 0:10,
-    search_cost = 10:2:24,
+    act_cost = 1:10,
+    search_cost = 2:2:24,
 ))
+
+
+# length(prms)
+# prms = filter(prms) do prm
+#     env, C = get_env_costs(prm)
+#     P = env.agent_policy
+#     P.b0c0 == 0 &&
+#     P.b1c0 == 0 &&
+#     P.b0c1 == 1 &&
+#     P.b1c1 == 0 &&
+#     P.b0c2 == 1 &&
+#     P.b1c2 == 0
+# end
 
 dataframe(compute_costs, prms) |> write_csv("costs-idealized.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized.csv")
+
 
 # %% --------
 
@@ -114,5 +128,7 @@ dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
 
 
-prm = reparametrize((;act_cost=0, search_cost=10))
+# %% --------
+
+prm = reparametrize((;act_cost=0, search_cost=0))
 Costs(; subset(prm, fieldnames(Costs))...)
