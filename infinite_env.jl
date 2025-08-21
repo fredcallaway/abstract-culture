@@ -15,13 +15,14 @@ include("utils.jl")
 end
 
 struct InfiniteEnv
-    S::Int  # number of starts and goals
+    S::Int  # number of starts
+    G::Int  # number of goals
     D::Int  # number of demonstrations
     agent_policy::EndowmentProbs
 end
 
-InfiniteEnv(;S, D, kws...) = InfiniteEnv(S, D, agent_policy(;kws...))
-InfiniteEnv(pol::EndowmentProbs; S, D) = InfiniteEnv(S, D, pol)
+InfiniteEnv(;S, D, G=S, kws...) = InfiniteEnv(S, G, D, agent_policy(;kws...))
+InfiniteEnv(pol::EndowmentProbs; S, D, G=S) = InfiniteEnv(S, G, D, pol)
 
 abstract type InfinitePop end
 
@@ -30,13 +31,32 @@ abstract type InfinitePop end
 ¬(p::Real) = 1 - p
 prob_observe(p, k) = ¬((¬p) ^ k)
 
-function observation_probabilities(S, D_comp, D_bespoke)
-    d_bespoke = Bernoulli(prob_observe(1 / S^2, D_bespoke))
-    d_comp = Binomial(2, prob_observe(1 / S, D_comp))
+#  OLD VERSION WITHOUT G
+# function observation_probabilities(S, D_comp, D_bespoke)
+#     d_bespoke = Bernoulli(prob_observe(1 / S^2, D_bespoke))
+#     d_comp = Binomial(2, prob_observe(1 / S, D_comp))
+
+#     # SVector prevents memory allocation
+#     p_bespoke = pdf(d_bespoke, SVector(0,1))
+#     p_comp = pdf(d_comp, SVector(0,1,2))
+    
+#     EndowmentProbs(p_bespoke * p_comp')
+# end
+
+function observation_probabilities(S, G, D_comp, D_bespoke)
+    # d_bespoke = Bernoulli(prob_observe(1 / S^2, D_bespoke))
+    pB = prob_observe(1 / (S*G), D_bespoke)
+    pS = prob_observe(1 / S, D_comp)
+    pG = prob_observe(1 / G, D_comp)
 
     # SVector prevents memory allocation
-    p_bespoke = pdf(d_bespoke, SVector(0,1))
-    p_comp = pdf(d_comp, SVector(0,1,2))
+    p_bespoke = SVector(¬pB, pB)
+    p_comp = SVector(
+        ¬pS * ¬pG,  # neither
+        ¬pS * pG + pS * ¬pG,  # one
+        pS * pG,  # both
+    )
+    @assert sum(p_comp) ≈ 1.
     
     EndowmentProbs(p_bespoke * p_comp')
 end
@@ -45,7 +65,7 @@ function observation_probabilities(env::InfiniteEnv, pop::InfinitePop)
     c = ensure_prob(compositional_rate(pop))
     expectation(Binomial(env.D, c)) do D_comp
         D_bespoke = env.D - D_comp
-        observation_probabilities(env.S, D_comp, D_bespoke)
+        observation_probabilities(env.S, env.G, D_comp, D_bespoke)
     end
 end
 
@@ -149,18 +169,18 @@ CompPop(pop::InfinitePop) = CompPop(compositional_rate(pop))
 transition(env::InfiniteEnv, c::Real) = transition(env, CompPop(c)).comp
 
 
-struct FullPop{S} <: InfinitePop
-    C::SMatrix{S,S,Float64}
-    B::SMatrix{S,S,Float64}
+struct FullPop{S,G} <: InfinitePop
+    C::SMatrix{S,G,Float64}
+    B::SMatrix{S,G,Float64}
 end
 
 compositional_rate(pop::FullPop) = sum(pop.C)
 
-FullPop{S}(c::Float64) where S = FullPop{S}(
-    c .* ones(S, S) ./ S^2,
-    (1 - c) .* ones(S, S) ./ S^2,
+FullPop{S,G}(c::Float64) where {S,G} = FullPop{S,G}(
+    (c / (S*G)) .* ones(S, G),
+    ((1 - c) / (S*G)) .* ones(S, G),
 )
-FullPop(S::Int, c::Float64) = FullPop{S}(c)
+FullPop(S::Int, G::Int, c::Float64) = FullPop{S,G}(c)
 
 function transition(env::InfiniteEnv, pop::FullPop)
     error("needs update")
@@ -204,7 +224,7 @@ cost(costs::Costs, pop::FreqPop) = sum(struct2vec(costs) .* struct2vec(pop))
 function observation_probabilities(env::InfiniteEnv, pop::FreqPop)
     total = sum(struct2vec(pop))
     if total ≈ 0.
-        observation_probabilities(env.S, 0, 0)
+        observation_probabilities(env.S, env.G, 0, 0)
     else @assert total ≈ 1. "FreqPop must sum to 0 or 1"
         @invoke observation_probabilities(env, pop::InfinitePop)  # like python super()
     end
