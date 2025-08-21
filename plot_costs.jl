@@ -75,16 +75,54 @@ end
 # %% --------
 
 function reparametrize(prm)
-    (;act_cost, search_cost) = prm
+    (;act_cost, search_cost, base_cost) = prm
     (;
         prm...,
-        bespoke_zilch = 10,
+        bespoke_zilch = base_cost,
         bespoke_full = 0,
-        comp_zilch = act_cost + search_cost,
-        comp_partial = act_cost + search_cost/2,
+        comp_zilch = act_cost + base_cost + search_cost,
+        comp_partial = act_cost + (base_cost + search_cost)/2,
         comp_full = act_cost,
     )
 end
+
+prms = reparametrize.(grid(;
+    S = 10,
+    # D = 1 .* 3 .^ (1:5),
+    D = 100,
+    base_cost = 30:60,
+    act_cost = 10:30,
+    search_cost = 1,
+))
+
+prms = filter(prms) do prm
+    # prm.bespoke_zilch < prm.comp_zilch
+    # prm.search_cost > (prm.bespoke_zilch - prm.bespoke_full) &&
+    transition(get_env_costs(prm)[1], 0.5) > 0.5
+end
+
+
+df = dataframe(compute_costs, prms)
+@rtransform! df :asymptotic_advantage = (:bespoke_cost - :asymptotic_cost) / :base_cost
+println(minimum(df.asymptotic_advantage))
+prms[argmin(df.asymptotic_advantage)]
+
+
+# %% --------
+
+
+prms = reparametrize.(grid(;
+    S=6:20, 
+    D=2 .^ (1:9),
+    base_cost = 50,
+    act_cost = 7,
+    search_cost = 4,
+))
+
+dataframe(compute_costs, prms) |> write_csv("costs-idealized-SD.csv")
+
+
+# %% --------
 
 
 prms = reparametrize.(grid(;
@@ -92,9 +130,16 @@ prms = reparametrize.(grid(;
     # D = 1 .* 3 .^ (1:5),
     D = [4, 20, 100, 500],
 
-    act_cost = 1:10,
-    search_cost = 2:2:24,
+    base_cost = 50,
+    act_cost = 20:30,
+    search_cost = 1:10,
 ))
+
+prms = filter(prms) do prm
+    # prm.bespoke_zilch < prm.comp_zilch
+    # prm.search_cost > 10
+    true
+end
 
 
 # length(prms)
