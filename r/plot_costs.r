@@ -1,6 +1,7 @@
 # %% --------
 
 source("base.r")
+RESULTS_PATH <- "../results/cost-SG"
 
 plot_evolution <- function(data) {
     data %>% ggplot(aes(gen)) +
@@ -36,7 +37,7 @@ plot_advantage_binary <- function(data, ..., fill, midpoint=0) {
 }
 
 load_costs <- function(version) {
-    read_csv(glue("../results/cost/costs-{version}.csv")) %>% 
+    read_csv(glue("{RESULTS_PATH}/costs-{version}.csv")) %>% 
     mutate(
         comp_advantage = (bespoke_cost - comp_cost) / 10,
         asymptotic_advantage = (bespoke_cost - asymptotic_cost) / 10
@@ -44,7 +45,7 @@ load_costs <- function(version) {
 }
 
 load_evolution <- function(version) {
-    read_csv(glue("../results/cost/evolution-{version}.csv")) %>% 
+    read_csv(glue("{RESULTS_PATH}/evolution-{version}.csv")) %>% 
         mutate(score = 1 - relative(cost, lo=0, hi=10))
 }
 
@@ -52,14 +53,17 @@ load_evolution <- function(version) {
 # %% ===== idealized ==========================================================
 
 costs <- load_costs('idealized') %>% 
-    filter(bespoke_zilch < comp_zilch) %>% 
-    filter(comp_partial < bespoke_zilch)
+    filter(
+        bespoke_zilch < comp_zilch,
+        # comp_partial < bespoke_zilch
+    ) 
 evolution <- load_evolution('idealized')
 FIGS_PATH <- "figs/cost/idealized-"
 
 last_gen <- evolution %>% filter(gen == 100) %>% select(1:4, comp100 = compositionality)
+
 best_prm <- costs %>% 
-    left_join(last_gen) %>% filter(comp100 > .01) %>% 
+    # left_join(last_gen, by=c("S", "G", 'D', 'base_cost', 'act_cost', 'search_cost')) %>% filter(comp100 > .01) %>% 
     # filter(asymptotic_compositionality > 0.8) %>% 
     slice_min(asymptotic_advantage)
 
@@ -82,7 +86,7 @@ figure("cost-simple", w=1.5,
     filter(search_cost <= 20) %>% 
     right_join(select(best_prm, S, D)) %>% 
     plot_advantage(search_cost, act_cost, fill=asymptotic_compositionality, midpoint=0) +
-    geom_rect(aes(xmin=1, xmax=21, ymin=0.5, ymax=3.5), fill=NA, color=GREEN, linewidth=1) +
+    # geom_rect(aes(xmin=1, xmax=21, ymin=0.5, ymax=3.5), fill=NA, color=GREEN, linewidth=1) +
     geom_point(data=best_prm) +
     expand_limits(fill=c(0, 1))
     # coord_fixed(ratio=2.5) +
@@ -90,18 +94,8 @@ figure("cost-simple", w=1.5,
     # facet_wrap(~D, nrow=1),
 )
 
-# %% --------
-
-figure("tmp", 
-    costs %>% 
-    filter(D == 27) %>% 
-    # right_join(select(best_prm, S, D)) %>% 
-    plot_advantage(search_cost, act_cost, fill=comp_advantage, midpoint=0) +
-    labs(fill="cost savings")
-)
 
 # %% --------
-
 
 figure("cost-evolution", evolution %>% 
     right_join(best_prm) %>% 

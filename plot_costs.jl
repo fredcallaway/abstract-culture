@@ -6,7 +6,7 @@ nprocs() == 1 && addprocs()
 # %% --------
 
 DEFAULT_PARALLEL = true
-RESULTS_PATH = "results/cost/"
+RESULTS_PATH = "results/cost-SG/"
 mkpath(RESULTS_PATH)
 
 function write_csv(name, df)
@@ -75,25 +75,26 @@ end
 # %% --------
 
 function reparametrize(prm)
-    (;act_cost, search_cost) = prm
+    (;act_cost, search_cost, base_cost) = prm
     (;
         prm...,
-        bespoke_zilch = 10,
+        bespoke_zilch = base_cost,
         bespoke_full = 0,
-        comp_zilch = act_cost + search_cost,
-        comp_partial = act_cost + search_cost/2,
+        comp_zilch = act_cost + (base_cost + search_cost),
+        comp_partial = act_cost + (base_cost + search_cost)/2,
         comp_full = act_cost,
     )
 end
 
 
 prms = reparametrize.(grid(;
-    S = 10,
+    S = 100,
+    G = 1,
     # D = 1 .* 3 .^ (1:5),
     D = [4, 20, 100, 500],
-
+    base_cost = 10,
     act_cost = 1:10,
-    search_cost = 2:2:24,
+    search_cost = 1:5,
 ))
 
 
@@ -112,24 +113,27 @@ prms = reparametrize.(grid(;
 dataframe(compute_costs, prms) |> write_csv("costs-idealized.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized.csv")
 
-
+df = dataframe(compute_costs, prms)
+@rtransform! df :asymptotic_advantage = (:bespoke_cost - :asymptotic_cost) / :base_cost
+println(minimum(df.asymptotic_advantage))
+prms[argmin(df.asymptotic_advantage)]
 # %% --------
 
-prms = reparametrize.(grid(;
-    S = 4,
-    D = 2 .^ (1:6),
-    ε = 0.05,
-    β = 2.0,
+# prms = reparametrize.(grid(;
+#     S = 4,
+#     D = 2 .^ (1:6),
+#     ε = 0.05,
+#     β = 2.0,
 
-    act_cost = 0:10,
-    search_cost = 0:2:24,
-))
+#     act_cost = 0:10,
+#     search_cost = 0:2:24,
+# ))
 
-dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
-@time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
+# dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
+# @time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
 
 
-# %% --------
+# # %% --------
 
-prm = reparametrize((;act_cost=0, search_cost=0))
-Costs(; subset(prm, fieldnames(Costs))...)
+# prm = reparametrize((;act_cost=0, search_cost=0))
+# Costs(; subset(prm, fieldnames(Costs))...)
