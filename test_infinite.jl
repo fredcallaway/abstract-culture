@@ -8,15 +8,15 @@ include("test_utils.jl")
 test_envs = create_test_objects(splatify(InfiniteEnv), (
     S = (1, 50), 
     D = (0, 100), 
-    p_0 = (0., 1.), 
-    p_r = (0., 1.)
+    b0c0 = (0., 1.), 
+    b0c1 = (0., 1.)
 ))
 
 
 @testset "observation_probabilities sum to 1" begin
     foreach(test_envs) do env
         foreach([0., rand(), 1.]) do c
-            P = observation_probabilities(env.S, env.D, c)
+            P = observation_probabilities(env, CompPop(c))
             @test sum(P) ≈ 1
         end
     end
