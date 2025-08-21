@@ -51,7 +51,9 @@ load_evolution <- function(version) {
 
 # %% ===== idealized ==========================================================
 
-costs <- load_costs('idealized')
+costs <- load_costs('idealized') %>% 
+    filter(bespoke_zilch < comp_zilch) %>% 
+    filter(comp_partial < bespoke_zilch)
 evolution <- load_evolution('idealized')
 FIGS_PATH <- "figs/cost/idealized-"
 
@@ -124,14 +126,9 @@ figure_wrap("costs-full", nrow=3,
 )
 
 
-# %% --------
-
-
-
-
-
-
 # %% ===== predicted ==========================================================
+
+stop("don't run this")
 
 costs <- load_costs('predicted') %>% filter(search_cost >= 10)
 evolution <- load_evolution('predicted') %>% filter(search_cost >= 10)

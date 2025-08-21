@@ -88,8 +88,9 @@ end
 
 
 prms = reparametrize.(grid(;
-    S = 5,
-    D = 1 .* 3 .^ (1:5),
+    S = 10,
+    # D = 1 .* 3 .^ (1:5),
+    D = [4, 20, 100, 500],
 
     act_cost = 1:10,
     search_cost = 2:2:24,
