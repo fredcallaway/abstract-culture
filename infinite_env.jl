@@ -147,6 +147,9 @@ function fixed_points(env::InfiniteEnv; raw=false)
         c2 - c
     end
     raw && return fixed
+    if isempty(fixed)  # shouldn't happen
+        return fixed
+    end
 
     # handle edge cases with numerical problems
     if fixed[end] == 0.

@@ -179,7 +179,7 @@ function softmax!(x)
     x .= exp.(x .- maximum(x))
     x ./= sum(x)
 end
-softmax(x) = softmax!(copy(x))
+softmax(x) = softmax!(float.(x))  # also copies data
 
 function softmax!(x, i)
     x .= exp.(x .- maximum(x))
