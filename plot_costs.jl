@@ -170,19 +170,19 @@ dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG-big.csv")
 # %% --------
 
 prms = reparametrize.(grid(;
-    S = 1:6,
-    G = 1:6,
-    D = [2, 4, 8, 16, 32],
+    S = 1,
+    G = 3:10,
+    D = 2:2:16,
     ε = 0.05,
     β = 2.0,
     
     base_cost = 100,
-    act_cost = 30:5:50,
-    search_cost = 0:2:24,
+    act_cost = 40:2:50,
+    search_cost = 0:2:10,
 ))
 
 prms = filter(prms) do prm
-    prm.S * prm.G > 2 && prm.S ≤ prm.G
+    prm.S * prm.G ≥ 3 && prm.S ≤ prm.G
 end
 
 dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")

@@ -188,23 +188,28 @@ best_prm <- costs %>%
 best_prm %>% pivot_longer(everything()) %>% print(n=100)
 
 
-# %% --------
 # S G D act_cost search_cost
 
 figure("tmp", costs %>% 
     filter(S == 1) %>% 
+    filter(asymptotic_advantage < -.1) %>%
     # group_by(S, G, act_cost, search_cost) %>%
     # slice_min(asymptotic_advantage) %>%
     ungroup() %>%
     plot_advantage(act_cost, search_cost, fill=asymptotic_advantage, midpoint=0) +
-    facet_grid(D ~ G)
+    facet_grid(G ~ D)
 )
 
 
 # %% --------
 
 figure("evolution", evolution %>% 
-    right_join(best_prm) %>% 
+    right_join(
+        costs %>% 
+        filter(G==8) %>% 
+        slice_min(asymptotic_advantage)
+    ) %>% 
+    # right_join(best_prm) %>% 
     filter(gen > 1, gen < 11) %>% 
     plot_evolution
 )
