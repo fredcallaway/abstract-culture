@@ -151,14 +151,13 @@ prms = reparametrize.(grid(;
     # D = [80, 100, 120],
     D = 20,
     base_cost = 100,
-    act_cost = [40, 45, 50],
-    search_cost = [0, 1, 2],
+    act_cost = 30:5:50,
+    search_cost = 0:2:10,
 ))
 
 prms = filter(prms) do prm
     prm.S * prm.G > 2
 end
-
 
 df = dataframe(compute_costs, prms)
 @rtransform! df :asymptotic_advantage = (:bespoke_cost - :asymptotic_cost) / :base_cost
@@ -170,21 +169,26 @@ dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG-big.csv")
 
 # %% --------
 
-# prms = reparametrize.(grid(;
-#     S = 4,
-#     D = 2 .^ (1:6),
-#     ε = 0.05,
-#     β = 2.0,
+prms = reparametrize.(grid(;
+    S = 1:6,
+    G = 1:6,
+    D = [2, 4, 8, 16, 32],
+    ε = 0.05,
+    β = 2.0,
+    
+    base_cost = 100,
+    act_cost = 30:5:50,
+    search_cost = 0:2:24,
+))
 
-#     act_cost = 0:10,
-#     search_cost = 0:2:24,
-# ))
+prms = filter(prms) do prm
+    prm.S * prm.G > 2 && prm.S ≤ prm.G
+end
 
-# dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
-# @time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
+dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
+@time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
 
+# %% --------
 
-# # %% --------
-
-# prm = reparametrize((;act_cost=0, search_cost=0))
-# Costs(; subset(prm, fieldnames(Costs))...)
+prm = reparametrize((;act_cost=0, search_cost=0))
+Costs(; subset(prm, fieldnames(Costs))...)

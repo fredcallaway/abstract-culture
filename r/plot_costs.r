@@ -174,47 +174,40 @@ figure("tmp", SG_costs %>%
 
 
 
-# # %% ===== predicted ==========================================================
+# %% ===== predicted ==========================================================
 
-# stop("don't run this")
 
-# costs <- load_costs('predicted') %>% filter(search_cost >= 10)
-# evolution <- load_evolution('predicted') %>% filter(search_cost >= 10)
-# FIGS_PATH <- "figs/cost/predicted-"
+costs <- load_costs('predicted')
+evolution <- load_evolution('predicted')
+FIGS_PATH <- "figs/cost/predicted-"
 
-# # %% --------
 
-# last_gen <- evolution %>% filter(gen == 100) %>% select(1:6, comp100 = compositionality) %>% print
+best_prm <- costs %>% 
+    slice_min(asymptotic_advantage)
 
-# best_prm <- costs %>% 
-#     left_join(last_gen) %>% 
-#     filter(comp100 > .3) %>% 
-#     slice_min(asymptotic_advantage) %>% 
-#     # select(D, search_cost, act_cost) %>% 
-#     print
+best_prm %>% pivot_longer(everything()) %>% print(n=100)
 
-# best_prm %>% select(comp_advantage, asymptotic_advantage, asymptotic_compositionality, comp100)
 
-# # %% --------
+# %% --------
+# S G D act_cost search_cost
 
-# figure("tmp", costs %>% 
-#     mutate(asymptotic_advantage = pmin(0, asymptotic_advantage)) %>% 
-#     plot_advantage(search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
-#     facet_wrap(~D, nrow=1)
-# )
+figure("tmp", costs %>% 
+    filter(S == 1) %>% 
+    # group_by(S, G, act_cost, search_cost) %>%
+    # slice_min(asymptotic_advantage) %>%
+    ungroup() %>%
+    plot_advantage(act_cost, search_cost, fill=asymptotic_advantage, midpoint=0) +
+    facet_grid(D ~ G)
+)
 
-# # %% --------
 
-# # best_prm <- costs %>% 
-# #     filter(search_cost > 0) %>% 
-# #     slice_min(asymptotic_advantage) %>% 
-# #     select(D, search_cost, act_cost)
+# %% --------
 
-# figure("evolution", evolution %>% 
-#     right_join(best_prm) %>% 
-#     filter(gen < 11) %>% 
-#     plot_evolution
-# )
+figure("evolution", evolution %>% 
+    right_join(best_prm) %>% 
+    filter(gen > 1, gen < 11) %>% 
+    plot_evolution
+)
 
 # # %% --------
 
