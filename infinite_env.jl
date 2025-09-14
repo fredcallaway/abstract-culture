@@ -185,26 +185,6 @@ FullPop{S,G}(c::Float64) where {S,G} = FullPop{S,G}(
 )
 FullPop(S::Int, G::Int, c::Float64) = FullPop{S,G}(c)
 
-function old_transition(env::InfiniteEnv, pop::FullPop)
-    (;S, D) = env
-    @assert env.G == S
-    @assert env.agent_policy.b0c1 == 1.  # TODO: handle other cases
-    @assert env.agent_policy.b0c0 == 0.
-
-    (;B, C) = pop
-    
-    B1 = similar(pop.B); C1 = similar(pop.C)
-    for i in 1:S, j in 1:S
-        term1 = 1/S^2
-        term2 = (1 - B[i,j])^D
-        term3_inner = (sum(C[i, :]) + sum(C[:, j]) - C[i,j]) / (1 - B[i,j])
-        term3 = 1 - (1 - term3_inner)^D
-        C1[i,j] = term1 * term2 * term3
-        B1[i, j] = term1 - C1[i,j]
-    end
-    FullPop{S, S}(C1, B1)
-end
-
 function transition(env::InfiniteEnv, pop::FullPop)
     (;S, G, D) = env
     @assert env.agent_policy.b0c1 == 1.  # TODO: handle other cases

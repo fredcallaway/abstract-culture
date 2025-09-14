@@ -48,12 +48,29 @@ end
 
 # %% --------
 
-env = InfiniteEnv(S=4, G=4, D=8)
+sg_envs = create_test_objects(splatify(InfiniteEnv), (
+    S = (1, 20),
+    G = (1, 20),
+    D = (0, 100),
+), n_rand=2)
 
-pop = FullPop{4,4}(.1)
-pop2 = transition(env, pop)
-sum(pop2.B) + sum(pop2.C) ≈ 1.
+@testset "FullPop matches CompPop" begin
+    
+    for env in sg_envs
+        S = env.S
+        G = env.G
+        c = rand()
 
-pop3 = old_transition(env, pop)
+        comp = CompPop(c)
+        full = FullPop{S,G}(c)
 
-pop2 == pop3
+        # @test compositional_rate(full) ≈ c
+        @test compositional_rate(comp) ≈ c atol=1e-8
+        @test compositional_rate(full) ≈ c atol=1e-8
+
+
+        # @test transition(env, full) |> compositional_rate ≈ transition(env, c)
+        @test transition(env, comp) |> compositional_rate ≈ transition(env, c) atol=1e-8
+        @test transition(env, full) |> compositional_rate ≈ transition(env, c) atol=1e-8
+    end
+end
