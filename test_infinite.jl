@@ -46,3 +46,14 @@ end
     end
 end
 
+# %% --------
+
+env = InfiniteEnv(S=4, G=4, D=8)
+
+pop = FullPop{4,4}(.1)
+pop2 = transition(env, pop)
+sum(pop2.B) + sum(pop2.C) ≈ 1.
+
+pop3 = old_transition(env, pop)
+
+pop2 == pop3

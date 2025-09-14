@@ -185,9 +185,9 @@ FullPop{S,G}(c::Float64) where {S,G} = FullPop{S,G}(
 )
 FullPop(S::Int, G::Int, c::Float64) = FullPop{S,G}(c)
 
-function transition(env::InfiniteEnv, pop::FullPop)
-    error("needs update")
+function old_transition(env::InfiniteEnv, pop::FullPop)
     (;S, D) = env
+    @assert env.G == S
     @assert env.agent_policy.b0c1 == 1.  # TODO: handle other cases
     @assert env.agent_policy.b0c0 == 0.
 
@@ -202,7 +202,32 @@ function transition(env::InfiniteEnv, pop::FullPop)
         C1[i,j] = term1 * term2 * term3
         B1[i, j] = term1 - C1[i,j]
     end
-    FullPop{S}(C1, B1)
+    FullPop{S, S}(C1, B1)
+end
+
+function transition(env::InfiniteEnv, pop::FullPop)
+    (;S, G, D) = env
+    @assert env.agent_policy.b0c1 == 1.  # TODO: handle other cases
+    @assert env.agent_policy.b0c0 == 0.
+
+    (;B, C) = pop
+    
+    B1 = similar(pop.B); C1 = similar(pop.C)
+    for s in 1:S, g in 1:G
+        p_task = 1/(S*G)
+        p_not_bespoke = (1 - B[s,g])
+        p_none_bespoke = p_not_bespoke^D
+
+        p_s_single = sum(C[s, :])
+        p_g_single = sum(C[:, g])
+        p_either_single = p_s_single + p_g_single - C[s,g]
+        p_either_single_conditional = p_either_single / p_not_bespoke
+        p_either_any_conditional = 1 - (1 - p_either_single_conditional)^D
+        
+        C1[s,g] = p_task * p_none_bespoke * p_either_any_conditional
+        B1[s,g] = p_task - C1[s,g]
+    end
+    FullPop{S,G}(C1, B1)
 end
 
 
