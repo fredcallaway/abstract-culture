@@ -38,7 +38,7 @@ plot_advantage_binary <- function(data, ..., fill, midpoint=0) {
 }
 
 load_costs <- function(version) {
-    read_csv(glue("{RESULTS_PATH}/costs-{version}.csv")) %>% 
+    read_csv(glue("{RESULTS_PATH}/costs-{version}.csv"), show_col_types=FALSE) %>% 
     mutate(
         comp_advantage = (bespoke_cost - comp_cost) / base_cost,
         asymptotic_advantage = (bespoke_cost - asymptotic_cost) / base_cost
@@ -46,7 +46,7 @@ load_costs <- function(version) {
 }
 
 load_evolution <- function(version) {
-    read_csv(glue("{RESULTS_PATH}/evolution-{version}.csv")) %>% 
+    read_csv(glue("{RESULTS_PATH}/evolution-{version}.csv"), show_col_types=FALSE) %>% 
         mutate(score = 1 - relative(cost, lo=0, hi=base_cost))
 }
 
@@ -72,17 +72,50 @@ best_prm %>% pivot_longer(everything())
 
 # %% --------
 
+# this selects the region that should be colored GREEN
+costs %>% 
+    right_join(select(best_prm, S, D)) %>% 
+    filter(comp_advantage > 0)
+
+# %% --------
+
 figure("cost-simple", w=1.5,
     costs %>% 
     filter(search_cost <= 20) %>% 
-    right_join(select(best_prm, S, D)) %>% 
+    # right_join(select(best_prm, S, D)) %>% 
     plot_advantage(search_cost, act_cost, fill=asymptotic_compositionality, midpoint=0) +
+    geom_raster(color=GREEN) +
     # geom_rect(aes(xmin=1, xmax=21, ymin=0.5, ymax=3.5), fill=NA, color=GREEN, linewidth=1) +
     geom_point(data=best_prm) +
-    expand_limits(fill=c(0, 1))
+    expand_limits(fill=c(0, 1)) +
     # coord_fixed(ratio=2.5) +
-    # scale_fill_gradient(low=RED, high=GREEN,) +
+    facet_grid(S~D),
+)
+
+# %% --------
+
+figure("cost-simple-alt", w=1.5, costs %>% 
+    filter(search_cost <= 20) %>% 
+    mutate(class = case_when(
+        asymptotic_compositionality > 0.9 & comp_advantage > 0 ~ "both",
+        asymptotic_compositionality > 0.9 ~ "evolves",
+        comp_advantage > 0 ~ "good",
+        TRUE ~ "neither"
+    )) %>% 
+    ggplot(aes(search_cost, act_cost, fill=class)) +
+    geom_tile() +
+    scale_colour_manual(values=c(
+        both = YELLOW,
+        good = GREEN,
+        evolves = C_COMP,
+        neither = WHITE
+    ), aesthetics=c("fill", "colour")) +
+    no_gridlines +
+    facet_grid(S~D) +
+    # geom_point(data=best_prm)
+    # coord_fixed(ratio=2.5) +
     # facet_wrap(~D, nrow=1),
+    theme()
 )
 
 

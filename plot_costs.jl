@@ -92,7 +92,7 @@ end
 prms = reparametrize.(grid(;
     S = 1,
     G = 100,
-    β = 1.0,
+    # β = 1.0,
     # D = 1 .* 3 .^ (1:5),
     # D = [2, 20, 100, 200],
     # D = [80, 100, 120],
@@ -108,10 +108,8 @@ df = dataframe(compute_costs, prms)
 println(minimum(df.asymptotic_advantage))
 prms[argmin(df.asymptotic_advantage)]
 
-# %% --------
-
-dataframe(compute_costs, prms) |> write_csv("costs-idealized.csv")
-@time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized.csv")
+df |> write_csv("costs-idealized.csv")
+dataframe(compute_evolution, prms) |> write_csv("evolution-idealized.csv")
 
 # %% --------
 
@@ -138,6 +136,7 @@ println(minimum(df.asymptotic_advantage))
 prms[argmin(df.asymptotic_advantage)]
 
 # %% --------
+
 dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized-SG.csv")
 
