@@ -84,7 +84,7 @@ figure("cost-simple", w=1.5,
     filter(search_cost <= 20) %>% 
     # right_join(select(best_prm, S, D)) %>% 
     plot_advantage(search_cost, act_cost, fill=asymptotic_compositionality, midpoint=0) +
-    geom_raster(color=GREEN) +
+    # geom_raster(color=GREEN) +
     # geom_rect(aes(xmin=1, xmax=21, ymin=0.5, ymax=3.5), fill=NA, color=GREEN, linewidth=1) +
     geom_point(data=best_prm) +
     expand_limits(fill=c(0, 1)) +
@@ -108,7 +108,7 @@ figure("cost-simple-alt", w=1.5, costs %>%
         both = YELLOW,
         good = GREEN,
         evolves = C_COMP,
-        neither = WHITE
+        neither = GRAY
     ), aesthetics=c("fill", "colour")) +
     no_gridlines +
     facet_grid(S~D) +
@@ -128,7 +128,6 @@ figure("cost-evolution", evolution %>%
     plot_evolution
 )
 
-
 # %% --------
 
 figure_wrap("costs-full", nrow=3,
@@ -144,19 +143,29 @@ figure_wrap("costs-full", nrow=3,
 )
 
 # %% ===== SG =================================================================
+
 SG_costs <- load_costs('idealized-SG')  
 
+best_prm <- SG_costs %>% 
+    slice_min(asymptotic_advantage)
+
+best_prm %>% pivot_longer(everything()) %>% print(n=100)
+
 figure("tmp", SG_costs %>% 
-    mutate(tasks = factor(S * G), skew=factor(S)) %>% 
-    plot_advantage(tasks, skew, fill=asymptotic_advantage, midpoint=0) +
-    facet_grid(skew~D, nrow=1)
+    # mutate(tasks = factor(S * G), skew=factor(S)) %>% 
+    plot_advantage(S, G, fill=asymptotic_advantage, midpoint=0) +
+    facet_grid(~D)
 )
 
 # %% --------
 
-figure("tmp", load_costs('idealized') %>% 
-    plot_advantage(search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
-    facet_wrap(~D, nrow=1)
+SG_evolution <- load_evolution('idealized-SG')
+
+figure("tmp", SG_evolution %>% 
+    right_join(best_prm) %>% 
+    filter(gen > 1) %>% 
+    # filter(gen < 50) %>% 
+    plot_evolution
 )
 
 # %% ===== SG big =================================================================
@@ -167,11 +176,6 @@ figure("tmp", SG_costs %>%
     plot_advantage(S, G, fill=asymptotic_advantage, midpoint=0) +
     facet_grid(search_cost~act_cost)
 )
-
-# %% --------
-
-
-
 
 
 # %% ===== predicted ==========================================================

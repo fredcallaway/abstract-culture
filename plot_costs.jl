@@ -115,16 +115,13 @@ prms = reparametrize.(grid(;
 ))
 
 prms = filter(prms) do prm
-    prm.S * prm.G > 2
+    prm.S * prm.G > 2 && prm.S ≤ prm.G
 end
-
 
 df = dataframe(compute_costs, prms)
 @rtransform! df :asymptotic_advantage = (:bespoke_cost - :asymptotic_cost) / :base_cost
-println(minimum(df.asymptotic_advantage))
-prms[argmin(df.asymptotic_advantage)]
-
-# %% --------
+# println(minimum(df.asymptotic_advantage))
+# prms[argmin(df.asymptotic_advantage)]
 
 dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized-SG.csv")
@@ -150,8 +147,8 @@ end
 
 df = dataframe(compute_costs, prms)
 @rtransform! df :asymptotic_advantage = (:bespoke_cost - :asymptotic_cost) / :base_cost
-println(minimum(df.asymptotic_advantage))
-prms[argmin(df.asymptotic_advantage)]
+# println(minimum(df.asymptotic_advantage))
+# prms[argmin(df.asymptotic_advantage)]
 
 dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG-big.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized-SG-big.csv")
@@ -176,8 +173,3 @@ end
 
 dataframe(compute_costs, prms) |> write_csv("costs-predicted.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-predicted.csv")
-
-# %% --------
-
-prm = reparametrize((;act_cost=0, search_cost=0))
-Costs(; subset(prm, fieldnames(Costs))...)
