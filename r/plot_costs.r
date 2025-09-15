@@ -53,22 +53,11 @@ load_evolution <- function(version) {
 
 # %% ===== idealized ==========================================================
 
-costs <- load_costs('idealized') %>% 
-    filter(
-        # bespoke_zilch < comp_zilch,
-        # comp_partial < bespoke_zilch
-    ) 
+costs <- load_costs('idealized')
 evolution <- load_evolution('idealized')
 
-# last_gen <- evolution %>% filter(gen == 100) %>% select(1:4, comp100 = compositionality)
-
-best_prm <- costs %>% 
-    # left_join(last_gen, by=c("S", "G", 'D', 'base_cost', 'act_cost', 'search_cost')) %>% filter(comp100 > .01) %>% 
-    # filter(asymptotic_compositionality > 0.8) %>% 
-    slice_min(asymptotic_advantage)
-
+best_prm <- costs %>% slice_min(asymptotic_advantage)
 best_prm %>% pivot_longer(everything())
-
 
 # %% --------
 
@@ -167,16 +156,6 @@ figure("tmp", SG_evolution %>%
     # filter(gen < 50) %>% 
     plot_evolution
 )
-
-# %% ===== SG big =================================================================
-
-SG_costs <- load_costs('idealized-SG-big')  
-
-figure("tmp", SG_costs %>% 
-    plot_advantage(S, G, fill=asymptotic_advantage, midpoint=0) +
-    facet_grid(search_cost~act_cost)
-)
-
 
 # %% ===== predicted ==========================================================
 

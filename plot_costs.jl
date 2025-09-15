@@ -4,7 +4,7 @@ nprocs() == 1 && addprocs()
 @everywhere include("model_infinite.jl")
 
 DEFAULT_PARALLEL = true
-RESULTS_PATH = "results/cost-SG/"
+RESULTS_PATH = "results/cost/"
 
 # %% --------
 
@@ -105,10 +105,10 @@ dataframe(compute_evolution, prms) |> write_csv("evolution-idealized.csv")
 prms = reparametrize.(grid(;
     S = 1:14,
     G = 1:14,
-    # D = 1 .* 3 .^ (1:5),
+    D = 1 .* 3 .^ (1:5),
     # D = [2, 20, 100, 200],
     # D = [80, 100, 120],
-    D = [2, 20, 100, 200],
+    # D = [2, 20, 100, 200],
     base_cost = 100,
     act_cost = 49,
     search_cost = 1,
@@ -125,33 +125,6 @@ df = dataframe(compute_costs, prms)
 
 dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG.csv")
 @time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized-SG.csv")
-
-# %% --------
-
-prms = reparametrize.(grid(;
-    S = 1:14,
-    G = 1:14,
-    # β = 1.,
-    # D = 1 .* 3 .^ (1:5),
-    # D = [2, 20, 100, 200],
-    # D = [80, 100, 120],
-    D = 20,
-    base_cost = 100,
-    act_cost = 30:5:50,
-    search_cost = 0:2:10,
-))
-
-prms = filter(prms) do prm
-    prm.S * prm.G > 2
-end
-
-df = dataframe(compute_costs, prms)
-@rtransform! df :asymptotic_advantage = (:bespoke_cost - :asymptotic_cost) / :base_cost
-# println(minimum(df.asymptotic_advantage))
-# prms[argmin(df.asymptotic_advantage)]
-
-dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG-big.csv")
-@time dataframe(compute_evolution, prms) |> write_csv("evolution-idealized-SG-big.csv")
 
 # %% --------
 
