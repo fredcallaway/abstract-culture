@@ -36,11 +36,11 @@ Base.getindex(ir::InfoRates, info::Info) = getindex(ir, info.bespoke + 1, info.c
     comp_full::Float64 = 0.
 end
 
-function cost(C::Costs, bespoke_known::Int, comp_known::Int, comp_solution::Bool)
+function cost(C::Costs, info::Info, comp_solution::Bool)
     if comp_solution
-        (C.comp_zilch, C.comp_partial, C.comp_full)[comp_known + 1]
+        (C.comp_zilch, C.comp_partial, C.comp_full)[info.comp + 1]
     else
-        (C.bespoke_zilch, C.bespoke_full)[bespoke_known + 1]
+        (C.bespoke_zilch, C.bespoke_full)[info.bespoke + 1]
     end
 end
 
@@ -71,8 +71,9 @@ bespoke_policy() = zeros(InfoRates)
 comp_policy() = ones(InfoRates)
 
 function rational_policy(C::Costs; β=1e10, ε=0.)
-    map(product(0:1, 0:2)) do (bespoke_known, comp_known)
-        rel_cost = cost(C, bespoke_known, comp_known, true) - cost(C, bespoke_known, comp_known, false)
+    map(product(0:1, 0:2)) do (bk, ck)
+        info = Info(bk, ck)
+        rel_cost = cost(C, info, true) - cost(C, info, false)
         p = logistic(β * -rel_cost)
         lapse(p, ε)
     end |> InfoRates

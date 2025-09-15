@@ -105,7 +105,8 @@ end
 
 # %% ==================== acting ====================
 
-cost(C::Costs, beh::Behavior) = cost(C, beh.info.bespoke, beh.info.comp, beh.compositional)
+cost(C::Costs, beh::Behavior) = cost(C, beh.info, beh.compositional)
+cost(C::Costs, pop::FinitePop) = sum(cost(C, beh) for beh in pop) / length(pop)
 
 relevant_info(knowledge::Knowledge, s, g) = Info(
     knowledge.bespoke[s,g], 

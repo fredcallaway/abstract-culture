@@ -26,13 +26,24 @@ test_envs = create_test_objects((
 
         c = round(rand(), digits=pwr-1)
 
-        icomp = transition(imodel, CompPop(c)) |> compositional_rate
-        fcomp = transition(fmodel, initial_population(fmodel, c)) |> compositional_rate
+        fpop = transition(fmodel, initial_population(fmodel, c))
+        ipop = transition(imodel, FreqPop(CompPop(c)))
 
-        icomp, fcomp
+        icomp = compositional_rate(ipop)
+        fcomp = compositional_rate(fpop)
+
+        costs = Costs(rand(), rand(), rand(), rand(), rand())
+        icost = cost(costs, ipop)
+        fcost = cost(costs, fpop)
+
+        icomp, fcomp, icost, fcost
     end
 
-    for (icomp, fcomp) in results
+    @testset "Compositional rate" for (icomp, fcomp) in results
         @test icomp ≈ fcomp atol=1e-3
     end
-end
+
+    @testset "Costs" for (_, _, icost, fcost) in results
+        @test icost ≈ fcost atol=1e-3
+    end
+end;

@@ -1,13 +1,19 @@
+include("model_finite.jl")
+include("model_infinite.jl")
 
-prm = reparametrize((;S=4, D=16, act_cost=8, search_cost=2, β=2.0, ε=0.05))
-env, C = get_env_costs(prm)
+# %% --------
 
-compute_evolution(prm)
-env.agent_policy
-simulate(env, 1; init=FreqPop())
+S = 4
+G = 3
+D = 8
+c = .1
 
+fmodel = FiniteModel(;S, G, D, N=1_000_000)
+imodel = InfiniteModel(;S, G, D)
 
-simulate(env, 10; init=FreqPop())
-observation_probabilities(env, FreqPop())
+fpop = transition(fmodel, initial_population(fmodel, c))
+ipop = transition(imodel, FreqPop(CompPop(c)))
 
+costs = Costs(100, 10, 150, 75, 50)
 
+@test cost(costs, fpop) ≈ cost(costs, ipop) atol=0.1
