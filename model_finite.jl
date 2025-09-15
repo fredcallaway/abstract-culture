@@ -47,12 +47,19 @@ function compositional_rate(pop::FinitePop)
 end
 
 function initial_population(env::FiniteModel, ::Nothing=nothing)
-    [Behavior(0, 0, false, Info(0, 0)) for _ in 1:env.K, _ in 1:env.N]
+    # [Behavior(0, 0, false, Info(0, 0)) for _ in 1:env.K, _ in 1:env.N]
+    (;S, G, N, K) = env
+    info = Info(0, 0)
+    p_comp = env.agent_policy[info]
+    map(Iterators.product(1:K, 1:N)) do _
+        use_comp = rand(Bernoulli(p_comp))
+        Behavior(rand(1:S), rand(1:G), use_comp, info)
+    end
 end
 
 function initial_population(env::FiniteModel, init::Float64)
     (;S, G, N, K) = env
-    compositional = falses(N * K)
+    compositional = falses(K, N)
     
     n_comp = init * N * K
     if abs(n_comp - round(Int, n_comp)) > 1e-3
@@ -61,10 +68,9 @@ function initial_population(env::FiniteModel, init::Float64)
     for i in sample(eachindex(compositional), round(Int,n_comp); replace=false)
         compositional[i] = true
     end
-    X = map(compositional) do comp
+    map(compositional) do comp
         Behavior(rand(1:S), rand(1:G), comp, Info(0, 0))
     end
-    reshape(X, (K, N))
 end
 
 initial_population(::FiniteModel, init::FinitePop) = init

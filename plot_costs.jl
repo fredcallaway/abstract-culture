@@ -130,14 +130,13 @@ dataframe(compute_costs, prms) |> write_csv("costs-idealized-SG.csv")
 
 prms = reparametrize.(grid(;
     S = 1,
-    G = 3:10,
-    D = 2:2:16,
-    ε = 0.05,
-    β = 2.0,
-    
+    G = 5:8,
+    D = 1 .* (4:2:12),
     base_cost = 100,
-    act_cost = 40:2:50,
-    search_cost = 0:2:10,
+    act_cost = 20:5:50,
+    search_cost = 0:5:30,
+    ε = 0.05,
+    β = 0.1,
 ))
 
 prms = filter(prms) do prm

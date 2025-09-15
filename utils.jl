@@ -19,9 +19,22 @@ select(x::NamedTuple, args...) = NamedTupleTools.select(x, args...)
 subset(x::NamedTuple, fields) = select(x, intersect(propertynames(x), fields))
 
 
+macro default(exp)
+    local e = :($exp)
+    @assert e.head == :(=)
+    left, right = e.args
+    has_type = left isa Expr && left.head == :(::)  # @ifundef x::Int = 1
+    var = has_type ? left.args[1] : left
+    isdefined(Main, var) ? :($(var)) : :($(esc(exp)))
+end
 
-RESULTS_PATH = "results/"
+@default RESULTS_PATH::String = "results/"
+
 function write_csv(name, df, path=RESULTS_PATH; quiet=false)
+    if !occursin("/", path)
+        @warn "adding trailing / to results path $path"
+        path = path * "/"
+    end
     if !isdir(dirname(path))
         mkpath(dirname(path))
     end
@@ -331,7 +344,7 @@ function splatify(f::Union{Function,DataType})
     foo
 end
 
-DEFAULT_PARALLEL::Bool = @isdefined(DEFAULT_PARALLEL) ? DEFAULT_PARALLEL : false
+@default DEFAULT_PARALLEL::Bool = false
 function dataframe(f, params; parallel=DEFAULT_PARALLEL, pbar=parallel, splat=false)
 
     map_fun = if pbar

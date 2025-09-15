@@ -2,23 +2,29 @@
 
 source("base.r")
 RESULTS_PATH <- "../results/cost/"
-FIGS_PATH <- "figs/cost/idealized-"
+FIGS_PATH <- "figs/cost/"
 
-plot_evolution <- function(data) {
-    data %>% ggplot(aes(gen)) +
+double_y_axis <- function(name_left, name_right, color_left, color_right) {
+    list(
+        scale_y_continuous(
+            name = name_left,
+            sec.axis = sec_axis(~. * 1, name = name_right)
+        ),
+        theme(
+            axis.title.y.left = element_text(color = color_left),
+            axis.title.y.right = element_text(color = color_right),
+            axis.text.y.left = element_text(color = color_left),
+            axis.text.y.right = element_text(color = color_right)
+        )
+    )
+}
+
+plot_evolution <- function(data, ...) {
+    data %>% ggplot(aes(gen, ...)) +
         # geom_hline(yintercept=10, color=GREEN, linetype="dashed") +
         geom_line(aes(y = score), color=GREEN, linewidth=1) +
         geom_line(aes(y = compositionality), color = C_COMP, linewidth=1) +
-        scale_y_continuous(
-            name = "compositionality",
-            sec.axis = sec_axis(~. * 1, name = "relative reward")
-        ) +
-        theme(
-            axis.title.y.left = element_text(color = C_COMP),
-            axis.title.y.right = element_text(color = GREEN),
-            axis.text.y.left = element_text(color = C_COMP),
-            axis.text.y.right = element_text(color = GREEN)
-        ) +
+        double_y_axis("compositionality", "relative reward", C_COMP, GREEN) +
         expand_limits(y = c(0, 1)) +
         labs(x = "generation")
 }
@@ -161,7 +167,6 @@ figure("tmp", SG_evolution %>%
 
 costs <- load_costs('predicted')
 evolution <- load_evolution('predicted')
-FIGS_PATH <- "figs/cost/predicted-"
 
 best_prm <- costs %>% 
     slice_min(asymptotic_advantage)
@@ -171,8 +176,8 @@ best_prm %>% pivot_longer(everything()) %>% print(n=100)
 # S G D act_cost search_cost
 
 figure("tmp", costs %>% 
-    filter(S == 1) %>% 
-    filter(asymptotic_advantage < -.1) %>%
+    # filter(S == 1) %>% 
+    # filter(asymptotic_advantage < -.1) %>%
     # group_by(S, G, act_cost, search_cost) %>%
     # slice_min(asymptotic_advantage) %>%
     ungroup() %>%
@@ -195,14 +200,62 @@ figure("evolution", evolution %>%
 
 # %% ===== predicted with finite population ===================================
 
-RESULTS_PATH <- "../results/cost-finite"
-FIGS_PATH <- "figs/cost/finite-"
+evolution <- load_evolution('finite')
+BASE_COST <- 100  # assumption
 
-evolution <- load_evolution('simple')
+costs <- evolution %>% 
+    filter(gen == 2 | gen == 12) %>%
+    group_by(S,G,D,act_cost,search_cost,gen) %>% 
+    summarise(across(c(compositionality, cost), mean)) %>% 
+    pivot_wider(names_from=gen, values_from=c(compositionality, cost)) %>% 
+    filter(compositionality_12 > compositionality_2 + .2) %>% 
+    mutate(advantage = (cost_2 - cost_12) / BASE_COST)
 
-figure("evolution", evolution %>% 
-    # right_join(best_prm) %>% 
-    # filter(gen > 1, gen < 11) %>% 
-    plot_evolution
+
+figure("finite-costs", costs %>% 
+    plot_advantage(act_cost, search_cost, fill=advantage, midpoint=0) +
+    facet_grid(G ~ D) +
+    theme()
 )
-evolution
+
+# %% --------
+
+probs <- evolution %>% 
+    select(S,G,D,act_cost,search_cost,gen,pop,compositionality,cost) %>% 
+    filter(gen == 2 | gen == 12) %>%
+    pivot_wider(names_from=gen, values_from=c(compositionality, cost)) %>% 
+    group_by(S,G,D,act_cost,search_cost) %>% 
+    mutate(
+        more_comp = compositionality_12 > compositionality_2 * 1.0,
+        more_cost = cost_12 > cost_2 * 1.0,
+        success = more_comp & more_cost,
+    ) %>%
+    summarise(across(c(more_comp, more_cost, success), mean)) %>%
+    identity
+
+figure("finite-probs", probs %>% 
+    ggplot(aes(act_cost, search_cost, fill=success)) +
+    geom_raster() +
+    scale_fill_continuous_diverging(mid=0.5) +
+    labs(fill="cost and comp increase") +
+    facet_grid(G ~ D) +
+    theme()
+)
+
+# %% --------
+
+figure("finite-evolution", evolution %>% 
+    filter(act_cost == 40, search_cost == 10, G==7, D==8) %>% 
+    filter(pop < 10) %>% 
+    filter(gen > 1) %>%
+    ggplot(aes(gen)) +
+    # geom_hline(yintercept=10, color=GREEN, linetype="dashed") +
+    geom_line(aes(group=pop, y = compositionality), color = C_COMP, linewidth=.4, alpha=0.2) +
+    geom_line(aes(group=pop, y = score), color=GREEN, linewidth=.4, alpha=0.2) +
+    mean_line(mapping=aes(y = compositionality), color = C_COMP, linewidth=1) +
+    mean_line(mapping=aes(y = score), color=GREEN, linewidth=1) +
+    double_y_axis("compositionality", "relative reward", C_COMP, GREEN) +
+    expand_limits(y = c(0, 1)) +
+    labs(x = "generation")
+    # facet_grid(G~D)
+)
