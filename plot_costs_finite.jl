@@ -8,6 +8,8 @@ RESULTS_PATH = "tmp/cost/"
 
 # %% --------
 
+@everywhere REPEATS = 1000
+
 @everywhere function get_env_costs(prm, policy=rational_policy)
     env_prm = subset(prm, fieldnames(FiniteModel))
     cost_prm = subset(prm, fieldnames(Costs))
@@ -20,12 +22,15 @@ end
     env, C = get_env_costs(prm)
     env = mutate(env, agent_policy=make_policy(C))
     sim = simulate(env, 12)
-    imap(sim) do gen, pop
-        (;
-            gen,
-            cost = cost(C, pop),
-            compositionality = compositional_rate(pop),
-        )
+    flatmap(1:REPEATS) do rep
+        imap(sim) do gen, pop
+            (;
+                pop=rep,
+                gen,
+                cost = cost(C, pop),
+                compositionality = compositional_rate(pop),
+            )
+        end
     end
 end
 
@@ -43,7 +48,7 @@ end
 
 # %% --------
 
-@everywhere noisy_rational_policy(C::Costs) = rational_policy(C; β=0.1, ε=0.05)
+@everywhere noisy_rational_policy(C::Costs) = rational_policy(C; β=0.2, ε=0.05)
 
 prms = reparametrize.(grid(;
     S = 1,
@@ -51,11 +56,8 @@ prms = reparametrize.(grid(;
     N = 50,
     D = 1 .* (4:2:10),
     base_cost = 100,
-    act_cost = 0:5:50,
+    act_cost = 20:5:50,
     search_cost = 0:5:30,
-    # act_cost = 40:2:50,
-    # search_cost = 0:2:10,
-    pop = 1:100
 ))
 
 

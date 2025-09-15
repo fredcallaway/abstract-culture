@@ -245,42 +245,44 @@ figure("finite-probs", probs %>%
 
 # %% --------
 
-
 coefs <- evolution %>% 
     group_by(S,G,D,act_cost,search_cost) %>% 
-    group_modify(function(data, grp) {
-        data %>% 
-            regress(compositionality ~ gen, print_table=FALSE) %>%
-            tidy %>% 
-            filter(term == "gen") %>%
-            select(estimate)
-    })
+    summarise(slope = cov(cost, gen) / var(gen))
 
-figure("finite-coefs", coefs %>% 
-    ggplot(aes(act_cost, search_cost, fill=estimate)) +
+figure("finite-cost-slope", coefs %>% 
+    ggplot(aes(act_cost, search_cost, fill=slope)) +
     geom_raster() +
-    scale_fill_continuous_diverging(mid=0.) +
     labs(fill="cost ~ gen") +
     facet_grid(G ~ D) +
+    bluered_pal() +
     theme()
 )
 
 # %% --------
 
+pop_coefs <- evolution %>% 
+    group_by(S,G,D,act_cost,search_cost, pop) %>% 
+    summarise(
+        slope = cov(cost, gen) / var(gen),
+    )
 
-evolution %>% 
-    filter(pop < 3) %>% 
-    group_by(S,G,D,act_cost,search_cost,pop) %>% 
-    group_modify(function(data, grp) {
-        data %>% 
-            regress(cost ~ gen, print_table=FALSE) %>%
-            tidy
-    })
+# %% --------
+
+figure("finite-cost-slope-increases", pop_coefs %>% 
+    summarise(p_increase=mean(slope>0)) %>% 
+    ggplot(aes(act_cost, search_cost, fill=p_increase)) +
+    geom_raster() +
+    labs(fill="P(cost increases)") +
+    facet_grid(G ~ D) +
+    bluered_pal(mid=0.5) +
+    theme()
+)
+
 
 # %% --------
 
 figure("finite-evolution", evolution %>% 
-    filter(act_cost == 40, search_cost == 10, G==7, D==8) %>% 
+    filter(act_cost == 40, search_cost == 0, G==7, D==6) %>% 
     filter(pop < 10) %>% 
     filter(gen > 1) %>%
     ggplot(aes(gen)) +
