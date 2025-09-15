@@ -1,11 +1,11 @@
 using Test
 
-include("infinite_env.jl")
+include("model_infinite.jl")
 include("test_utils.jl")
 
 # %% --------
 
-test_envs = create_test_objects(splatify(InfiniteEnv), (
+test_envs = create_test_objects(splatify(InfiniteModel), (
     S = (1, 50), 
     D = (0, 100), 
     b0c0 = (0., 1.), 
@@ -48,7 +48,7 @@ end
 
 # %% --------
 
-sg_envs = create_test_objects(splatify(InfiniteEnv), (
+sg_envs = create_test_objects(splatify(InfiniteModel), (
     S = (1, 20),
     G = (1, 20),
     D = (0, 100),

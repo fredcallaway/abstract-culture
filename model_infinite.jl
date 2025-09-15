@@ -1,35 +1,21 @@
-using StaticArrays
 using Roots
 using Distributions
 
-include("utils.jl")
+include("model_shared.jl")
 
-# used for observation and action probabilities
-@kwdef struct EndowmentProbs <: FieldMatrix{2, 3, Float64}
-    b0c0::Float64
-    b1c0::Float64
-    b0c1::Float64
-    b1c1::Float64
-    b0c2::Float64
-    b1c2::Float64
-end
-
-struct InfiniteEnv
+struct InfiniteModel
     S::Int  # number of starts
     G::Int  # number of goals
     D::Int  # number of demonstrations
-    agent_policy::EndowmentProbs
+    agent_policy::InfoRates
 end
 
-InfiniteEnv(;S, D, G=S, kws...) = InfiniteEnv(S, G, D, agent_policy(;kws...))
-InfiniteEnv(pol::EndowmentProbs; S, D, G=S) = InfiniteEnv(S, G, D, pol)
+InfiniteModel(;S, D, G=S, kws...) = InfiniteModel(S, G, D, agent_policy(;kws...))
+InfiniteModel(pol::InfoRates; S, D, G=S) = InfiniteModel(S, G, D, pol)
 
 abstract type InfinitePop end
 
 # %% ===== social observations ================================================
-
-¬(p::Real) = 1 - p
-prob_observe(p, k) = ¬((¬p) ^ k)
 
 #  OLD VERSION WITHOUT G
 # function observation_probabilities(S, D_comp, D_bespoke)
@@ -40,7 +26,7 @@ prob_observe(p, k) = ¬((¬p) ^ k)
 #     p_bespoke = pdf(d_bespoke, SVector(0,1))
 #     p_comp = pdf(d_comp, SVector(0,1,2))
     
-#     EndowmentProbs(p_bespoke * p_comp')
+#     InfoRates(p_bespoke * p_comp')
 # end
 
 function observation_probabilities(S, G, D_comp, D_bespoke)
@@ -58,10 +44,10 @@ function observation_probabilities(S, G, D_comp, D_bespoke)
     )
     @assert sum(p_comp) ≈ 1.
     
-    EndowmentProbs(p_bespoke * p_comp')
+    InfoRates(p_bespoke * p_comp')
 end
 
-function observation_probabilities(env::InfiniteEnv, pop::InfinitePop)
+function observation_probabilities(env::InfiniteModel, pop::InfinitePop)
     c = ensure_prob(compositional_rate(pop))
     expectation(Binomial(env.D, c)) do D_comp
         D_bespoke = env.D - D_comp
@@ -69,55 +55,6 @@ function observation_probabilities(env::InfiniteEnv, pop::InfinitePop)
     end
 end
 
-
-# %% ===== agent policy =======================================================
-
-function agent_policy(;kws...)
-    default = (
-        b0c0 = 0.,  # no info
-        b1c0 = 0.,
-        b0c1 = 1.,  # no bespoke, half comp
-        b1c1 = 0.,
-        b0c2 = 1.,  # no bespoke, full comp
-        b1c2 = 0.,
-    )
-    EndowmentProbs(;default..., kws...)
-end
-bespoke_policy() = zeros(EndowmentProbs)
-comp_policy() = ones(EndowmentProbs)
-
-@kwdef struct Costs
-    bespoke_zilch::Float64 = 0.
-    bespoke_full::Float64 = 0.
-    comp_zilch::Float64 = 0.
-    comp_partial::Float64 = 0.
-    comp_full::Float64 = 0.
-end
-
-function cost(C::Costs, bespoke_known::Int, comp_known::Int, comp_solution::Bool)
-    if comp_solution
-        (C.comp_zilch, C.comp_partial, C.comp_full)[comp_known + 1]
-    else
-        (C.bespoke_zilch, C.bespoke_full)[bespoke_known + 1]
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", costs::Costs)
-    print(io, "Costs")
-    fields = fieldnames(Costs)
-    for f in fields
-        val = getfield(costs, f)
-        print(io, "\n  ", string(f), " = ", val)
-    end
-end
-
-function rational_policy(C::Costs; β=1e10, ε=0.)
-    map(product(0:1, 0:2)) do (bespoke_known, comp_known)
-        rel_cost = cost(C, bespoke_known, comp_known, true) - cost(C, bespoke_known, comp_known, false)
-        p = logistic(β * -rel_cost)
-        lapse(p, ε)
-    end |> EndowmentProbs
-end
 
 # %% ===== population dynamics ================================================
 
@@ -127,11 +64,11 @@ end
 
 compositional_rate(pop::CompPop) = pop.comp
 
-function transition(env::InfiniteEnv, pop::CompPop)
+function transition(env::InfiniteModel, pop::CompPop)
     CompPop(sum(observation_probabilities(env, pop) .* env.agent_policy))
 end
 
-function simulate(env::InfiniteEnv, n_gen; init=0.)
+function simulate(env::InfiniteModel, n_gen; init=0.)
     gen0 = init isa Real ? CompPop(init) : init
 
     x = fill(gen0, n_gen+1)
@@ -141,7 +78,7 @@ function simulate(env::InfiniteEnv, n_gen; init=0.)
     x
 end
 
-function fixed_points(env::InfiniteEnv; raw=false)
+function fixed_points(env::InfiniteModel; raw=false)
     fixed = find_zeros(0, 1) do c
         c2 = transition(env, c)
         c2 - c
@@ -169,7 +106,7 @@ end
 # %% ===== expanded form populations ===========================================
 
 CompPop(pop::InfinitePop) = CompPop(compositional_rate(pop))
-transition(env::InfiniteEnv, c::Real) = transition(env, CompPop(c)).comp
+transition(env::InfiniteModel, c::Real) = transition(env, CompPop(c)).comp
 
 
 struct FullPop{S,G} <: InfinitePop
@@ -185,7 +122,7 @@ FullPop{S,G}(c::Float64) where {S,G} = FullPop{S,G}(
 )
 FullPop(S::Int, G::Int, c::Float64) = FullPop{S,G}(c)
 
-function transition(env::InfiniteEnv, pop::FullPop)
+function transition(env::InfiniteModel, pop::FullPop)
     (;S, G, D) = env
     @assert env.agent_policy.b0c1 == 1.  # TODO: handle other cases
     @assert env.agent_policy.b0c0 == 0.
@@ -229,7 +166,7 @@ compositional_rate(pop::FreqPop) = pop.comp_full + pop.comp_partial + pop.comp_z
 
 cost(costs::Costs, pop::FreqPop) = sum(struct2vec(costs) .* struct2vec(pop))
 
-function observation_probabilities(env::InfiniteEnv, pop::FreqPop)
+function observation_probabilities(env::InfiniteModel, pop::FreqPop)
     total = sum(struct2vec(pop))
     if total ≈ 0.
         observation_probabilities(env.S, env.G, 0, 0)
@@ -238,7 +175,7 @@ function observation_probabilities(env::InfiniteEnv, pop::FreqPop)
     end
 end
 
-function transition(env::InfiniteEnv, pop::FreqPop)
+function transition(env::InfiniteModel, pop::FreqPop)
     p_obs = observation_probabilities(env, pop)
     p_comp = p_obs .* env.agent_policy
     p_besp = p_obs .* 1 .- p_comp

@@ -43,4 +43,6 @@ function create_test_objects(constructor, ranges::NamedTuple; n_rand::Int=3)
     
     # Apply constructor to each combination
     map(constructor, parameter_combinations)
-end 
+end
+
+create_test_objects(ranges::NamedTuple; n_rand::Int=3) = create_test_objects(identity, ranges; n_rand)
