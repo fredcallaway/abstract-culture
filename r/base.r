@@ -82,6 +82,10 @@ teals_pal <- function(...) {
     scale_color_discrete_sequential(palette = "TealGrn", l1 = 40, l2 = 80, c2 = 40, aesthetics = c("color", "fill"), ...)
 }
 
+bluered_pal <- function(...) {
+    scale_fill_continuous_diverging(palette="Blue-Red 2", aesthetics = c("color", "fill"), ...)
+}
+
 
 zissou_pal <- scale_fill_discrete_divergingx(
     palette = "Zissou 1", aesthetics = c("color", "fill"), rev = T, guide = guide_legend(reverse = TRUE)

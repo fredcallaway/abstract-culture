@@ -200,7 +200,8 @@ figure("evolution", evolution %>%
 
 # %% ===== predicted with finite population ===================================
 
-evolution <- load_evolution('finite')
+evolution <- load_evolution('finite') %>% filter(gen > 1)
+
 BASE_COST <- 100  # assumption
 
 costs <- evolution %>% 
@@ -236,11 +237,45 @@ probs <- evolution %>%
 figure("finite-probs", probs %>% 
     ggplot(aes(act_cost, search_cost, fill=success)) +
     geom_raster() +
-    scale_fill_continuous_diverging(mid=0.5) +
     labs(fill="cost and comp increase") +
+    facet_grid(G ~ D) +
+    bluered_pal(mid=0.5) +
+    theme()
+)
+
+# %% --------
+
+
+coefs <- evolution %>% 
+    group_by(S,G,D,act_cost,search_cost) %>% 
+    group_modify(function(data, grp) {
+        data %>% 
+            regress(compositionality ~ gen, print_table=FALSE) %>%
+            tidy %>% 
+            filter(term == "gen") %>%
+            select(estimate)
+    })
+
+figure("finite-coefs", coefs %>% 
+    ggplot(aes(act_cost, search_cost, fill=estimate)) +
+    geom_raster() +
+    scale_fill_continuous_diverging(mid=0.) +
+    labs(fill="cost ~ gen") +
     facet_grid(G ~ D) +
     theme()
 )
+
+# %% --------
+
+
+evolution %>% 
+    filter(pop < 3) %>% 
+    group_by(S,G,D,act_cost,search_cost,pop) %>% 
+    group_modify(function(data, grp) {
+        data %>% 
+            regress(cost ~ gen, print_table=FALSE) %>%
+            tidy
+    })
 
 # %% --------
 
