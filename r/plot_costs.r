@@ -1,7 +1,7 @@
 # %% --------
 
 source("base.r")
-RESULTS_PATH <- "../results/cost/"
+RESULTS_PATH <- "../tmp/cost/"
 FIGS_PATH <- "figs/cost/"
 
 double_y_axis <- function(name_left, name_right, color_left, color_right) {

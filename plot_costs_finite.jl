@@ -4,7 +4,7 @@ nprocs() == 1 && addprocs()
 @everywhere include("model_finite.jl")
 
 DEFAULT_PARALLEL = true
-RESULTS_PATH = "results/cost/"
+RESULTS_PATH = "tmp/cost/"
 
 # %% --------
 
