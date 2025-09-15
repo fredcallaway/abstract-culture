@@ -1,7 +1,7 @@
 # %% --------
 
 source("base.r")
-RESULTS_PATH <- "../results/cost-SG"
+RESULTS_PATH <- "../results/cost/"
 FIGS_PATH <- "figs/cost/idealized-"
 
 plot_evolution <- function(data) {
@@ -159,17 +159,14 @@ figure("tmp", SG_evolution %>%
 
 # %% ===== predicted ==========================================================
 
-
 costs <- load_costs('predicted')
 evolution <- load_evolution('predicted')
 FIGS_PATH <- "figs/cost/predicted-"
-
 
 best_prm <- costs %>% 
     slice_min(asymptotic_advantage)
 
 best_prm %>% pivot_longer(everything()) %>% print(n=100)
-
 
 # S G D act_cost search_cost
 
@@ -182,7 +179,6 @@ figure("tmp", costs %>%
     plot_advantage(act_cost, search_cost, fill=asymptotic_advantage, midpoint=0) +
     facet_grid(G ~ D)
 )
-
 
 # %% --------
 
@@ -197,24 +193,16 @@ figure("evolution", evolution %>%
     plot_evolution
 )
 
-# # %% --------
+# %% ===== predicted with finite population ===================================
 
-# figure_wrap("costs-full", nrow=3,
+RESULTS_PATH <- "../results/cost-finite"
+FIGS_PATH <- "figs/cost/finite-"
 
-#     plot_advantage(costs, search_cost, act_cost, fill=comp_advantage, midpoint=0) +
-#         facet_wrap(~D, nrow=1),
-    
-#     plot_advantage(costs, search_cost, act_cost, fill=asymptotic_compositionality, midpoint=0.5) +
-#         facet_wrap(~D, nrow=1),
+evolution <- load_evolution('simple')
 
-#     plot_advantage(costs, search_cost, act_cost, fill=asymptotic_advantage, midpoint=0) +
-#         facet_wrap(~D, nrow=1)
-# )
-
-# # %% --------
-
-# figure("D-act_cost", 
-#     costs %>% 
-#     filter(search_cost == 2) %>% 
-#     plot_advantage(factor(D), act_cost, fill=comp_advantage, midpoint=0)
-# )
+figure("evolution", evolution %>% 
+    # right_join(best_prm) %>% 
+    # filter(gen > 1, gen < 11) %>% 
+    plot_evolution
+)
+evolution
