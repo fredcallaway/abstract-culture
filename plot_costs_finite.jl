@@ -4,25 +4,26 @@ nprocs() == 1 && addprocs()
 @everywhere include("model_finite.jl")
 
 DEFAULT_PARALLEL = true
-RESULTS_PATH = "tmp/cost/"
+@everywhere RESULTS_PATH = "tmp/evolution-finite"
 
 # %% --------
 
-@everywhere REPEATS = 1000
-
-@everywhere function get_env_costs(prm, policy=rational_policy)
+@everywhere function get_env_costs(prm)
     env_prm = subset(prm, fieldnames(FiniteModel))
     cost_prm = subset(prm, fieldnames(Costs))
+    pol_prm = subset(prm, (:ε, :β))
     C = Costs(;cost_prm...)
-    env = FiniteModel(; env_prm...)
+    agent_policy = rational_policy(C; pol_prm...)
+    env = FiniteModel(; env_prm..., agent_policy)
     (env, C)
 end
 
-@everywhere function compute_evolution(prm, make_policy)
+@everywhere function write_evolution_csv(prm; repeats=1000)
     env, C = get_env_costs(prm)
-    env = mutate(env, agent_policy=make_policy(C))
-    sim = simulate(env, 12)
-    flatmap(1:REPEATS) do rep
+    
+    filename = "$RESULTS_PATH/$(hash(prm)).csv"
+    flatmap(1:repeats) do rep
+        sim = simulate(env, 12)
         imap(sim) do gen, pop
             (;
                 pop=rep,
@@ -31,7 +32,8 @@ end
                 compositionality = compositional_rate(pop),
             )
         end
-    end
+    end |> DataFrame |> write_csv(filename; quiet=true)
+    "$(hash(prm)).csv"
 end
 
 function reparametrize(prm)
@@ -48,20 +50,22 @@ end
 
 # %% --------
 
-@everywhere noisy_rational_policy(C::Costs) = rational_policy(C; β=0.2, ε=0.05)
-
 prms = reparametrize.(grid(;
     S = 1,
     G = 6:8,
     N = 50,
     D = 1 .* (4:2:10),
+
     base_cost = 100,
     act_cost = 20:5:50,
     search_cost = 0:5:30,
+
+    β = 0.1,
+    ε = 0.05
 ))
 
-
-evol = dataframe(prms) do prm
-    compute_evolution(prm, noisy_rational_policy)
+index = dataframe(prms) do prm
+    filename = write_evolution_csv(prm; repeats=1000)
+    (;prm..., filename)
 end
-evol |> write_csv("evolution-finite.csv")
+index |> write_csv("$RESULTS_PATH/index.csv")

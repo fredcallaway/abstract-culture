@@ -28,22 +28,23 @@ macro default(exp)
     isdefined(Main, var) ? :($(var)) : :($(esc(exp)))
 end
 
-@default RESULTS_PATH::String = "results/"
 
-function write_csv(name, df, path=RESULTS_PATH; quiet=false)
-    if !occursin("/", path)
-        @warn "adding trailing / to results path $path"
-        path = path * "/"
-    end
-    if !isdir(dirname(path))
-        mkpath(dirname(path))
-    end
-    fp = path * name
-    CSV.write(fp, df)
-    !quiet && println("Wrote $fp")
+function write_csv(path::String, df::DataFrame; quiet=false)
+    mkpath(dirname(path))
+    CSV.write(path, df)
+    !quiet && println("Wrote $path ($(nrow(df)) rows)")
+    return path
 end
-write_csv(name::String) = df -> write_csv(name, df)
-read_csv(name::String) = CSV.read(RESULTS_PATH * name, DataFrame)
+write_csv(path::String; quiet=false) = df -> write_csv(path, df; quiet)
+
+function write_csv(func::Function, path::String; overwrite=true, quiet=false)
+    if !overwrite && isfile(path)
+        !quiet && println("Skipping $path because it already exists")
+        return
+    end
+    df = func()
+    write_csv(path, df; quiet)
+end
 
 
 # DataFrames has annoying imports

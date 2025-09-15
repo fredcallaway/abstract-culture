@@ -108,6 +108,22 @@ glue <- glue::glue
 extract <- tidyr::extract
 
 
+double_y_axis <- function(name_left, name_right, color_left, color_right) {
+    list(
+        scale_y_continuous(
+            name = name_left,
+            sec.axis = sec_axis(~. * 1, name = name_right)
+        ),
+        theme(
+            axis.title.y.left = element_text(color = color_left),
+            axis.title.y.right = element_text(color = color_right),
+            axis.text.y.left = element_text(color = color_left),
+            axis.text.y.right = element_text(color = color_right)
+        )
+    )
+}
+
+
 # %% ==================== Miscellany ====================
 
 relative <- function(x, lo=min(x), hi=max(x)) {

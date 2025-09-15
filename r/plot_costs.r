@@ -201,6 +201,7 @@ figure("evolution", evolution %>%
 # %% ===== predicted with finite population ===================================
 
 evolution <- load_evolution('finite') %>% filter(gen > 1)
+FIGS_PATH <- "figs/cost/N20-"
 
 BASE_COST <- 100  # assumption
 
@@ -219,29 +220,6 @@ figure("finite-costs", costs %>%
     theme()
 )
 
-# %% --------
-
-probs <- evolution %>% 
-    select(S,G,D,act_cost,search_cost,gen,pop,compositionality,cost) %>% 
-    filter(gen == 2 | gen == 12) %>%
-    pivot_wider(names_from=gen, values_from=c(compositionality, cost)) %>% 
-    group_by(S,G,D,act_cost,search_cost) %>% 
-    mutate(
-        more_comp = compositionality_12 > compositionality_2 * 1.0,
-        more_cost = cost_12 > cost_2 * 1.0,
-        success = more_comp & more_cost,
-    ) %>%
-    summarise(across(c(more_comp, more_cost, success), mean)) %>%
-    identity
-
-figure("finite-probs", probs %>% 
-    ggplot(aes(act_cost, search_cost, fill=success)) +
-    geom_raster() +
-    labs(fill="cost and comp increase") +
-    facet_grid(G ~ D) +
-    bluered_pal(mid=0.5) +
-    theme()
-)
 
 # %% --------
 
@@ -266,7 +244,6 @@ pop_coefs <- evolution %>%
         slope = cov(cost, gen) / var(gen),
     )
 
-# %% --------
 
 figure("finite-cost-slope-increases", pop_coefs %>% 
     summarise(p_increase=mean(slope>0)) %>% 
@@ -283,7 +260,7 @@ figure("finite-cost-slope-increases", pop_coefs %>%
 
 figure("finite-evolution", evolution %>% 
     filter(act_cost == 40, search_cost == 0, G==7, D==6) %>% 
-    filter(pop < 10) %>% 
+    filter(pop < 20) %>% 
     filter(gen > 1) %>%
     ggplot(aes(gen)) +
     # geom_hline(yintercept=10, color=GREEN, linetype="dashed") +
