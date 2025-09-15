@@ -1,4 +1,4 @@
-include("infinite_env.jl")
+include("infinite_model.jl")
 include("utils.jl")
 
 function simplex_grid(n::Int)
@@ -28,7 +28,7 @@ end
 
 # %% --------
 using Roots
-function find_stable_points(env::InfiniteEnv; atol=1e-5)
+function find_stable_points(env::InfiniteModel; atol=1e-5)
     fixed = find_zeros(0, 1) do comp
         comp2 = transition(env, CompPop(comp)).comp
         comp2 - comp
@@ -73,11 +73,11 @@ function find_stable_points(env::InfiniteEnv; atol=1e-5)
     # (;start, stop)
 end
 
-find_stable_points(;params...) = find_stable_points(InfiniteEnv(;params...))
+find_stable_points(;params...) = find_stable_points(InfiniteModel(;params...))
 
 # %% --------
 
-function find_stable_points_3d(env::InfiniteEnv)
+function find_stable_points_3d(env::InfiniteModel)
     stable = find_stable_points(env)
     map(filter(!isnan, collect(stable))) do x
         pop = @infiltry transition(env, FreqPop(CompPop(x)))
@@ -113,7 +113,7 @@ end
 
 
 dataframe(g) do prm
-    env = InfiniteEnv(;prm...)
+    env = InfiniteModel(;prm...)
     fixed_points = find_stable_points_3d(env)
     grid_points = Pop3.(simplex_grid(10))
     filter!(grid_points) do pop

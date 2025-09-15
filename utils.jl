@@ -19,6 +19,20 @@ select(x::NamedTuple, args...) = NamedTupleTools.select(x, args...)
 subset(x::NamedTuple, fields) = select(x, intersect(propertynames(x), fields))
 
 
+
+RESULTS_PATH = "results/"
+function write_csv(name, df, path=RESULTS_PATH; quiet=false)
+    if !isdir(dirname(path))
+        mkpath(dirname(path))
+    end
+    fp = path * name
+    CSV.write(fp, df)
+    !quiet && println("Wrote $fp")
+end
+write_csv(name::String) = df -> write_csv(name, df)
+read_csv(name::String) = CSV.read(RESULTS_PATH * name, DataFrame)
+
+
 # DataFrames has annoying imports
 using DataFramesMeta, CSV
 

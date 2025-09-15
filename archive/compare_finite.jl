@@ -1,5 +1,5 @@
 include("utils.jl")
-include("infinite_env.jl")
+include("infinite_model.jl")
 include("binary_env.jl")
 
 using RCall
@@ -23,7 +23,7 @@ g = grid(
 
 function get_env(prm)
     if prm.N == Inf
-        InfiniteEnv(;delete(prm, :N)...)
+        InfiniteModel(;delete(prm, :N)...)
     else
         agent_policy = classic_policy(;prm.p_r, prm.p_0)
         BinaryCompositionEnv(;delete(prm, :p_r, :p_0)..., agent_policy)

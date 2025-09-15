@@ -1,11 +1,11 @@
-include("infinite_env.jl")
+include("infinite_model.jl")
 include("utils.jl")
 using Accessors
 
 
 # %% --------
 
-env = InfiniteEnv(p_0 = 0.0, p_r = 1.0)
+env = InfiniteModel(p_0 = 0.0, p_r = 1.0)
 
 function analytic_transition(env, c)
     (;S, D) = env
@@ -29,7 +29,7 @@ end
 
 # %% --------
 
-function transition(env::InfiniteEnv, pop::FullPop)
+function transition(env::InfiniteModel, pop::FullPop)
     (;S, D, p_0, p_r) = env
 
     (;B, C) = pop
@@ -46,7 +46,7 @@ function transition(env::InfiniteEnv, pop::FullPop)
     FullPop{S}(C1, B1)
 end
 
-env = InfiniteEnv(p_0 = 0.0, p_r = 1.0)
+env = InfiniteModel(p_0 = 0.0, p_r = 1.0)
 
 for c in 0:.1:1
     S = env.S
@@ -62,7 +62,7 @@ for c in 0:.1:1
 end
 
 # %% --------
-env = InfiniteEnv(p_0 = 0.0, p_r = 1.0, S = 3)
+env = InfiniteModel(p_0 = 0.0, p_r = 1.0, S = 3)
 S = env.S
 
 pop = FullPop{S}(
@@ -91,7 +91,7 @@ sum(pop3.C)
 
 # %% --------
 
-function new_transition(env::InfiniteEnv, pop::CompPop)
+function new_transition(env::InfiniteModel, pop::CompPop)
     (;S, D, p_0, p_r) = env
 
     c = pop.comp

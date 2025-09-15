@@ -1,13 +1,13 @@
 using Distributed
 nprocs() == 1 && addprocs()
 
-@everywhere include("infinite_env.jl")
+@everywhere include("infinite_model.jl")
 
 # %% --------
 grd = grid(;S=1:14, G=1:14, D=2 .^ (0:6))
 
 fixed = dataframe(grd, parallel=true) do prm
-    env = InfiniteEnv(;prm...)
+    env = InfiniteModel(;prm...)
     stable = fixed_points(env)
     start = stable[1]
     stop = get(stable, 2, missing)
@@ -19,13 +19,13 @@ CSV.write("results/SG_fixed_points.csv", fixed)
 # %% --------
 
 
-fixed_points(InfiniteEnv(;S=10, G=10, D=5))
-fixed_points(InfiniteEnv(;S=5, G=20, D=5))
+fixed_points(InfiniteModel(;S=10, G=10, D=5))
+fixed_points(InfiniteModel(;S=5, G=20, D=5))
 
 # %% --------
 
 evol = dataframe(grd, parallel=true) do prm
-    env = InfiniteEnv(;prm...)
+    env = InfiniteModel(;prm...)
     map(enumerate(simulate(env, 100; init=1e-9))) do (gen, pop)
         (;gen, compositionality=compositional_rate(pop))
     end

@@ -1,31 +1,20 @@
 using Distributed
 nprocs() == 1 && addprocs()
 
-@everywhere include("infinite_env.jl")
-
-# %% --------
+@everywhere include("model_infinite.jl")
 
 DEFAULT_PARALLEL = true
 RESULTS_PATH = "results/cost-SG/"
-mkpath(RESULTS_PATH)
-
-function write_csv(name, df)
-    fp = RESULTS_PATH * name
-    CSV.write(fp, df)
-    println("Wrote $fp")
-end
-write_csv(name::String) = df -> write_csv(name, df)
-read_csv(name::String) = CSV.read(RESULTS_PATH * name, DataFrame)
 
 # %% --------
 
 @everywhere function get_env_costs(prm)
-    env_prm = subset(prm, fieldnames(InfiniteEnv))
+    env_prm = subset(prm, fieldnames(InfiniteModel))
     cost_prm = subset(prm, fieldnames(Costs))
     pol_prm = subset(prm, (:ε, :β))
     C = Costs(;cost_prm...)
     pol = rational_policy(C; pol_prm...)
-    env = InfiniteEnv(pol; env_prm...)
+    env = InfiniteModel(pol; env_prm...)
     (env, C)
 end
 

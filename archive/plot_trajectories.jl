@@ -1,4 +1,4 @@
-include("infinite_env.jl")
+include("infinite_model.jl")
 include("utils.jl")
 
 # %% --------
@@ -15,7 +15,7 @@ g = grid(
 # %% --------
 
 dataframe(g) do prm
-    env = InfiniteEnv(;prm...)
+    env = InfiniteModel(;prm...)
     map(enumerate(simulate(env, 20))) do (gen, pop)
         
         (;gen=gen-1, named_tuple(pop)...)
