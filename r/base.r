@@ -108,11 +108,12 @@ glue <- glue::glue
 extract <- tidyr::extract
 
 
-double_y_axis <- function(name_left, name_right, color_left, color_right) {
+double_y_axis <- function(name_left, name_right, color_left, color_right, scale=1, shift=0) {
     list(
         scale_y_continuous(
             name = name_left,
-            sec.axis = sec_axis(~. * 1, name = name_right)
+            # sec.axis = sec_axis(~ (-0.5 + .) * scaling, name = name_right)
+            sec.axis = sec_axis(~ scale * (. + shift), name = name_right)
         ),
         theme(
             axis.title.y.left = element_text(color = color_left),
