@@ -54,7 +54,8 @@ prms = reparametrize.(grid(;
     S = 1,
     G = 6:8,
     N = 50,
-    D = 1 .* (4:2:10),
+    # D = 1 .* (4:2:10),
+    D = 4:9,
 
     base_cost = 100,
     act_cost = 20:5:50,
@@ -69,3 +70,38 @@ index = dataframe(prms) do prm
     (;prm..., filename)
 end
 index |> write_csv("$RESULTS_PATH/index.csv")
+
+# %% --------
+
+prm = (;
+    S = 1,
+    G = 7,
+    D = 6,
+    act_cost = 40,
+    search_cost = 0,
+    base_cost = 100,
+    N=50,
+    β = 0.1,
+    ε = 0.05
+)
+env, C = get_env_costs(reparametrize(prm))
+
+version = "cost-pilot-v1"
+shape_sets = "7" .* join.(product("ABC", "123"))[:]
+
+solutions = map(product(0:1, shape_sets)) do (rep, shape_set)
+    gen = [1,6][rep+1]
+    sim = simulate(env, 10)
+    id = "$version-$rep-$shape_set"
+    solutions = map(sim[gen][:]) do beh
+        (
+            task = join((beh.s, beh.g)),
+            kind = beh.compositional ? "compositional" : "bespoke"
+        )    
+    end
+    id => solutions
+end |> Dict
+
+using JSON
+write("/Users/fred/projects/culture/machine-task/stimuli/solutions-g0.json", json(solutions))
+
