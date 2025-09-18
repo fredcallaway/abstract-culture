@@ -268,7 +268,7 @@ pframe() do uid
         map(eachindex(t.events)) do i
             e = t.events[i]
             if e["event"] == "machine.select"
-                (; trial_number=t.trial_number, time = (e["time"] - start) / 1000, 
+                (; t.uid, trial_number=t.trial_number, time = (e["time"] - start) / 1000, 
                 dial=e["kind"], correct=e["correct"], pos=e["pos"], val=e["val"])
             else
                 missing

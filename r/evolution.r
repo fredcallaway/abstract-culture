@@ -193,9 +193,58 @@ main_trials |>
     # geom_quasirandom(size=.2) +
     points() +
     cpal +
+    expand_limits(y=c(0, 1)) +
     facet_wrap(~bespoke)
 
 fig("duration-by-solution-type", w=2)
+
+# %% --------
+
+main_trials |> 
+    group_by(bespoke, compositional, solution_type) %>% 
+    filter(duration < quantile(duration, .95)) %>% 
+    summarise(duration = mean(duration)/1000) %>% 
+    pivot_wider(names_from=solution_type, values_from=duration, names_prefix="duration_")
+
+# 18 # min (bespoke exact)
+# 46 # baseline (bespoke zilch)
+# 28 # bespoke search cost
+# 7  # seconds per dial searching
+# 57 # partial
+
+# %% --------
+
+x1 <- main_trials %>% 
+    filter(compositional == "partial", bespoke == "zilch", solution_type == "compositional") %>%
+    group_by(uid) %>%
+    summarise(partial = mean(duration)/1000)
+
+x2 <- main_trials %>% 
+    filter(compositional == "zilch", bespoke == "zilch", solution_type == "bespoke") %>%
+    group_by(uid) %>%
+    summarise(bespoke = mean(duration)/1000)
+    
+inner_join(x1, x2, by="uid") %>% 
+    ggplot(aes(partial, bespoke)) +
+    geom_abline(color=RED, slope=1, intercept=0) +
+    geom_point(size=.3)
+
+fig()
+
+# %% --------
+
+
+
+main_trials %>% 
+    mutate(
+        comp_solution = 1 * (solution_type == "compositional"),
+        besp_solution = 1 * (solution_type == "bespoke"),
+        bespokezilch = 1 * (solution_type == "bespoke" & bespoke == "zilch"),
+        compositional = relevel(compositional, "exact")
+    ) %>% 
+    mutate(duration = duration / 1000) %>%
+    filter(duration < 90) %>%
+    regress(duration ~ comp_solution + comp_solution:compositional + besp_solution:bespokezilch, print_table=F)
 
 # %% --------
 
@@ -231,3 +280,32 @@ main_trials %>%
     group_by(bespoke, compositional) %>% 
     summarise(p_compositional = mean(choose_compositional)) %>% 
     write_csv("../tmp/compositional-rates-reg-v2.csv")
+
+# %% --------
+
+events <- read_csvs("../data/reg-v2-g*/events.csv") %>% 
+    select(-data_file) %>% 
+    right_join(select(participants, uid, generation, excluded), by="uid") %>% 
+    mutate(pid = glue("{generation}.{pid}"))
+
+# %% --------
+
+events %>% 
+    filter(trial_number > 0) %>%
+    transmute(dt = time - lag(time)) %>% 
+    drop_na() %>% 
+    filter(dt > 0, dt < 10) %>%
+    ggplot(aes(dt)) +
+    geom_histogram() +
+    
+
+fig()
+
+# %% --------
+
+events %>% 
+    filter(trial_number > 0) %>%
+    transmute(dt = time - lag(time)) %>% 
+    drop_na() %>% 
+    filter(dt > 0, dt < 5) %>% 
+    with(mean(dt))
