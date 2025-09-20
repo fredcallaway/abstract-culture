@@ -41,28 +41,55 @@ participants = load_participants(version)
 
 # %% --------
 
-valid_pids = @chain participants begin
-    @rsubset(! :failed_catch)
-    @distinct :config
-    @groupby :repetition
-    @transform :agent = 1:length(:pid)
-    @rsubset :agent <= 50
-    @with :pid
-end
-
-@assert issorted(valid_pids)
-@assert issorted(participants.start_time)
-
-@rtransform! participants :excluded = !(:pid in valid_pids)
-
-# %% --------
-
 uid2pid = Dict(participants.uid .=> participants.pid)
 pid2uid = Dict(participants.pid .=> participants.uid)
 
 trials = mapreduce(load_trials, vcat, participants.uid)
 participants |> CSV.write(outdir * "participants.csv")
 @assert participants.pid == 1:nrow(participants)
+
+
+# %% ===== generation solutions json for stimuli generation ===================
+
+gen_code = let 
+    m = match(r"-(g\d+)", version)
+    m !== nothing ? m.captures[1] : nothing
+end
+
+if gen_code !== nothing
+    @info "Generating solutions for generation $gen_code"
+    valid_pids = @chain participants begin
+        @rsubset(! :failed_catch)
+        @distinct :config
+        @groupby :repetition
+        @transform :agent = 1:length(:pid)
+        @rsubset :agent <= 50
+        @with :pid
+    end
+
+    @assert issorted(valid_pids)
+    @assert issorted(participants.start_time)
+
+    @rtransform! participants :excluded = !(:pid in valid_pids)
+
+    solutions = @chain df begin
+        @rsubset :pid in valid_pids
+        @rsubset !:is_practice !:is_catch
+        @rtransform :chain_id = chain_id(:trial_id)
+        @rtransform :solution = (;task=:task, kind=:kind)
+        @groupby :chain_id
+        @combine :solutions = [:solution]
+        @with Dict(:chain_id .=> :solutions)
+    end
+
+
+    @assert all(map(length, values(solutions)) .== 50)
+
+    gen_code = match(r"-(g\d+)", version).captures[1]
+    fp = "../machine-task/stimuli/solutions-$gen_code.json"
+    json(solutions) |> write(fp)
+    println("Wrote $fp")
+end
 
 # %% ===== trials.csv =========================================================
 
@@ -158,27 +185,6 @@ df = map(trials) do t
     )
 end |> skipmissing |> DataFrame
 df |> CSV.write(outdir * "trials.csv")
-
-# %% ===== generation solutions json for stimuli generation ===================
-
-
-solutions = @chain df begin
-    @rsubset :pid in valid_pids
-    @rsubset !:is_practice !:is_catch
-    @rtransform :chain_id = chain_id(:trial_id)
-    @rtransform :solution = (;task=:task, kind=:kind)
-    @groupby :chain_id
-    @combine :solutions = [:solution]
-    @with Dict(:chain_id .=> :solutions)
-end
-
-
-@assert all(map(length, values(solutions)) .== 50)
-
-gen_code = match(r"-(g\d+)", version).captures[1]
-fp = "../machine-task/stimuli/solutions-$gen_code.json"
-json(solutions) |> write(fp)
-println("Wrote $fp")
 
 # %% --------
 
