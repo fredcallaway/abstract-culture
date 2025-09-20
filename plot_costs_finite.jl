@@ -86,6 +86,10 @@ prm = (;
 )
 env, C = get_env_costs(reparametrize(prm))
 
+@show rational_policy(C; β=.1, ε=0.1)
+
+# %% --------
+
 version = "cost-pilot-v1"
 shape_sets = "7" .* join.(product("ABC", "123"))[:]
 
