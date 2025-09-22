@@ -158,7 +158,7 @@ zclip <- function(x, z1, z2) {
 }
 
 numerize <- function(data, var) mutate(data, "{{var}}" := as.numeric({{ var }}))
-orderize <- function(data, x, y, .fun = mean) mutate(data, "{{x}}" := fct_reorder({{ x }}, {{ y }}, .fun))
+orderize <- function(data, x, y, .fun = mean) mutate(data, "{{x}}" := fct_reorder(factor({{ x }}), {{ y }}, .fun))
 fctrize <- function(data, var, ...) mutate(data, "{{var}}" := factor({{ var }}, ...))
 labelize <- function(data, var, t = as_string(ensym(var)), f = paste0("not ", t)) {
     mutate(data, "{{var}}" := if_else({{ var }}, t, f))
