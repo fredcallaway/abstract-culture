@@ -1,7 +1,7 @@
 # %% --------
 source("base.r")
 
-version <- "cost-pilot-v2"
+version <- "cost-pilot-v3"
 FIGS_PATH <- glue("figs/{version}/")
 
 load_data <- function(name) {
@@ -16,27 +16,6 @@ participants <- load_data("participants")
 events <- load_data("events")
 
 print(glue("{length(unique(df$pid))} participants and {nrow(df)} trials"))
-
-
-# %% ===== exclusions =========================================================
-
-pass_rate <- df %>% 
-    filter(is_catch) %>% 
-    summarise(
-        pass_rate = mean(choose_best),
-        n_fail = sum(!choose_best),
-        .by=pid
-    )
-
-pass_rate %>% 
-    ggplot(aes(factor(pass_rate))) +
-    geom_bar()
-# %% --------
-
-df %>% filter(trial_number == 0) %>% 
-    left_join(participants %>% transmute(pid, delay=solutionDelay/1000)) %>% 
-    group_by(delay) %>%
-    summarise(mean(choose_compositional))
 
 # %% --------
 
@@ -89,16 +68,6 @@ main_trials |>
 
 fig("compositional-rate", w=2, h=1.5)
 
-# %% --------
-
-main_trials %>% 
-    mutate(effort_difference = if_else(choose_compositional == choose_left, effort_difference, -effort_difference)) %>% 
-    agg(choose_compositional, c(trial_type, effort_difference))  %>% 
-    ggplot(aes(effort_difference, 1 * choose_compositional)) +
-    geom_point() + expand_limits(y=c(0, 1))
-
-fig()
-
 # %% ===== completion time =================================================
 
 main_trials |> 
@@ -112,9 +81,67 @@ main_trials |>
     expand_limits(y=c(0, 1)) +
     facet_grid(delay~bespoke)
 
-fig("duration-by-solution-type", w=2, h=1.5)
+fig("duration-by-solution-type", w=2)
 
+# %% ===== where does the time happen? ========================================
+
+figure("tmp", h=4, main_trials %>% 
+    # filter(duration < 1000) %>%
+    left_join(events) %>% 
+    mutate(trial = glue("{pid}-{trial_number}")) %>% 
+    mutate(info = glue("{bespoke} vs. {compositional}")) %>% 
+    # filter(compositional == "zilch", bespoke == "zilch") %>%
+    # filter(pid == 4) %>% 
+    ggplot(aes(trial, time, color=dial, size=correct)) +
+    geom_point() +
+    scale_colour_manual(values=c(
+        left = "#eebb00",
+        right = "#1da8e4",
+        bespoke = "#1dc384"
+    ), aesthetics=c("fill", "colour"), name="") + no_legend +
+    scale_size_manual(values=c(
+        `TRUE` = 1,
+        `FALSE` = 0.2
+    )) +
+    theme() +
+    ggplot2::facet_grid( ~ info, scales="free") +
+    ylim(0, 60)
+)
+    
 # %% --------
+
+figure("tmp", w=4, h=2, main_trials %>% 
+    # filter(duration < 1000) %>%
+    left_join(events) %>% 
+    mutate(trial = glue("{pid}-{trial_number}")) %>% 
+    mutate(info = glue("{bespoke} vs. {compositional}")) %>% 
+    filter(compositional == "zilch", bespoke == "zilch", !choose_compositional) %>%
+    # filter(pid == 4) %>% 
+    ggplot(aes(trial, time, color=dial, size=correct)) +
+    geom_point() +
+    scale_colour_manual(values=c(
+        left = "#eebb00",
+        right = "#1da8e4",
+        bespoke = "#1dc384"
+    ), aesthetics=c("fill", "colour"), name="") + no_legend +
+    scale_size_manual(values=c(
+        `TRUE` = 1,
+        `FALSE` = 0.2
+    )) +
+    theme(
+        panel.grid.minor.y = element_line(color = "#e5e5e5")
+    ) +
+    scale_y_continuous(breaks=seq(0, 60, 9), minor_breaks=seq(0, 60, 3)) +
+    ggplot2::facet_grid( ~ info, scales="free")
+    # ylim(0, 40)
+)
+    
+
+
+
+
+# %% ===== old ================================================================
+
 
 durations <- main_trials |> 
     group_by(delay, bespoke, compositional, solution_type) %>% 
@@ -208,6 +235,7 @@ inner_join(x1, x2, by="uid") %>%
 fig()
 
 # %% --------
+
 touches <- events %>% 
     group_by(pid, trial_number, dial) %>% 
     summarise(first_touch = min(time), last_touch = max(time), correct=max(correct)) %>% 
@@ -272,6 +300,12 @@ figure("comp_times", w=2, h=1, wrap_plots(ncol=2, guides="collect",
         theme()
 ))
 
+# %% --------
+
+events %>% 
+    filter(trial_number == 1) %>%
+    identity
+
 
 # %% --------
 
@@ -290,15 +324,10 @@ figure("bespoke_times", bespoke_times %>%
     theme()
 )    
     
-
 # %% --------
-main_trials %>% 
-    filter(choose_compositional) %>%
-    select(uid, trial_number, compositional, bespoke) %>% 
-    left_join(events) %>% 
-    filter(pid == 2) %>% 
-    select(trial_number, compositional, bespoke, dial, pos, correct, time) %>% 
-    print(n=100)
+
+load_data("feedback")$feedback
+
 
 # %% --------
    
