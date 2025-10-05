@@ -13,6 +13,8 @@ using Dates
 using Distributed
 using NamedTupleTools
 using StaticArrays
+using DataFrames
+using CSV
 
 flatten(xs) = reduce(vcat, xs)
 select(x::NamedTuple, args...) = NamedTupleTools.select(x, args...)
@@ -45,6 +47,8 @@ function write_csv(func::Function, path::String; overwrite=true, quiet=false)
     df = func()
     write_csv(path, df; quiet)
 end
+
+read_csv(path::String) = CSV.read(path, DataFrame)
 
 
 # DataFrames has annoying imports

@@ -3,7 +3,7 @@
 include("utils.jl")
 include("data.jl")
 
-using DataFrames
+using DataFrames, DataFramesMeta
 
 # empty!(ARGS)
 # push!(ARGS, "code-pilot-v21")
@@ -114,6 +114,7 @@ machine_type(m::Machine) = string(
     "-", m.knowledge
 )
 
+
 function effort(machine; action_cost=1, search_cost=3)
     search_multiplier = Dict(
         :exact => 0,
@@ -160,6 +161,8 @@ df = map(trials) do t
     # trial_type = join(map(machine_type, machines[ranks]), " vs ")
     trial_type = join(sort(map(machine_type, machines)), " vs ")
     n_click = length(filtermatch(t.events, "machine.select"))
+    
+    
 
     (;
         t.uid,
@@ -185,6 +188,28 @@ df = map(trials) do t
     )
 end |> skipmissing |> DataFrame
 df |> CSV.write(outdir * "trials.csv")
+
+
+# %% --------
+
+X = @chain df begin
+    @rsubset !:is_practice !:is_catch
+    @rtransform begin
+        :bespoke = :trial_type[4:8]
+        :compositional = :trial_type[16:end]
+    end
+    @groupby :bespoke :compositional
+    @combine begin 
+        :duration = mean(:duration)
+        :policy = mean(:choose_compositional)
+    end
+    @orderby :compositional :bespoke
+    reverse
+    # @select Not(:trial_type)
+end
+
+X |> CSV.write("tmp/duration-policy-$version.csv")
+
 
 # %% --------
 
@@ -274,14 +299,45 @@ pframe() do uid
         map(eachindex(t.events)) do i
             e = t.events[i]
             if e["event"] == "machine.select"
-                (; t.uid, trial_number=t.trial_number, time = (e["time"] - start) / 1000, 
-                dial=e["kind"], correct=e["correct"], pos=e["pos"], val=e["val"])
+                (; t.uid, 
+                   trial_number=t.trial_number, 
+                   time = (e["time"] - start) / 1000,
+                   dial=e["kind"], 
+                   correct=e["correct"], 
+                   pos=e["pos"], 
+                   val=e["val"])
             else
                 missing
             end
         end
     end
 end |> CSV.write(outdir * "events.csv")
+
+# %% --------
+
+load_trials(participants.uid[1])[3].events
+
+pframe() do uid
+    map(load_trials(uid)) do t
+        start = findnextmatch(t.events, "machine.initialize")[1]["time"]
+        map(eachindex(t.events)) do i
+            e = t.events[i]
+            if e["event"] == "machine.select"
+                (;
+                    t.uid,
+                    trial_number=t.trial_number,
+                    time=(e["time"] - start) / 1000,
+                    dial=e["kind"],
+                    correct=e["correct"],
+                    # pos=e["pos"],
+                    # val=e["val"]
+                )
+            else
+                missing
+            end
+        end
+    end
+end |> CSV.write(outdir * "events_alt.csv")
 
 # %% --------
 

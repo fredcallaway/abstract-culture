@@ -4,6 +4,24 @@ source("base.r")
 RESULTS_PATH <- "../tmp/cost/"
 FIGS_PATH <- "figs/cost/"
 
+# %% ===== empirical ==========================================================
+
+df <- read_csv("../tmp/empirical_predictions.csv")
+
+figure("predicted-comp", df %>% 
+    ggplot(aes(gen, compositionality, group=pop)) +
+    geom_line(aes(group=pop, y = compositionality), color = C_COMP, linewidth=.4, alpha=0.2) +
+    # geom_line(aes(group=pop, y = duration), color=GREEN, linewidth=.4, alpha=0.2) +
+    theme()
+)
+
+
+
+
+
+
+# %% ===== theoretical =========================================================
+
 read_indexed_results <- function(path) {
     read_csv(glue("{path}/index.csv"), show_col_types=FALSE) %>% 
     mutate(data = map(filename, ~ 

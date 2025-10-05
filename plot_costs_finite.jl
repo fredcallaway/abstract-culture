@@ -57,8 +57,8 @@ prms = reparametrize.(grid(;
     # D = 1 .* (4:2:10),
     D = 4:9,
 
-    base_cost = 100,
-    act_cost = 20:5:50,
+    base_cost = 100,  # print time plus search time
+    act_cost = 20:5:50,  # print time
     search_cost = 0:5:30,
 
     β = 0.1,
@@ -108,4 +108,67 @@ end |> Dict
 
 using JSON
 write("/Users/fred/projects/culture/machine-task/stimuli/solutions-g0.json", json(solutions))
+
+# %% ===== empirical predicted ================================================
+
+
+function parse_policy_cost(version="v3")
+    data = read_csv("tmp/duration-policy-cost-pilot-$version.csv")
+    
+    function parse_info(row)
+        bespoke = row.bespoke == "zilch" ? 0 : 1
+        comp = row.compositional == "zilch" ? 0 : row.compositional == "partial" ? 1 : 2
+        (bespoke, comp)
+    end
+    
+    pol_vals = Dict()
+    cost_vals = Dict()
+    
+    for row in eachrow(data)
+        b, c = parse_info(row)
+        pol_vals[(b, c)] = row.policy
+        cost_vals[(b, c)] = row.duration
+    end
+    
+    pol = InfoRates(
+        b0c0 = pol_vals[(0, 0)],
+        b1c0 = pol_vals[(1, 0)],
+        b0c1 = pol_vals[(0, 1)],
+        b1c1 = pol_vals[(1, 1)],
+        b0c2 = pol_vals[(0, 2)],
+        b1c2 = pol_vals[(1, 2)],
+    )
+    
+    costs = Costs(
+        bespoke_zilch = cost_vals[(0, 0)],
+        bespoke_full = cost_vals[(1, 0)],
+        comp_zilch = cost_vals[(0, 0)],
+        comp_partial = cost_vals[(0, 1)],
+        comp_full = cost_vals[(0, 2)],
+    )
+    
+    (pol, costs)
+end
+
+# %% --------
+
+
+pol, C = parse_policy_cost()
+env = FiniteModel(S=1, G=7, D=6, N=50, agent_policy=pol)
+
+simulate(env, 2) .|> compositional_rate
+initial_population(env) |> compositional_rate
+
+filename = "tmp/empirical_predictions.csv"
+flatmap(1:100) do rep
+    sim = simulate(env, 12)
+    imap(sim) do gen, pop
+        (;
+            pop=rep,
+            gen,
+            cost = cost(C, pop),
+            compositionality = compositional_rate(pop),
+        )
+    end
+end |> DataFrame |> write_csv(filename; quiet=true)
 
